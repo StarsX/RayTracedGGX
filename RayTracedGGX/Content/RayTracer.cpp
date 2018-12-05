@@ -19,9 +19,7 @@ const wchar_t* RayTracer::MissShaderName = L"missMain";
 
 RayTracer::RayTracer(const RayTracing::Device &device, const RayTracing::CommandList &commandList) :
 	m_device(device),
-	m_commandList(commandList),
-	m_vertexStride(0),
-	m_numIndices(0)
+	m_commandList(commandList)
 {
 	m_pipelineCache.SetDevice(device);
 	m_descriptorTableCache.SetDevice(device.Common);
@@ -32,25 +30,27 @@ RayTracer::~RayTracer()
 {
 }
 
-bool RayTracer::Init(uint32_t width, uint32_t height, Resource &vbUpload, Resource &ibUpload,
+bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resource *ibUploads,
 	Resource &scratch, Resource &instances, const char *fileName)
 {
-	m_viewport.x = static_cast<float>(width);
-	m_viewport.y = static_cast<float>(height);
+	m_viewport = XMUINT2(width, height);
 
 	// Load inputs
 	ObjLoader objLoader;
 	if (!objLoader.Import(fileName, true, true)) return false;
-	N_RETURN(createVB(objLoader.GetNumVertices(), objLoader.GetVertexStride(), objLoader.GetVertices(), vbUpload), false);
-	N_RETURN(createIB(objLoader.GetNumIndices(), objLoader.GetIndices(), ibUpload), false);
+	N_RETURN(createVB(objLoader.GetNumVertices(), objLoader.GetVertexStride(), objLoader.GetVertices(), vbUploads[MODEL_OBJ]), false);
+	N_RETURN(createIB(objLoader.GetNumIndices(), objLoader.GetIndices(), ibUploads[MODEL_OBJ]), false);
+
+	N_RETURN(createGroundMesh(vbUploads[GROUND], ibUploads[GROUND]), false);
 
 	// Create raytracing pipeline
 	createPipelineLayouts();
 	createPipeline();
 
 	// Create output view and build acceleration structures
-	m_outputView.Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	buildAccelerationStructures(scratch, instances);
+	for (auto &outputView : m_outputViews)
+		outputView.Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	N_RETURN(buildAccelerationStructures(scratch, instances), false);
 	buildShaderTables();
 
 	// Create the sampler
@@ -66,43 +66,127 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource &vbUpload, Resour
 
 void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj)
 {
-	XMStoreFloat4x4(&m_cbRayGens[frameIndex].ProjToWorld, XMMatrixInverse(nullptr, viewProj));
-	XMStoreFloat4(&m_cbRayGens[frameIndex].EyePt, eyePt);
+	const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
+	XMStoreFloat4x4(&m_cbRayGens[frameIndex].ProjToWorld, XMMatrixTranspose(projToWorld));
+	XMStoreFloat3(&m_cbRayGens[frameIndex].EyePt, eyePt);
 
 	m_rayGenShaderTables[frameIndex].Reset();
-	m_rayGenShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[PHONG],
+	m_rayGenShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
 		RaygenShaderName, &m_cbRayGens[frameIndex], sizeof(RayGenConstants)));
 }
 
 void RayTracer::Render(uint32_t frameIndex, const Descriptor &dsv)
 {
-	m_outputView.Barrier(m_commandList.Common, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	m_outputViews[frameIndex].Barrier(m_commandList.Common, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	rayTrace(frameIndex);
 }
 
-const Texture2D &RayTracer::GetOutputView() const
+const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, ResourceState dstState)
 {
-	return m_outputView;
+	if (dstState) m_outputViews[frameIndex].Barrier(m_commandList.Common, dstState);
+
+	return m_outputViews[frameIndex];
 }
 
 bool RayTracer::createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, Resource &vbUpload)
 {
-	m_vertexStride = stride;
-	N_RETURN(m_vertexBuffer.Create(m_device.Common, numVert, stride, D3D12_RESOURCE_FLAG_NONE,
+	auto &vertexBuffer = m_vertexBuffers[MODEL_OBJ];
+	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride, D3D12_RESOURCE_FLAG_NONE,
 		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
 
-	return m_vertexBuffer.Upload(m_commandList.Common, vbUpload, pData,
+	return vertexBuffer.Upload(m_commandList.Common, vbUpload, pData,
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool RayTracer::createIB(uint32_t numIndices, const uint32_t *pData, Resource &ibUpload)
 {
-	m_numIndices = numIndices;
-	N_RETURN(m_indexBuffer.Create(m_device.Common, sizeof(uint32_t) * numIndices, DXGI_FORMAT_R32_UINT,
+	auto &indexBuffers = m_indexBuffers[MODEL_OBJ];
+	N_RETURN(indexBuffers.Create(m_device.Common, sizeof(uint32_t) * numIndices, DXGI_FORMAT_R32_UINT,
 		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
 
-	return m_indexBuffer.Upload(m_commandList.Common, ibUpload, pData,
+	return indexBuffers.Upload(m_commandList.Common, ibUpload, pData,
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+}
+
+bool RayTracer::createGroundMesh(Resource &vbUpload,Resource &ibUpload)
+{
+	// Vertex buffer
+	{
+		// Cube vertices positions and corresponding triangle normals.
+		XMFLOAT3 vertices[][2] =
+		{
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+		};
+
+		auto &vertexBuffer = m_vertexBuffers[GROUND];
+		N_RETURN(vertexBuffer.Create(m_device.Common, ARRAYSIZE(vertices), sizeof(XMFLOAT3[2]),
+			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+
+		N_RETURN(vertexBuffer.Upload(m_commandList.Common, vbUpload, vertices,
+			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE), false);
+	}
+
+	// Index Buffer
+	{
+		// Cube indices.
+		uint32_t indices[] =
+		{
+			3,1,0,
+			2,1,3,
+
+			6,4,5,
+			7,4,6,
+
+			11,9,8,
+			10,9,11,
+
+			14,12,13,
+			15,12,14,
+
+			19,17,16,
+			18,17,19,
+
+			22,20,21,
+			23,20,22
+		};
+
+		auto &indexBuffers = m_indexBuffers[GROUND];
+		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(uint32_t) * ARRAYSIZE(indices), DXGI_FORMAT_R32_UINT,
+			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+
+		N_RETURN(indexBuffers.Upload(m_commandList.Common, ibUpload, indices,
+			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE), false);
+	}
+
+	return true;
 }
 
 void RayTracer::createPipelineLayouts()
@@ -114,7 +198,8 @@ void RayTracer::createPipelineLayouts()
 		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
 		pipelineLayout.SetRange(ACCELERATION_STRUCTURE, DescriptorType::SRV, 1, 0);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
-		pipelineLayout.SetRange(GEOMETRY_BUFFERS, DescriptorType::SRV, 2, 1);
+		pipelineLayout.SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
+		pipelineLayout.SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		m_pipelineLayouts[GLOBAL_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
 			D3D12_ROOT_SIGNATURE_FLAG_NONE, NumUAVs);
 	}
@@ -131,32 +216,37 @@ void RayTracer::createPipelineLayouts()
 
 void RayTracer::createPipeline()
 {
-	m_pipelineCache.SetDevice(m_device);
-
 	{
-		ThrowIfFailed(D3DReadFileToBlob(L"RayTracedPhong.cso", &m_shaderLib));
+		ThrowIfFailed(D3DReadFileToBlob(L"RayTracedTest.cso", &m_shaderLib));
 
 		RayTracing::State state;
 		state.SetShaderLibrary(m_shaderLib);
 		state.SetHitGroup(0, HitGroupName, ClosestHitShaderName);
-		state.SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
+		state.SetShaderConfig(sizeof(XMFLOAT4) + sizeof(uint32_t), sizeof(XMFLOAT2));
 		state.SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
-		state.SetMaxRecursionDepth(1);
-		m_pipelines[PHONG] = state.GetPipeline(m_pipelineCache);
+		state.SetMaxRecursionDepth(3);
+		m_pipelines[TEST] = state.GetPipeline(m_pipelineCache);
 	}
 }
 
-void RayTracer::createDescriptorTables(vector<Descriptor> &descriptors)
+void RayTracer::createDescriptorTables()
 {
+	for (auto i = 0u; i < FrameCount; ++i)
 	{
-		descriptors.push_back(m_bottomLevelAS.GetResult().GetUAV());
-		descriptors.push_back(m_topLevelAS.GetResult().GetUAV());
-		// 3 UAVs, so NumUAVs = 3.
 		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(descriptors.size()), descriptors.data());
-		m_uavTables[UAV_TABLE_OUTPUT] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		descriptorTable.SetDescriptors(0, 1, &m_outputViews[i].GetUAV());
+		m_uavTables[i][UAV_TABLE_OUTPUT] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+	}
+
+	{
+		Descriptor descriptors[NUM_MESH + 1];
+		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_bottomLevelASs[i].GetResult().GetUAV();
+		descriptors[NUM_MESH] = m_topLevelAS.GetResult().GetUAV();
+		Util::DescriptorTable descriptorTable;
+		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
+		descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
 	{
@@ -166,48 +256,71 @@ void RayTracer::createDescriptorTables(vector<Descriptor> &descriptors)
 	}
 
 	{
-		Descriptor descriptors[] = { m_indexBuffer.GetSRV(), m_vertexBuffer.GetSRV() };
+		Descriptor descriptors[NUM_MESH];
+		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_indexBuffers[i].GetSRV();
 		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, _countof(descriptors), descriptors);
-		m_srvTables[SRV_TABLE_IB_VB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
+		m_srvTables[SRV_TABLE_IB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+	}
+
+	{
+		Descriptor descriptors[ NUM_MESH];
+		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i].GetSRV();
+		Util::DescriptorTable descriptorTable;
+		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
+		m_srvTables[SRV_TABLE_VB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 }
 
 bool RayTracer::buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resource &instances)
 {
 	// Set geometries
-	const auto numDescs = 1u;
-	vector<Geometry> geometries(numDescs);
-	BottomLevelAS::SetGeometries(geometries.data(), numDescs, DXGI_FORMAT_R32G32B32_FLOAT,
-		&m_vertexBuffer.GetVBV(), &m_indexBuffer.GetIBV());
+	VertexBufferView vertexBufferViews[NUM_MESH];
+	IndexBufferView indexBufferViews[NUM_MESH];
+	for (auto i = 0; i < NUM_MESH; ++i)
+	{
+		vertexBufferViews[i] = m_vertexBuffers[i].GetVBV();
+		indexBufferViews[i] = m_indexBuffers[i].GetIBV();
+	}
+	vector<Geometry> geometries(NUM_MESH);
+	BottomLevelAS::SetGeometries(geometries.data(), NUM_MESH, DXGI_FORMAT_R32G32B32_FLOAT,
+		vertexBufferViews, indexBufferViews);
 
-	// Descriptors
-	vector<Descriptor> descriptors = { m_outputView.GetUAV() };
-	const uint32_t bottomLevelASIndex = static_cast<uint32_t>(descriptors.size());
-	const uint32_t topLevelASIndex = bottomLevelASIndex + 1;
+	// Descriptor index in descriptor pool
+	const uint32_t bottomLevelASIndex = FrameCount;
+	const uint32_t topLevelASIndex = bottomLevelASIndex + NUM_MESH;
 
 	// Prebuild
-	N_RETURN(m_bottomLevelAS.PreBuild(m_device, numDescs, geometries.data(), bottomLevelASIndex, NumUAVs), false);
-	N_RETURN(m_topLevelAS.PreBuild(m_device, numDescs, topLevelASIndex, NumUAVs), false);
+	for (auto i = 0; i < NUM_MESH; ++i)
+		N_RETURN(m_bottomLevelASs[i].PreBuild(m_device, 1, &geometries[i],
+			bottomLevelASIndex + i, NumUAVs), false);
+	N_RETURN(m_topLevelAS.PreBuild(m_device, NUM_MESH, topLevelASIndex, NumUAVs), false);
 
 	// Create scratch buffer
-	const auto scratchSize = (max)(m_bottomLevelAS.GetScratchDataMaxSize(), m_topLevelAS.GetScratchDataMaxSize());
+	auto scratchSize = m_topLevelAS.GetScratchDataMaxSize();
+	for (const auto &bottomLevelAS : m_bottomLevelASs)
+		scratchSize = (max)(bottomLevelAS.GetScratchDataMaxSize(), scratchSize);
 	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device.Common, scratch, scratchSize), false);
 
 	// Get descriptor pool and create descriptor tables
-	createDescriptorTables(descriptors);
+	createDescriptorTables();
 
 	// Set instance
-	const auto numInstances = 1u;
-	float *transforms[] = { XMMatrixIdentity().r[0].m128_f32 };
-	TopLevelAS::SetInstances(m_device, instances, 1, &m_bottomLevelAS, transforms);
+	const auto numInstances = NUM_MESH;
+	float *transforms[] =
+	{
+		XMMatrixIdentity().r[0].m128_f32,
+		XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))).r[0].m128_f32
+	};
+	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, m_bottomLevelASs, transforms);
 
-	// Build bottom level AS
-	N_RETURN(m_bottomLevelAS.Build(m_device, m_commandList, scratch,
-		m_descriptorTableCache.GetCbvSrvUavPool(), NumUAVs), false);
+	// Build bottom level ASs
+	for (auto &bottomLevelAS : m_bottomLevelASs)
+		N_RETURN(bottomLevelAS.Build(m_device, m_commandList, scratch,
+			m_descriptorTableCache.GetCbvSrvUavPool(), NumUAVs), false);
 
 	// Barrier
-	AccelerationStructure::Barrier(m_commandList, numInstances, &m_bottomLevelAS);
+	AccelerationStructure::Barrier(m_commandList, numInstances, m_bottomLevelASs);
 
 	// Build top level AS
 	return m_topLevelAS.Build(m_device, m_commandList, scratch, instances,
@@ -222,18 +335,19 @@ void RayTracer::buildShaderTables()
 	// Ray gen shader table
 	for (auto i = 0ui8; i < FrameCount; ++i)
 	{
-		m_rayGenShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants), L"RayGenShaderTable");
-		m_rayGenShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[PHONG],
+		m_rayGenShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
+			(L"RayGenShaderTable" + to_wstring(i)).c_str());
+		m_rayGenShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
 			RaygenShaderName, &m_cbRayGens[i], sizeof(RayGenConstants)));
 	}
 
 	// Miss shader table
 	m_missShaderTable.Create(m_device, 1, shaderIDSize, L"MissShaderTable");
-	m_missShaderTable.AddShaderRecord(ShaderRecord(m_device, m_pipelines[PHONG], MissShaderName));
+	m_missShaderTable.AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST], MissShaderName));
 
 	// Hit group shader table
 	m_hitGroupShaderTable.Create(m_device, 1, shaderIDSize, L"HitGroupShaderTable");
-	m_hitGroupShaderTable.AddShaderRecord(ShaderRecord(m_device, m_pipelines[PHONG], HitGroupName));
+	m_hitGroupShaderTable.AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST], HitGroupName));
 }
 
 void RayTracer::rayTrace(uint32_t frameIndex)
@@ -249,13 +363,12 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	};
 	SetDescriptorPool(m_device, m_commandList, 2, descriptorPools);
 
-	commandList->SetComputeRootDescriptorTable(OUTPUT_VIEW, *m_uavTables[UAV_TABLE_OUTPUT]);
+	commandList->SetComputeRootDescriptorTable(OUTPUT_VIEW, *m_uavTables[frameIndex][UAV_TABLE_OUTPUT]);
 	SetTopLevelAccelerationStructure(m_device, m_commandList, ACCELERATION_STRUCTURE, m_topLevelAS, m_srvTables[SRV_TABLE_AS]);
 	commandList->SetComputeRootDescriptorTable(SAMPLER, *m_samplerTable);
-	commandList->SetComputeRootDescriptorTable(GEOMETRY_BUFFERS, *m_srvTables[SRV_TABLE_IB_VB]);
+	commandList->SetComputeRootDescriptorTable(INDEX_BUFFERS, *m_srvTables[SRV_TABLE_IB]);
+	commandList->SetComputeRootDescriptorTable(VERTEX_BUFFERS, *m_srvTables[SRV_TABLE_VB]);
 
-	const auto width = static_cast<uint32_t>(m_viewport.x);
-	const auto height = static_cast<uint32_t>(m_viewport.y);
-	DispatchRays(m_device, m_commandList, m_pipelines[PHONG], width, height, 1,
+	DispatchRays(m_device, m_commandList, m_pipelines[TEST], m_viewport.x, m_viewport.y, 1,
 		m_hitGroupShaderTable, m_missShaderTable, m_rayGenShaderTables[frameIndex]);
 }

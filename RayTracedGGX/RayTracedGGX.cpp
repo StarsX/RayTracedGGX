@@ -37,7 +37,7 @@ static const float g_FOVAngleY = PIDIV4;
 static const float g_zNear = 1.0f;
 static const float g_zFar = 1000.0f;
 
-DXRTest::DXRTest(uint32_t width, uint32_t height, std::wstring name) :
+RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	DXFramework(width, height, name),
 	m_isDxrSupported(false),
 	m_frameIndex(0),
@@ -46,14 +46,14 @@ DXRTest::DXRTest(uint32_t width, uint32_t height, std::wstring name) :
 {
 }
 
-void DXRTest::OnInit()
+void RayTracedGGX::OnInit()
 {
 	LoadPipeline();
 	LoadAssets();
 }
 
 // Load the rendering pipeline dependencies.
-void DXRTest::LoadPipeline()
+void RayTracedGGX::LoadPipeline()
 {
 	auto dxgiFactoryFlags = 0u;
 
@@ -173,7 +173,7 @@ void DXRTest::LoadPipeline()
 }
 
 // Load the sample assets.
-void DXRTest::LoadAssets()
+void RayTracedGGX::LoadAssets()
 {
 	// Create the command list.
 	ThrowIfFailed(m_device.Common->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_frameIndex].Get(),
@@ -185,8 +185,8 @@ void DXRTest::LoadAssets()
 	m_rayTracer = make_unique<RayTracer>(m_device, m_commandList);
 	if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
-	Resource vbUpload, ibUpload, scratch, instances;
-	if (!m_rayTracer->Init(m_width, m_height, vbUpload, ibUpload, scratch, instances))
+	Resource vbUploads[RayTracer::NUM_MESH], ibUploads[RayTracer::NUM_MESH], scratch, instances;
+	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, scratch, instances))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -217,8 +217,8 @@ void DXRTest::LoadAssets()
 	XMStoreFloat4x4(&m_proj, proj);
 
 	// View initialization
-	m_focusPt = XMFLOAT3(0.0f, 4.0f, 0.0f);
-	m_eyePt = XMFLOAT3(-8.0f, 12.0f, 14.0f);
+	m_focusPt = XMFLOAT3(0.0f, 3.0f, 0.0f);
+	m_eyePt = XMFLOAT3(-10.0f, 15.0f, 16.0f);
 	const auto focusPt = XMLoadFloat3(&m_focusPt);
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMMatrixLookAtLH(eyePt, focusPt, XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));
@@ -226,7 +226,7 @@ void DXRTest::LoadAssets()
 }
 
 // Update frame-based values.
-void DXRTest::OnUpdate()
+void RayTracedGGX::OnUpdate()
 {
 	// Timer
 	static auto time = 0.0, pauseTime = 0.0;
@@ -244,7 +244,7 @@ void DXRTest::OnUpdate()
 }
 
 // Render the scene.
-void DXRTest::OnRender()
+void RayTracedGGX::OnRender()
 {
 	// Record all the commands we need to render the scene into the command list.
 	PopulateCommandList();
@@ -259,7 +259,7 @@ void DXRTest::OnRender()
 	MoveToNextFrame();
 }
 
-void DXRTest::OnDestroy()
+void RayTracedGGX::OnDestroy()
 {
 	// Ensure that the GPU is no longer referencing resources that are about to be
 	// cleaned up by the destructor.
@@ -269,7 +269,7 @@ void DXRTest::OnDestroy()
 }
 
 // User hot-key interactions.
-void DXRTest::OnKeyUp(uint8_t key)
+void RayTracedGGX::OnKeyUp(uint8_t key)
 {
 	switch (key)
 	{
@@ -279,7 +279,69 @@ void DXRTest::OnKeyUp(uint8_t key)
 	}
 }
 
-void DXRTest::PopulateCommandList()
+// User camera interactions.
+void RayTracedGGX::OnLButtonDown(float posX, float posY)
+{
+	m_tracking = true;
+	m_mousePt = XMFLOAT2(posX, posY);
+}
+
+void RayTracedGGX::OnLButtonUp(float posX, float posY)
+{
+	m_tracking = false;
+}
+
+void RayTracedGGX::OnMouseMove(float posX, float posY)
+{
+	if (m_tracking)
+	{
+		const auto dPos = XMFLOAT2(m_mousePt.x - posX, m_mousePt.y - posY);
+
+		XMFLOAT2 radians;
+		radians.x = XM_2PI * dPos.y / m_height;
+		radians.y = XM_2PI * dPos.x / m_width;
+
+		const auto focusPt = XMLoadFloat3(&m_focusPt);
+		auto eyePt = XMLoadFloat3(&m_eyePt);
+
+		const auto len = XMVectorGetX(XMVector3Length(focusPt - eyePt));
+		auto transform = XMMatrixTranslation(0.0f, 0.0f, -len);
+		transform *= XMMatrixRotationRollPitchYaw(radians.x, radians.y, 0.0f);
+		transform *= XMMatrixTranslation(0.0f, 0.0f, len);
+
+		const auto view = XMLoadFloat4x4(&m_view) * transform;
+		const auto viewInv = XMMatrixInverse(nullptr, view);
+		eyePt = viewInv.r[3];
+
+		XMStoreFloat3(&m_eyePt, eyePt);
+		XMStoreFloat4x4(&m_view, view);
+
+		m_mousePt = XMFLOAT2(posX, posY);
+	}
+}
+
+void RayTracedGGX::OnMouseWheel(float deltaZ, float posX, float posY)
+{
+	const auto focusPt = XMLoadFloat3(&m_focusPt);
+	auto eyePt = XMLoadFloat3(&m_eyePt);
+
+	const auto len = XMVectorGetX(XMVector3Length(focusPt - eyePt));
+	const auto transform = XMMatrixTranslation(0.0f, 0.0f, -len * deltaZ / 16.0f);
+
+	const auto view = XMLoadFloat4x4(&m_view) * transform;
+	const auto viewInv = XMMatrixInverse(nullptr, view);
+	eyePt = viewInv.r[3];
+
+	XMStoreFloat3(&m_eyePt, eyePt);
+	XMStoreFloat4x4(&m_view, view);
+}
+
+void RayTracedGGX::OnMouseLeave()
+{
+	m_tracking = false;
+}
+
+void RayTracedGGX::PopulateCommandList()
 {
 	// Command list allocators can only be reset when the associated 
 	// command lists have finished execution on the GPU; apps should use 
@@ -299,7 +361,7 @@ void DXRTest::PopulateCommandList()
 	// Record commands.
 	//const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
 	//commandList->ClearRenderTargetView(*m_rtvTables[m_frameIndex], clearColor, 0, nullptr);
-	commandList->ClearDepthStencilView(m_depth.GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+	//commandList->ClearDepthStencilView(m_depth.GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
 	m_rayTracer->Render(m_frameIndex, m_depth.GetDSV());
 
@@ -310,7 +372,7 @@ void DXRTest::PopulateCommandList()
 }
 
 // Wait for pending GPU work to complete.
-void DXRTest::WaitForGpu()
+void RayTracedGGX::WaitForGpu()
 {
 	// Schedule a Signal command in the queue.
 	ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_frameIndex]));
@@ -321,7 +383,7 @@ void DXRTest::WaitForGpu()
 }
 
 // Prepare to render the next frame.
-void DXRTest::MoveToNextFrame()
+void RayTracedGGX::MoveToNextFrame()
 {
 	// Schedule a Signal command in the queue.
 	const auto currentFenceValue = m_fenceValues[m_frameIndex];
@@ -341,7 +403,7 @@ void DXRTest::MoveToNextFrame()
 	m_fenceValues[m_frameIndex] = currentFenceValue + 1;
 }
 
-double DXRTest::CalculateFrameStats(float *fTimeStep)
+double RayTracedGGX::CalculateFrameStats(float *fTimeStep)
 {
 	static int frameCnt = 0;
 	static double elapsedTime = 0.0;
@@ -395,7 +457,7 @@ inline bool IsDirectXRaytracingSupported(IDXGIAdapter1 *adapter)
 		&& featureSupportData.RaytracingTier != D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
 }
 
-void DXRTest::EnableDirectXRaytracing(IDXGIAdapter1 *adapter)
+void RayTracedGGX::EnableDirectXRaytracing(IDXGIAdapter1 *adapter)
 {
 	// Fallback Layer uses an experimental feature and needs to be enabled before creating a D3D12 device.
 	bool isFallbackSupported = EnableComputeRaytracingFallback(adapter);
@@ -421,7 +483,7 @@ void DXRTest::EnableDirectXRaytracing(IDXGIAdapter1 *adapter)
 	}
 }
 
-void DXRTest::CreateRaytracingInterfaces()
+void RayTracedGGX::CreateRaytracingInterfaces()
 {
 	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
@@ -442,10 +504,10 @@ void DXRTest::CreateRaytracingInterfaces()
 }
 
 // Copy the raytracing output to the backbuffer.
-void DXRTest::CopyRaytracingOutputToBackbuffer()
+void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
 {
 	const auto &commandList = m_commandList.Common;
 	commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST));
-	commandList->CopyResource(m_renderTargets[m_frameIndex].Get(), m_rayTracer->GetOutputView().GetResource().Get());
+	commandList->CopyResource(m_renderTargets[m_frameIndex].Get(), m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().Get());
 	commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 }

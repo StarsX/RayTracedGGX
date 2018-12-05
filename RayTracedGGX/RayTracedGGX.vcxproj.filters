@@ -181,16 +181,7 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="PixelShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="VertexShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="RayTraceShader.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Content\Shaders\RayTracedPhong.hlsl">
+    <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

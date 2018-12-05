@@ -23,10 +23,10 @@ using namespace DirectX;
 // An example of this can be found in the class method: OnDestroy().
 using Microsoft::WRL::ComPtr;
 
-class DXRTest : public DXFramework
+class RayTracedGGX : public DXFramework
 {
 public:
-	DXRTest(uint32_t width, uint32_t height, std::wstring name);
+	RayTracedGGX(uint32_t width, uint32_t height, std::wstring name);
 
 	virtual void OnInit();
 	virtual void OnUpdate();
@@ -34,6 +34,11 @@ public:
 	virtual void OnDestroy();
 
 	virtual void OnKeyUp(uint8_t /*key*/);
+	virtual void OnLButtonDown(float posX, float posY);
+	virtual void OnLButtonUp(float posX, float posY);
+	virtual void OnMouseMove(float posX, float posY);
+	virtual void OnMouseWheel(float deltaZ, float posX, float posY);
+	virtual void OnMouseLeave();
 
 private:
 	static const uint32_t FrameCount = RayTracer::FrameCount;
@@ -73,6 +78,10 @@ private:
 	// Application state
 	bool m_pausing;
 	StepTimer m_timer;
+
+	// User camera interactions
+	bool m_tracking;
+	DirectX::XMFLOAT2 m_mousePt;
 
 	void LoadPipeline();
 	void LoadAssets();

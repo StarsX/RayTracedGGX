@@ -56,8 +56,11 @@
       <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;$(SolutionDir)Packages\WinPixEventRuntime.1.0.180612001\bin\WinPixEventRuntime.lib;$(SolutionDir)Build_VS15\$(Platform)\$(Configuration)\Output\FallbackLayer\FallbackLayer.lib</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cd "$(SolutionDir)tools\x64\"
-PostbuildCopy.bat "$(SolutionDir)$(Platform)\$(Configuration)\"</Command>
+      <Command>COPY /Y "$(OutDir)*.cso" "$(ProjectDir)..\Bin\"
+COPY /Y "$(OutDir)*.exe" "$(ProjectDir)..\Bin\"
+cd "$(SolutionDir)tools\x64\"
+PostbuildCopy.bat "$(ProjectDir)..\Bin\"
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
@@ -76,8 +79,11 @@ PostbuildCopy.bat "$(SolutionDir)$(Platform)\$(Configuration)\"</Command>
       <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;$(SolutionDir)Packages\WinPixEventRuntime.1.0.180612001\bin\WinPixEventRuntime.lib;$(SolutionDir)Build_VS15\$(Platform)\$(Configuration)\Output\FallbackLayer\FallbackLayer.lib</AdditionalDependencies>
     </Link>
     <PostBuildEvent>
-      <Command>cd "$(SolutionDir)tools\x64\"
-PostbuildCopy.bat "$(SolutionDir)$(Platform)\$(Configuration)\"</Command>
+      <Command>COPY /Y "$(OutDir)*.cso" "$(ProjectDir)..\Bin\"
+COPY /Y "$(OutDir)*.exe" "$(ProjectDir)..\Bin\"
+cd "$(SolutionDir)tools\x64\"
+PostbuildCopy.bat "$(ProjectDir)..\Bin\"
+</Command>
     </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
@@ -184,7 +190,7 @@ PostbuildCopy.bat "$(SolutionDir)$(Platform)\$(Configuration)\"</Command>
     <ClInclude Include="XUSG\RayTracing\XUSGShaderTable.h" />
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Content\Shaders\RayTracedPhong.hlsl">
+    <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.3</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
@@ -193,28 +199,6 @@ PostbuildCopy.bat "$(SolutionDir)$(Platform)\$(Configuration)\"</Command>
       </EntryPointName>
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </EntryPointName>
-    </FxCompile>
-    <FxCompile Include="PixelShader.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
-    </FxCompile>
-    <FxCompile Include="RayTraceShader.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.3</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.3</ShaderModel>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-      </EntryPointName>
-      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-      </EntryPointName>
-    </FxCompile>
-    <FxCompile Include="VertexShader.hlsl">
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

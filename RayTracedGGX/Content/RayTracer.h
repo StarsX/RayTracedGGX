@@ -11,15 +11,23 @@
 class RayTracer
 {
 public:
+	enum MeshIndex
+	{
+		MODEL_OBJ,
+		GROUND,
+
+		NUM_MESH
+	};
+
 	RayTracer(const XUSG::RayTracing::Device &device, const XUSG::RayTracing::CommandList &commandList);
 	virtual ~RayTracer();
 
-	bool Init(uint32_t width, uint32_t height, XUSG::Resource &vbUpload, XUSG::Resource &ibUpload,
+	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
 		XUSG::Resource &scratch, XUSG::Resource &instances, const char *fileName = "Media\\bunny.obj");
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
 	void Render(uint32_t frameIndex, const XUSG::Descriptor &dsv);
 
-	const XUSG::Texture2D &GetOutputView() const;
+	const XUSG::Texture2D &GetOutputView(uint32_t frameIndex, XUSG::ResourceState dstState = XUSG::ResourceState(0));
 
 	static const uint32_t FrameCount = 3;
 
@@ -37,12 +45,13 @@ protected:
 		OUTPUT_VIEW,
 		ACCELERATION_STRUCTURE,
 		SAMPLER,
-		GEOMETRY_BUFFERS
+		INDEX_BUFFERS,
+		VERTEX_BUFFERS
 	};
 
 	enum PipelineIndex
 	{
-		PHONG,
+		TEST,
 
 		NUM_PIPELINE_INDEX
 	};
@@ -50,7 +59,8 @@ protected:
 	enum SRVTable
 	{
 		SRV_TABLE_AS,
-		SRV_TABLE_IB_VB,
+		SRV_TABLE_IB,
+		SRV_TABLE_VB,
 
 		NUM_SRV_TABLE
 	};
@@ -65,15 +75,16 @@ protected:
 	struct RayGenConstants
 	{
 		DirectX::XMFLOAT4X4	ProjToWorld;
-		DirectX::XMFLOAT4	EyePt;
+		DirectX::XMFLOAT3	EyePt;
 	};
 
 	bool createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
 	bool createIB(uint32_t numIndices, const uint32_t *pData, XUSG::Resource &ibUpload);
+	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
 
 	void createPipelineLayouts();
 	void createPipeline();
-	void createDescriptorTables(std::vector<XUSG::Descriptor> &descriptors);
+	void createDescriptorTables();
 
 	bool buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resource &instances);
 	void buildShaderTables();
@@ -82,16 +93,11 @@ protected:
 	XUSG::RayTracing::Device m_device;
 	XUSG::RayTracing::CommandList m_commandList;
 
-	uint32_t m_vertexStride;
-	uint32_t m_numIndices;
-
-	DirectX::XMFLOAT4	m_bound;
-	DirectX::XMFLOAT2	m_viewport;
-
+	DirectX::XMUINT2	m_viewport;
 	RayGenConstants		m_cbRayGens[FrameCount];
 
-	static const uint32_t NumUAVs = 3;
-	XUSG::RayTracing::BottomLevelAS m_bottomLevelAS;
+	static const uint32_t NumUAVs = FrameCount + NUM_MESH + 1;
+	XUSG::RayTracing::BottomLevelAS m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 
 	XUSG::Blob m_shaderLib;
@@ -99,22 +105,22 @@ protected:
 	XUSG::RayTracing::Pipeline m_pipelines[NUM_PIPELINE_INDEX];
 
 	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
-	XUSG::DescriptorTable	m_uavTables[NUM_UAV_TABLE];
+	XUSG::DescriptorTable	m_uavTables[FrameCount][NUM_UAV_TABLE];
 	XUSG::DescriptorTable	m_samplerTable;
 
-	XUSG::VertexBuffer	m_vertexBuffer;
-	XUSG::IndexBuffer	m_indexBuffer;
+	XUSG::VertexBuffer		m_vertexBuffers[NUM_MESH];
+	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D		m_outputView;
+	XUSG::Texture2D			m_outputViews[FrameCount];
 
 	// Shader tables
-	static const wchar_t* HitGroupName;
-	static const wchar_t* RaygenShaderName;
-	static const wchar_t* ClosestHitShaderName;
-	static const wchar_t* MissShaderName;
-	XUSG::RayTracing::ShaderTable m_missShaderTable;
-	XUSG::RayTracing::ShaderTable m_hitGroupShaderTable;
-	XUSG::RayTracing::ShaderTable m_rayGenShaderTables[FrameCount];
+	static const wchar_t *HitGroupName;
+	static const wchar_t *RaygenShaderName;
+	static const wchar_t *ClosestHitShaderName;
+	static const wchar_t *MissShaderName;
+	XUSG::RayTracing::ShaderTable	m_missShaderTable;
+	XUSG::RayTracing::ShaderTable	m_hitGroupShaderTable;
+	XUSG::RayTracing::ShaderTable	m_rayGenShaderTables[FrameCount];
 
 	XUSG::RayTracing::PipelineCache	m_pipelineCache;
 	XUSG::PipelineLayoutCache		m_pipelineLayoutCache;
