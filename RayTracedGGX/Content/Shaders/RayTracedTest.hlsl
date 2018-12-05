@@ -2,6 +2,8 @@
 // By Stars XU Tianchen
 //--------------------------------------------------------------------------------------
 
+#include "BRDFModels.hlsli"
+
 #define NUM_TEXTURES		8
 #define MAX_RECURSION_DEPTH	3
 
@@ -52,12 +54,13 @@ StructuredBuffer<Vertex>	g_vertexBuffers[]	: register(t0, space2);
 SamplerState g_sampler;
 
 //--------------------------------------------------------------------------------------
-// Ray miss
+// Retrieve hit world position.
 //--------------------------------------------------------------------------------------
-[shader("miss")]
-void missMain(inout RayPayload payload)
+float4 environment(float3 dir)
 {
-	payload.Color = float4(0.0, 0.4, 0.8, 0.0);
+	const float a = dot(dir, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
+
+	return lerp(float4(0.0, 0.16, 0.64, 0.0), 1.0, a);
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
@@ -65,7 +68,8 @@ float4 traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 {
 	RayPayload payload;
 
-	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH) missMain(payload);
+	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH)
+		payload.Color = environment(ray.Direction) * 0.5;
 	else
 	{
 		// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
@@ -112,10 +116,11 @@ void raygenMain()
 	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
 	generateCameraRay(DispatchRaysIndex().xy, ray.Origin, ray.Direction);
 
-	const float4 color = traceRadianceRay(ray, 0);
+	float4 color = traceRadianceRay(ray, 0);
+	//color /= (color + 1.0);
 
 	// Write the raytraced color to the output texture.
-	RenderTarget[DispatchRaysIndex().xy] = color;
+	RenderTarget[DispatchRaysIndex().xy] = sqrt(color);
 }
 
 //--------------------------------------------------------------------------------------
@@ -173,10 +178,28 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	const float3 nrm = normalize(input.Nrm);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), nrm);
-	const float4 reflectionColor = traceRadianceRay(ray, payload.RecursionDepth);
+	float4 radiance = traceRadianceRay(ray, payload.RecursionDepth);
 
+	const float3 halfAngle = normalize(ray.Direction - WorldRayDirection());
+	const float NoV = max(dot(nrm, -WorldRayDirection()), 0.00001);
+	const float NoL = max(dot(nrm, ray.Direction), 0.0000);
+	const float NoH = max(dot(nrm, halfAngle), 0.00001);
+	const float VoH = saturate(dot(-WorldRayDirection(), halfAngle));
+
+	const float3 spec = float3(0.8, 0.8, 0.8);
+	radiance.xyz *= saturate(F_Schlick(spec, VoH) * Vis_Smith(0.0, NoV, NoL) / NoH);
+	
 	const float3 color = saturate(dot(nrm, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5);
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 	
-	payload.Color = lerp(float4(color, 1.0), reflectionColor, 0.25);
+	payload.Color = radiance;//lerp(float4(color, 1.0), radiance, 0.25);
+}
+
+//--------------------------------------------------------------------------------------
+// Ray miss
+//--------------------------------------------------------------------------------------
+[shader("miss")]
+void missMain(inout RayPayload payload)
+{
+	payload.Color = environment(WorldRayDirection());
 }

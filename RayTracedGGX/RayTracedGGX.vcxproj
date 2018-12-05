@@ -202,6 +202,7 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
+    <None Include="Content\Shaders\BRDFModels.hlsli" />
     <None Include="XUSG\Core\XUSGBlend.inl" />
     <None Include="XUSG\Core\XUSGDepthStencil.inl" />
     <None Include="XUSG\Core\XUSGRasterizer.inl" />

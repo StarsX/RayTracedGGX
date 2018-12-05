@@ -198,5 +198,8 @@
     <None Include="XUSG\Core\XUSGSampler.inl">
       <Filter>XUSG\Core\Inc</Filter>
     </None>
+    <None Include="Content\Shaders\BRDFModels.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
 </Project>
