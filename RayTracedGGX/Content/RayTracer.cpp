@@ -24,6 +24,8 @@ RayTracer::RayTracer(const RayTracing::Device &device, const RayTracing::Command
 	m_pipelineCache.SetDevice(device);
 	m_descriptorTableCache.SetDevice(device.Common);
 	m_pipelineLayoutCache.SetDevice(device.Common);
+
+	m_descriptorTableCache.SetName(L"RayTracerDescriptorTableCache");
 }
 
 RayTracer::~RayTracer()
@@ -201,7 +203,7 @@ void RayTracer::createPipelineLayouts()
 		pipelineLayout.SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout.SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		m_pipelineLayouts[GLOBAL_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_NONE, NumUAVs);
+			D3D12_ROOT_SIGNATURE_FLAG_NONE, NumUAVs, L"RayTracerGlobalPipelineLayout");
 	}
 
 	// Local Root Signature for RayGen shader
@@ -210,7 +212,7 @@ void RayTracer::createPipelineLayouts()
 		RayTracing::PipelineLayout pipelineLayout;
 		pipelineLayout.SetConstants(0, SizeOfInUint32(RayGenConstants), 0);
 		m_pipelineLayouts[RAY_GEN_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs);
+			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerRayGenPipelineLayout");
 	}
 }
 
@@ -249,6 +251,7 @@ void RayTracer::createDescriptorTables()
 		descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
+	if (m_device.RaytracingAPI == RayTracing::API::DirectXRaytracing)
 	{
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, 1, &m_topLevelAS.GetResult().GetSRV());
@@ -309,7 +312,8 @@ bool RayTracer::buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resou
 	const auto numInstances = NUM_MESH;
 	float *transforms[] =
 	{
-		XMMatrixIdentity().r[0].m128_f32,
+		XMMatrixTranspose((XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixTranslation(0.0f, 0.0f, 0.0f))).r[0].m128_f32,
+		//XMMatrixTranspose((XMMatrixScaling(0.03f, 0.03f, 0.03f) * XMMatrixTranslation(0.0f, 2.4f, 0.0f))).r[0].m128_f32,
 		XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))).r[0].m128_f32
 	};
 	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, m_bottomLevelASs, transforms);

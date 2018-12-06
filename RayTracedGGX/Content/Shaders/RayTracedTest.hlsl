@@ -181,13 +181,20 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	float4 radiance = traceRadianceRay(ray, payload.RecursionDepth);
 
 	const float3 halfAngle = normalize(ray.Direction - WorldRayDirection());
-	const float NoV = max(dot(nrm, -WorldRayDirection()), 0.00001);
-	const float NoL = max(dot(nrm, ray.Direction), 0.0000);
-	const float NoH = max(dot(nrm, halfAngle), 0.00001);
+	const float NoV = max(dot(nrm, -WorldRayDirection()), 1e-5);
+	const float NoL = saturate(dot(nrm, ray.Direction));
+	const float NoH = saturate(dot(nrm, halfAngle));
 	const float VoH = saturate(dot(-WorldRayDirection(), halfAngle));
 
-	const float3 spec = float3(0.8, 0.8, 0.8);
-	radiance.xyz *= saturate(F_Schlick(spec, VoH) * Vis_Smith(0.0, NoV, NoL) / NoH);
+	const float3 specColors[] =
+	{
+		float3(1.00, 0.71, 0.29),
+		float3(0.95, 0.93, 0.88)
+	};
+	float3 lightAmtBRDF = F_Schlick(specColors[InstanceIndex()], VoH);
+	lightAmtBRDF *= Vis_Schlick(0.0, NoV, NoL) * VoH;
+	lightAmtBRDF /= NoH * NoV;
+	radiance.xyz *= saturate(lightAmtBRDF);
 	
 	const float3 color = saturate(dot(nrm, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5);
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
