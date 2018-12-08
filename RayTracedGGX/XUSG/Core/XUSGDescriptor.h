@@ -8,6 +8,15 @@
 
 namespace XUSG
 {
+	enum DescriptorPoolType : uint8_t
+	{
+		CBV_SRV_UAV_POOL,
+		SAMPLER_POOL,
+		RTV_POOL,
+
+		NUM_DESCRIPTOR_POOL
+	};
+
 	enum SamplerPreset : uint8_t
 	{
 		POINT_WRAP,
@@ -68,10 +77,8 @@ namespace XUSG
 		void SetDevice(const Device &device);
 		void SetName(const wchar_t *name);
 
-		void AllocateCbvSrvUavPool(uint32_t numDescriptors);
-		void AllocateSamplerPool(uint32_t numDescriptors);
-		void AllocateRtvPool(uint32_t numDescriptors);
-
+		void AllocateDescriptorPool(DescriptorPoolType type, uint32_t numDescriptors);
+		
 		DescriptorTable CreateCbvSrvUavTable(const Util::DescriptorTable &util);
 		DescriptorTable GetCbvSrvUavTable(const Util::DescriptorTable &util);
 
@@ -81,18 +88,14 @@ namespace XUSG
 		RenderTargetTable CreateRtvTable(const Util::DescriptorTable &util);
 		RenderTargetTable GetRtvTable(const Util::DescriptorTable &util);
 
-		const DescriptorPool &GetCbvSrvUavPool() const;
-		const DescriptorPool &GetSamplerPool() const;
-
+		const DescriptorPool &GetDescriptorPool(DescriptorPoolType type) const;
+		
 		const std::shared_ptr<Sampler> &GetSampler(SamplerPreset preset);
 
 	protected:
 		friend class Util::DescriptorTable;
 
-		bool allocateCbvSrvUavPool(uint32_t numDescriptors);
-		bool allocateSamplerPool(uint32_t numDescriptors);
-		bool allocateRtvPool(uint32_t numDescriptors);
-		
+		bool allocateDescriptorPool(DescriptorPoolType type, uint32_t numDescriptors);
 		bool reallocateCbvSrvUavPool(const std::string &key);
 		bool reallocateSamplerPool(const std::string &key);
 		bool reallocateRtvPool(const std::string &key);
@@ -112,18 +115,9 @@ namespace XUSG
 		std::unordered_map<std::string, DescriptorTable> m_samplerTables;
 		std::unordered_map<std::string, RenderTargetTable> m_rtvTables;
 
-		DescriptorPool	m_cbvSrvUavPool;
-		DescriptorPool	m_samplerPool;
-		DescriptorPool	m_rtvPool;
-
-		uint32_t		m_strideCbvSrvUav;
-		uint32_t		m_numCbvSrvUavs;
-
-		uint32_t		m_strideSampler;
-		uint32_t		m_numSamplers;
-
-		uint32_t		m_strideRtv;
-		uint32_t		m_numRtvs;
+		DescriptorPool	m_descriptorPools[NUM_DESCRIPTOR_POOL];
+		uint32_t		m_descriptorStrides[NUM_DESCRIPTOR_POOL];
+		uint32_t		m_descriptorCounts[NUM_DESCRIPTOR_POOL];
 
 		std::shared_ptr<Sampler> m_samplerPresets[NUM_SAMPLER_PRESET];
 		std::function<Sampler()> m_pfnSamplers[NUM_SAMPLER_PRESET];

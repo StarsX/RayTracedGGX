@@ -58,6 +58,6 @@ float3 F_Schlick(float3 SpecularColor, float VoH)
 	//return Fc + (1 - Fc) * SpecularColor;					// 1 add, 3 mad
 
 	// Anything less than 2% is physically impossible and is instead considered to be shadowing
-	return saturate(50.0 * SpecularColor.g) * Fc + (1.0 - Fc) * SpecularColor;
-
+	//return saturate(50.0 * SpecularColor.g) * Fc + (1.0 - Fc) * SpecularColor;
+	return Fc + (1.0 - Fc) * SpecularColor;
 }

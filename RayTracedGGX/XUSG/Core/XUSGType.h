@@ -15,19 +15,43 @@
 
 namespace XUSG
 {
-	using Microsoft::WRL::ComPtr;
+	template <typename T>
+	class com_ptr :
+		public Microsoft::WRL::ComPtr<T>
+	{
+	public:
+		using element_type = InterfaceType;
+
+		com_ptr() : ComPtr() {}
+		com_ptr(decltype(__nullptr) null) : ComPtr(null) {}
+
+		template<class U>
+		com_ptr(U *other) : ComPtr(other) {}
+		com_ptr(const ComPtr &other) : ComPtr(other) {}
+
+		template<class U>
+		com_ptr(const ComPtr<U> &other, typename Microsoft::WRL::Details::EnableIf<__is_convertible_to(U*, T*), void *>::type *t = 0) :
+			ComPtr(other, t) {}
+		com_ptr(ComPtr &&other) : ComPtr(other) {}
+
+		template<class U>
+		com_ptr(ComPtr<U>&& other, typename Microsoft::WRL::Details::EnableIf<__is_convertible_to(U*, T*), void *>::type *t = 0) :
+			ComPtr(other, t) {}
+
+		T *get() const { return Get(); }
+	};
 
 	// Device and blobs
 	using BlobType = ID3DBlob;
-	using Blob = ComPtr<BlobType>;
-	using Device = ComPtr<ID3D12Device>;
+	using Blob = com_ptr<BlobType>;
+	using Device = com_ptr<ID3D12Device>;
 
 	// Command lists related
 	using CommandList = ID3D12CommandList*;
-	using GraphicsCommandList = ComPtr<ID3D12GraphicsCommandList>;
+	using GraphicsCommandList = com_ptr<ID3D12GraphicsCommandList>;
 
 	// Resources related
-	using Resource = ComPtr<ID3D12Resource>;
+	using Resource = com_ptr<ID3D12Resource>;
 	using VertexBufferView = D3D12_VERTEX_BUFFER_VIEW;
 	using IndexBufferView = D3D12_INDEX_BUFFER_VIEW;
 	using Sampler = D3D12_SAMPLER_DESC;
@@ -36,14 +60,14 @@ namespace XUSG
 	using ResourceBarrier = D3D12_RESOURCE_BARRIER;
 
 	// Descriptors related
-	using DescriptorPool = ComPtr<ID3D12DescriptorHeap>;
+	using DescriptorPool = com_ptr<ID3D12DescriptorHeap>;
 	using Descriptor = CD3DX12_CPU_DESCRIPTOR_HANDLE;
 	using DescriptorView = CD3DX12_GPU_DESCRIPTOR_HANDLE;
 	using DescriptorTable = std::shared_ptr<DescriptorView>;
 	using RenderTargetTable = std::shared_ptr<Descriptor>;
 
 	// Pipeline layouts related
-	using PipelineLayout = ComPtr<ID3D12RootSignature>;
+	using PipelineLayout = com_ptr<ID3D12RootSignature>;
 	using DescriptorRangeList = std::vector<CD3DX12_DESCRIPTOR_RANGE1>;
 
 	// Input layouts related
@@ -71,13 +95,13 @@ namespace XUSG
 	};
 	using DescriptorTableLayout = std::shared_ptr<RootParameter>;
 
-	using Pipeline = ComPtr<ID3D12PipelineState>;
+	using Pipeline = com_ptr<ID3D12PipelineState>;
 
 	// Shaders related
 	namespace Shader
 	{
 		using ByteCode = CD3DX12_SHADER_BYTECODE;
-		using Reflector = ComPtr<ID3D12ShaderReflection>;
+		using Reflector = com_ptr<ID3D12ShaderReflection>;
 	}
 
 	// Graphics pipelines related

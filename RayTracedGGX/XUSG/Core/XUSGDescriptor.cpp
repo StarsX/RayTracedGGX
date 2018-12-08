@@ -83,12 +83,9 @@ DescriptorTableCache::DescriptorTableCache() :
 	m_cbvSrvUavTables(0),
 	m_samplerTables(0),
 	m_rtvTables(0),
-	m_cbvSrvUavPool(nullptr),
-	m_samplerPool(nullptr),
-	m_rtvPool(nullptr),
-	m_numCbvSrvUavs(0),
-	m_numSamplers(0),
-	m_numRtvs(0),
+	m_descriptorPools(),
+	m_descriptorStrides(),
+	m_descriptorCounts(),
 	m_samplerPresets()
 {
 	// Sampler presets
@@ -123,9 +120,9 @@ void DescriptorTableCache::SetDevice(const Device &device)
 {
 	m_device = device;
 
-	m_strideCbvSrvUav = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_strideSampler = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
-	m_strideRtv = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	m_descriptorStrides[CBV_SRV_UAV_POOL] = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+	m_descriptorStrides[SAMPLER_POOL] = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER);
+	m_descriptorStrides[RTV_POOL] = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 }
 
 void DescriptorTableCache::SetName(const wchar_t *name)
@@ -133,19 +130,9 @@ void DescriptorTableCache::SetName(const wchar_t *name)
 	if (name) m_name = name;
 }
 
-void DescriptorTableCache::AllocateCbvSrvUavPool(uint32_t numDescriptors)
+void DescriptorTableCache::AllocateDescriptorPool(DescriptorPoolType type, uint32_t numDescriptors)
 {
-	allocateCbvSrvUavPool(numDescriptors);
-}
-
-void DescriptorTableCache::AllocateSamplerPool(uint32_t numDescriptors)
-{
-	allocateSamplerPool(numDescriptors);
-}
-
-void DescriptorTableCache::AllocateRtvPool(uint32_t numDescriptors)
-{
-	allocateRtvPool(numDescriptors);
+	allocateDescriptorPool(type, numDescriptors);
 }
 
 DescriptorTable DescriptorTableCache::CreateCbvSrvUavTable(const Util::DescriptorTable &util)
@@ -178,14 +165,9 @@ RenderTargetTable DescriptorTableCache::GetRtvTable(const Util::DescriptorTable 
 	return getRtvTable(util.GetKey());
 }
 
-const DescriptorPool &DescriptorTableCache::GetCbvSrvUavPool() const
+const DescriptorPool &DescriptorTableCache::GetDescriptorPool(DescriptorPoolType type) const
 {
-	return m_cbvSrvUavPool;
-}
-
-const DescriptorPool &DescriptorTableCache::GetSamplerPool() const
-{
-	return m_samplerPool;
+	return m_descriptorPools[type];
 }
 
 const shared_ptr<Sampler> &DescriptorTableCache::GetSampler(SamplerPreset preset)
@@ -196,43 +178,30 @@ const shared_ptr<Sampler> &DescriptorTableCache::GetSampler(SamplerPreset preset
 	return m_samplerPresets[preset];
 }
 
-bool DescriptorTableCache::allocateCbvSrvUavPool(uint32_t numDescriptors)
+bool DescriptorTableCache::allocateDescriptorPool(DescriptorPoolType type, uint32_t numDescriptors)
 {
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.NumDescriptors = numDescriptors;
-	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV;
-	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	V_RETURN(m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_cbvSrvUavPool)), cerr, false);
-	if (!m_name.empty()) m_cbvSrvUavPool->SetName((m_name + L".CbvSrvUavPool").c_str());
-
-	m_numCbvSrvUavs = 0;
-
-	return true;
-}
-
-bool DescriptorTableCache::allocateSamplerPool(uint32_t numDescriptors)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.NumDescriptors = numDescriptors;
-	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER;
-	desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
-	V_RETURN(m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_samplerPool)), cerr, false);
-	if (!m_name.empty()) m_samplerPool->SetName((m_name + L".SamplerPool").c_str());
-
-	m_numSamplers = 0;
-
-	return true;
-}
-
-bool DescriptorTableCache::allocateRtvPool(uint32_t numDescriptors)
-{
-	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
-	desc.NumDescriptors = numDescriptors;
-	desc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-	V_RETURN(m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_rtvPool)), cerr, false);
-	if (!m_name.empty()) m_rtvPool->SetName((m_name + L".RtvPool").c_str());
+	static const D3D12_DESCRIPTOR_HEAP_TYPE heapTypes[NUM_DESCRIPTOR_POOL] =
+	{
+		D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV,
+		D3D12_DESCRIPTOR_HEAP_TYPE_SAMPLER,
+		D3D12_DESCRIPTOR_HEAP_TYPE_RTV
+	};
 	
-	m_numRtvs = 0;
+	static const wchar_t *poolNames[] =
+	{
+		L".CbvSrvUavPool",
+		L".SamplerPool",
+		L".RtvPool"
+	};
+
+	D3D12_DESCRIPTOR_HEAP_DESC desc = {};
+	desc.NumDescriptors = numDescriptors;
+	desc.Type = heapTypes[type];
+	if (type != D3D12_DESCRIPTOR_HEAP_TYPE_RTV) desc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_SHADER_VISIBLE;
+	V_RETURN(m_device->CreateDescriptorHeap(&desc, IID_PPV_ARGS(&m_descriptorPools[type])), cerr, false);
+	if (!m_name.empty()) m_descriptorPools[type]->SetName((m_name + poolNames[type]).c_str());
+
+	m_descriptorCounts[type] = 0;
 
 	return true;
 }
@@ -242,30 +211,19 @@ bool DescriptorTableCache::reallocateCbvSrvUavPool(const string &key)
 	assert(key.size() > 0);
 	const auto numDescriptors = static_cast<uint32_t>(key.size() / sizeof(Descriptor));
 
-#if 0
-	// Record source data
-	const auto srcPool = m_cbvSrvUavPool;
-	const auto numCbvSrcUavs = m_numCbvSrvUavs;
-
-	// Allocate a new pool
-	m_numCbvSrvUavs += numDescriptors;
-	allocateCbvSrvUavPool(m_numCbvSrvUavs);
-
-	// Copy descriptors
-	m_device->CopyDescriptorsSimple(numCbvSrcUavs, m_cbvSrvUavPool->GetCPUDescriptorHandleForHeapStart(),
-		srcPool->GetCPUDescriptorHandleForHeapStart(), D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-	m_numCbvSrvUavs = numCbvSrcUavs;
-#endif
-
-	// Allocate a new pool
-	m_numCbvSrvUavs += numDescriptors;
-	N_RETURN(allocateCbvSrvUavPool(m_numCbvSrvUavs), false);
-
-	// Recreate descriptor tables
-	for (auto &tableIter : m_cbvSrvUavTables)
+	// Allocate a new pool if neccessary
+	const auto &descriptorPool = m_descriptorPools[CBV_SRV_UAV_POOL];
+	const auto descriptorCount = m_descriptorCounts[CBV_SRV_UAV_POOL] + numDescriptors;
+	if (!descriptorPool || descriptorPool->GetDesc().NumDescriptors < descriptorCount)
 	{
-		const auto table = createCbvSrvUavTable(tableIter.first);
-		*tableIter.second = *table;
+		N_RETURN(allocateDescriptorPool(CBV_SRV_UAV_POOL, descriptorCount), false);
+
+		// Recreate descriptor tables
+		for (auto &tableIter : m_cbvSrvUavTables)
+		{
+			const auto table = createCbvSrvUavTable(tableIter.first);
+			*tableIter.second = *table;
+		}
 	}
 
 	return true;
@@ -276,15 +234,19 @@ bool DescriptorTableCache::reallocateSamplerPool(const string &key)
 	assert(key.size() > 0);
 	const auto numDescriptors = static_cast<uint32_t>(key.size() / sizeof(Sampler*));
 
-	// Allocate a new pool
-	m_numSamplers += numDescriptors;
-	N_RETURN(allocateSamplerPool(m_numSamplers), false);
-
-	// Recreate descriptor tables
-	for (auto &tableIter : m_samplerTables)
+	// Allocate a new pool if neccessary
+	const auto &descriptorPool = m_descriptorPools[SAMPLER_POOL];
+	const auto descriptorCount = m_descriptorCounts[SAMPLER_POOL] + numDescriptors;
+	if (!descriptorPool || descriptorPool->GetDesc().NumDescriptors < descriptorCount)
 	{
-		const auto table = createSamplerTable(tableIter.first);
-		*tableIter.second = *table;
+		N_RETURN(allocateDescriptorPool(SAMPLER_POOL, descriptorCount), false);
+
+		// Recreate descriptor tables
+		for (auto &tableIter : m_samplerTables)
+		{
+			const auto table = createSamplerTable(tableIter.first);
+			*tableIter.second = *table;
+		}
 	}
 
 	return true;
@@ -295,15 +257,19 @@ bool DescriptorTableCache::reallocateRtvPool(const string &key)
 	assert(key.size() > 0);
 	const auto numDescriptors = static_cast<uint32_t>(key.size() / sizeof(Descriptor));
 
-	// Allocate a new pool
-	m_numRtvs += numDescriptors;
-	N_RETURN(allocateRtvPool(m_numRtvs), false);
-
-	// Recreate descriptor tables
-	for (auto &tableIter : m_rtvTables)
+	// Allocate a new pool if neccessary
+	const auto &descriptorPool = m_descriptorPools[RTV_POOL];
+	const auto descriptorCount = m_descriptorCounts[RTV_POOL] + numDescriptors;
+	if (!descriptorPool || descriptorPool->GetDesc().NumDescriptors < descriptorCount)
 	{
-		const auto table = createRtvTable(tableIter.first);
-		*tableIter.second = *table;
+		N_RETURN(allocateDescriptorPool(RTV_POOL, descriptorCount), false);
+
+		// Recreate descriptor tables
+		for (auto &tableIter : m_rtvTables)
+		{
+			const auto table = createRtvTable(tableIter.first);
+			*tableIter.second = *table;
+		}
 	}
 
 	return true;
@@ -317,17 +283,20 @@ DescriptorTable DescriptorTableCache::createCbvSrvUavTable(const string &key)
 		const auto descriptors = reinterpret_cast<const Descriptor*>(&key[0]);
 
 		// Compute start addresses for CPU and GPU handles
-		Descriptor descriptor(m_cbvSrvUavPool->GetCPUDescriptorHandleForHeapStart(), m_numCbvSrvUavs, m_strideCbvSrvUav);
-		DescriptorTable table = make_shared<DescriptorView>(m_cbvSrvUavPool->GetGPUDescriptorHandleForHeapStart(),
-			m_numCbvSrvUavs, m_strideCbvSrvUav);
+		const auto &descriptorPool = m_descriptorPools[CBV_SRV_UAV_POOL];
+		const auto &descriptorStride = m_descriptorStrides[CBV_SRV_UAV_POOL];
+		auto &descriptorCount = m_descriptorCounts[CBV_SRV_UAV_POOL];
+		Descriptor descriptor(descriptorPool->GetCPUDescriptorHandleForHeapStart(), descriptorCount, descriptorStride);
+		DescriptorTable table = make_shared<DescriptorView>(descriptorPool->GetGPUDescriptorHandleForHeapStart(),
+			descriptorCount, descriptorStride);
 
 		// Create a descriptor table
 		for (auto i = 0u; i < numDescriptors; ++i)
 		{
 			// Copy a descriptor
 			m_device->CopyDescriptorsSimple(1, descriptor, descriptors[i], D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
-			descriptor.Offset(m_strideCbvSrvUav);
-			++m_numCbvSrvUavs;
+			descriptor.Offset(descriptorStride);
+			++descriptorCount;
 		}
 
 		return table;
@@ -365,17 +334,20 @@ DescriptorTable DescriptorTableCache::createSamplerTable(const string &key)
 		const auto descriptors = reinterpret_cast<const Sampler* const*>(&key[0]);
 
 		// Compute start addresses for CPU and GPU handles
-		Descriptor descriptor(m_samplerPool->GetCPUDescriptorHandleForHeapStart(), m_numSamplers, m_strideSampler);
-		DescriptorTable table = make_shared<DescriptorView>(m_samplerPool->GetGPUDescriptorHandleForHeapStart(),
-			m_numSamplers, m_strideSampler);
+		const auto &descriptorPool = m_descriptorPools[SAMPLER_POOL];
+		const auto &descriptorStride = m_descriptorStrides[SAMPLER_POOL];
+		auto &descriptorCount = m_descriptorCounts[SAMPLER_POOL];
+		Descriptor descriptor(descriptorPool->GetCPUDescriptorHandleForHeapStart(), descriptorCount, descriptorStride);
+		DescriptorTable table = make_shared<DescriptorView>(descriptorPool->GetGPUDescriptorHandleForHeapStart(),
+			descriptorCount, descriptorStride);
 		
 		// Create a descriptor table
 		for (auto i = 0u; i < numDescriptors; ++i)
 		{
 			// Copy a descriptor
 			m_device->CreateSampler(descriptors[i], descriptor);
-			descriptor.Offset(m_strideSampler);
-			++m_numSamplers;
+			descriptor.Offset(descriptorStride);
+			++descriptorCount;
 		}
 
 		return table;
@@ -413,7 +385,10 @@ RenderTargetTable DescriptorTableCache::createRtvTable(const string &key)
 		const auto descriptors = reinterpret_cast<const Descriptor*>(&key[0]);
 
 		// Compute start addresses for CPU and GPU handles
-		Descriptor descriptor(m_rtvPool->GetCPUDescriptorHandleForHeapStart(), m_numRtvs, m_strideRtv);
+		const auto &descriptorPool = m_descriptorPools[RTV_POOL];
+		const auto &descriptorStride = m_descriptorStrides[RTV_POOL];
+		auto &descriptorCount = m_descriptorCounts[RTV_POOL];
+		Descriptor descriptor(descriptorPool->GetCPUDescriptorHandleForHeapStart(), descriptorCount, descriptorStride);
 		RenderTargetTable table = make_shared<Descriptor>();
 		*table = descriptor;
 
@@ -422,8 +397,8 @@ RenderTargetTable DescriptorTableCache::createRtvTable(const string &key)
 		{
 			// Copy a descriptor
 			m_device->CopyDescriptorsSimple(1, descriptor, descriptors[i], D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-			descriptor.Offset(m_strideRtv);
-			++m_numRtvs;
+			descriptor.Offset(descriptorStride);
+			++descriptorCount;
 		}
 
 		return table;

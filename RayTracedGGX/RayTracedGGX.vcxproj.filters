@@ -179,6 +179,9 @@
     <ClInclude Include="Content\RayTracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="XUSG\Core\XUSG.h">
+      <Filter>XUSG\Core\Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">

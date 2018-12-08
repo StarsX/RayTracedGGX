@@ -37,10 +37,10 @@ namespace XUSG
 
 		Resource		m_resource;
 		DescriptorPool	m_cbvPool;
-		std::vector<Descriptor> m_CBVs;
-		Descriptor		m_cbvCurrent;
+		std::vector<Descriptor> m_cbvs;
+		Descriptor		m_currentCbv;
 		
-		std::vector<uint32_t> m_CBVOffsets;
+		std::vector<uint32_t> m_cbvOffsets;
 
 		void			*m_pDataBegin;
 	};
@@ -71,11 +71,11 @@ namespace XUSG
 
 		Resource		m_resource;
 		DescriptorPool	m_srvUavPool;
-		std::vector<Descriptor> m_SRVs;
-		Descriptor		m_srvUavCurrent;
+		std::vector<Descriptor> m_srvs;
+		Descriptor		m_currentSrvUav;
 
 		ResourceState	m_state;
-		uint32_t		m_strideSrvUav;
+		uint32_t		m_srvUavStride;
 
 		std::wstring	m_name;
 	};
@@ -109,9 +109,9 @@ namespace XUSG
 		Descriptor GetSRVLevel(uint8_t i) const;
 
 	protected:
+		std::vector<Descriptor>	m_uavs;
+		std::vector<Descriptor>	m_srvLevels;
 		Resource m_counter;
-		std::vector<Descriptor>	m_UAVs;
-		std::vector<Descriptor>	m_SRVLevels;
 	};
 
 	//--------------------------------------------------------------------------------------
@@ -147,10 +147,10 @@ namespace XUSG
 		bool allocateRtvPool(uint32_t numDescriptors);
 
 		DescriptorPool	m_rtvPool;
-		std::vector<std::vector<Descriptor>> m_RTVs;
-		Descriptor		m_rtvCurrent;
+		std::vector<std::vector<Descriptor>> m_rtvs;
+		Descriptor		m_currentRtv;
 
-		uint32_t		m_strideRtv;
+		uint32_t		m_rtvStride;
 	};
 
 	//--------------------------------------------------------------------------------------
@@ -170,8 +170,8 @@ namespace XUSG
 			float clearDepth = 1.0f, const wchar_t *name = nullptr);
 
 		Descriptor GetDSV(uint8_t mipLevel = 0) const;
-		Descriptor GetDSVReadOnly(uint8_t mipLevel = 0) const;
-		const Descriptor &GetSRVStencil() const;
+		Descriptor GetReadOnlyDSV(uint8_t mipLevel = 0) const;
+		const Descriptor &GetStencilSRV() const;
 
 		const uint8_t GetNumMips() const;
 
@@ -179,12 +179,12 @@ namespace XUSG
 		bool allocateDsvPool(uint32_t numDescriptors);
 
 		DescriptorPool m_dsvPool;
-		std::vector<Descriptor> m_DSVs;
-		std::vector<Descriptor> m_DSVROs;
-		Descriptor	m_SRVStencil;
-		Descriptor	m_dsvCurrent;
+		std::vector<Descriptor> m_dsvs;
+		std::vector<Descriptor> m_readOnlyDsvs;
+		Descriptor	m_stencilSrv;
+		Descriptor	m_currentDsv;
 
-		uint32_t	m_strideDsv;
+		uint32_t	m_dsvStride;
 	};
 
 	//--------------------------------------------------------------------------------------
@@ -210,9 +210,9 @@ namespace XUSG
 		Descriptor GetSRVLevel(uint8_t i) const;
 
 	protected:
+		std::vector<Descriptor>	m_uavs;
+		std::vector<Descriptor>	m_srvLevels;
 		Resource m_counter;
-		std::vector<Descriptor>	m_UAVs;
-		std::vector<Descriptor>	m_SRVLevels;
 	};
 
 	//--------------------------------------------------------------------------------------
@@ -248,9 +248,9 @@ namespace XUSG
 			PoolType poolType, ResourceState state, uint32_t numSRVs, uint32_t numUAVs,
 			const wchar_t *name);
 
+		std::vector<Descriptor>	m_uavs;
+		std::vector<uint32_t>	m_srvOffsets;
 		Resource m_counter;
-		std::vector<Descriptor>	m_UAVs;
-		std::vector<uint32_t>	m_SRVOffsets;
 
 		void *m_pDataBegin;
 	};
@@ -322,7 +322,7 @@ namespace XUSG
 		VertexBufferView GetVBV(uint32_t i = 0) const;
 
 	protected:
-		std::vector<VertexBufferView> m_VBVs;
+		std::vector<VertexBufferView> m_vbvs;
 	};
 
 	//--------------------------------------------------------------------------------------
@@ -346,6 +346,6 @@ namespace XUSG
 		IndexBufferView GetIBV(uint32_t i = 0) const;
 
 	protected:
-		std::vector<IndexBufferView> m_IBVs;
+		std::vector<IndexBufferView> m_ibvs;
 	};
 }

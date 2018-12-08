@@ -21,7 +21,7 @@ struct Vertex
 
 struct RayPayload
 {
-	float4	Color;
+	float3	Color;
 	uint	RecursionDepth;
 };
 
@@ -56,32 +56,32 @@ SamplerState g_sampler;
 //--------------------------------------------------------------------------------------
 // Retrieve hit world position.
 //--------------------------------------------------------------------------------------
-float4 environment(float3 dir)
+float3 environment(float3 dir)
 {
 	const float a = dot(dir, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
 
-	return lerp(float4(0.0, 0.16, 0.64, 0.0), 1.0, a);
+	return lerp(float3(0.0, 0.16, 0.64), 1.0, a);
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
-float4 traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
+RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 {
 	RayPayload payload;
 
 	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH)
-		payload.Color = environment(ray.Direction) * 0.5;
+		payload.Color = environment(ray.Direction);// *0.5;
 	else
 	{
 		// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
 		// Note: make sure to enable face culling so as to avoid surface face fighting.
 		ray.TMin = 0.0;
 		ray.TMax = 10000.0;
-		payload.Color = 0.0.xxxx;
+		payload.Color = 0.0.xxx;
 		payload.RecursionDepth = currentRayRecursionDepth + 1;
 		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
 	}
 
-	return payload.Color;
+	return payload;
 }
 
 //--------------------------------------------------------------------------------------
@@ -116,11 +116,12 @@ void raygenMain()
 	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
 	generateCameraRay(DispatchRaysIndex().xy, ray.Origin, ray.Direction);
 
-	float4 color = traceRadianceRay(ray, 0);
-	//color /= (color + 1.0);
+	RayPayload payload = traceRadianceRay(ray, 0);
+	float3 color = sqrt(payload.Color);
 
 	// Write the raytraced color to the output texture.
-	RenderTarget[DispatchRaysIndex().xy] = sqrt(color);
+	const float a = payload.RecursionDepth > 1 ? 1.0 : 0.0;
+	RenderTarget[DispatchRaysIndex().xy] = float4(color, a);
 }
 
 //--------------------------------------------------------------------------------------
@@ -175,31 +176,32 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// Trace a reflection ray.
 	RayDesc ray;
-	const float3 nrm = normalize(input.Nrm);
+	const float3 N = normalize(input.Nrm);
 	ray.Origin = hitWorldPosition();
-	ray.Direction = reflect(WorldRayDirection(), nrm);
-	float4 radiance = traceRadianceRay(ray, payload.RecursionDepth);
+	ray.Direction = reflect(WorldRayDirection(), N);
+	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;
 
-	const float3 halfAngle = normalize(ray.Direction - WorldRayDirection());
-	const float NoV = max(dot(nrm, -WorldRayDirection()), 1e-5);
-	const float NoL = saturate(dot(nrm, ray.Direction));
-	const float NoH = saturate(dot(nrm, halfAngle));
-	const float VoH = saturate(dot(-WorldRayDirection(), halfAngle));
+	const float3 V = -WorldRayDirection();
+	const float3 H = normalize(V + ray.Direction);
+	const float NoV = max(dot(N, V), 1e-5);
+	const float NoL = saturate(dot(N, ray.Direction));
+	const float NoH = saturate(dot(N, H));
+	const float VoH = saturate(dot(V, H));
 
 	const float3 specColors[] =
 	{
 		float3(1.00, 0.71, 0.29),
 		float3(0.95, 0.93, 0.88)
 	};
-	float3 lightAmtBRDF = F_Schlick(specColors[InstanceIndex()], VoH);
-	lightAmtBRDF *= Vis_Schlick(0.0, NoV, NoL) * VoH;
-	lightAmtBRDF /= NoH * NoV;
-	radiance.xyz *= saturate(lightAmtBRDF);
-	
-	const float3 color = saturate(dot(nrm, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5);
+	const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
+	const float Vis = Vis_Schlick(0.0, NoV, NoL);
+	//radiance *= F * NoL * Vis * (4.0 * VoH / NoH);
+	//radiance *= F;
+	radiance *= F * saturate(Vis * VoH / NoV);
+
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 	
-	payload.Color = radiance;//lerp(float4(color, 1.0), radiance, 0.25);
+	payload.Color = radiance;
 }
 
 //--------------------------------------------------------------------------------------

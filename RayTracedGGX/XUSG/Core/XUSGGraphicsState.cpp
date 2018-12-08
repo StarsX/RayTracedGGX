@@ -27,12 +27,12 @@ State::~State()
 
 void State::SetPipelineLayout(const PipelineLayout &layout)
 {
-	m_pKey->PipelineLayout = layout.Get();
+	m_pKey->PipelineLayout = layout.get();
 }
 
 void State::SetShader(Shader::Stage stage, Blob shader)
 {
-	m_pKey->Shaders[stage] = shader.Get();
+	m_pKey->Shaders[stage] = shader.get();
 }
 
 void State::OMSetBlendState(const Blend &blend)

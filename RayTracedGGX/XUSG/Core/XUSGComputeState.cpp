@@ -23,12 +23,12 @@ State::~State()
 
 void State::SetPipelineLayout(const PipelineLayout &layout)
 {
-	m_pKey->PipelineLayout = layout.Get();
+	m_pKey->PipelineLayout = layout.get();
 }
 
 void State::SetShader(Blob shader)
 {
-	m_pKey->Shader = shader.Get();
+	m_pKey->Shader = shader.get();
 }
 
 Pipeline State::CreatePipeline(PipelineCache &pipelineCache, const wchar_t *name) const

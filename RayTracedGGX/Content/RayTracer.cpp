@@ -12,10 +12,10 @@ using namespace DirectX;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
 
-const wchar_t* RayTracer::HitGroupName = L"hitGroup";
-const wchar_t* RayTracer::RaygenShaderName = L"raygenMain";
-const wchar_t* RayTracer::ClosestHitShaderName = L"closestHitMain";
-const wchar_t* RayTracer::MissShaderName = L"missMain";
+const wchar_t *RayTracer::HitGroupName = L"hitGroup";
+const wchar_t *RayTracer::RaygenShaderName = L"raygenMain";
+const wchar_t *RayTracer::ClosestHitShaderName = L"closestHitMain";
+const wchar_t *RayTracer::MissShaderName = L"missMain";
 
 RayTracer::RayTracer(const RayTracing::Device &device, const RayTracing::CommandList &commandList) :
 	m_device(device),
@@ -224,7 +224,7 @@ void RayTracer::createPipeline()
 		RayTracing::State state;
 		state.SetShaderLibrary(m_shaderLib);
 		state.SetHitGroup(0, HitGroupName, ClosestHitShaderName);
-		state.SetShaderConfig(sizeof(XMFLOAT4) + sizeof(uint32_t), sizeof(XMFLOAT2));
+		state.SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
 		state.SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
@@ -235,6 +235,8 @@ void RayTracer::createPipeline()
 
 void RayTracer::createDescriptorTables()
 {
+	m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2 + 1);
+
 	for (auto i = 0u; i < FrameCount; ++i)
 	{
 		Util::DescriptorTable descriptorTable;
@@ -267,7 +269,7 @@ void RayTracer::createDescriptorTables()
 	}
 
 	{
-		Descriptor descriptors[ NUM_MESH];
+		Descriptor descriptors[NUM_MESH];
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i].GetSRV();
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
@@ -307,6 +309,7 @@ bool RayTracer::buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resou
 
 	// Get descriptor pool and create descriptor tables
 	createDescriptorTables();
+	const auto &descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
 	const auto numInstances = NUM_MESH;
@@ -320,15 +323,13 @@ bool RayTracer::buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resou
 
 	// Build bottom level ASs
 	for (auto &bottomLevelAS : m_bottomLevelASs)
-		N_RETURN(bottomLevelAS.Build(m_device, m_commandList, scratch,
-			m_descriptorTableCache.GetCbvSrvUavPool(), NumUAVs), false);
+		N_RETURN(bottomLevelAS.Build(m_device, m_commandList, scratch, descriptorPool, NumUAVs), false);
 
 	// Barrier
 	AccelerationStructure::Barrier(m_commandList, numInstances, m_bottomLevelASs);
 
 	// Build top level AS
-	return m_topLevelAS.Build(m_device, m_commandList, scratch, instances,
-		m_descriptorTableCache.GetCbvSrvUavPool(), NumUAVs);
+	return m_topLevelAS.Build(m_device, m_commandList, scratch, instances, descriptorPool, NumUAVs);
 }
 
 void RayTracer::buildShaderTables()
@@ -362,8 +363,8 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	// Bind the heaps, acceleration structure and dispatch rays.
 	const DescriptorPool descriptorPools[] =
 	{
-		m_descriptorTableCache.GetCbvSrvUavPool(),
-		m_descriptorTableCache.GetSamplerPool()
+		m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache.GetDescriptorPool(SAMPLER_POOL)
 	};
 	SetDescriptorPool(m_device, m_commandList, 2, descriptorPools);
 
