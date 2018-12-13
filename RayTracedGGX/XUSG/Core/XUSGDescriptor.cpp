@@ -83,6 +83,7 @@ DescriptorTableCache::DescriptorTableCache() :
 	m_cbvSrvUavTables(0),
 	m_samplerTables(0),
 	m_rtvTables(0),
+	m_descriptorKeyPtrs(),
 	m_descriptorPools(),
 	m_descriptorStrides(),
 	m_descriptorCounts(),
@@ -219,10 +220,10 @@ bool DescriptorTableCache::reallocateCbvSrvUavPool(const string &key)
 		N_RETURN(allocateDescriptorPool(CBV_SRV_UAV_POOL, descriptorCount), false);
 
 		// Recreate descriptor tables
-		for (auto &tableIter : m_cbvSrvUavTables)
+		for (const auto &pKey : m_descriptorKeyPtrs[CBV_SRV_UAV_POOL])
 		{
-			const auto table = createCbvSrvUavTable(tableIter.first);
-			*tableIter.second = *table;
+			const auto table = createCbvSrvUavTable(*pKey);
+			*m_cbvSrvUavTables[*pKey] = *table;
 		}
 	}
 
@@ -242,10 +243,10 @@ bool DescriptorTableCache::reallocateSamplerPool(const string &key)
 		N_RETURN(allocateDescriptorPool(SAMPLER_POOL, descriptorCount), false);
 
 		// Recreate descriptor tables
-		for (auto &tableIter : m_samplerTables)
+		for (const auto &pKey : m_descriptorKeyPtrs[SAMPLER_POOL])
 		{
-			const auto table = createSamplerTable(tableIter.first);
-			*tableIter.second = *table;
+			const auto table = createSamplerTable(*pKey);
+			*m_samplerTables[*pKey] = *table;
 		}
 	}
 
@@ -265,10 +266,10 @@ bool DescriptorTableCache::reallocateRtvPool(const string &key)
 		N_RETURN(allocateDescriptorPool(RTV_POOL, descriptorCount), false);
 
 		// Recreate descriptor tables
-		for (auto &tableIter : m_rtvTables)
+		for (const auto &pKey : m_descriptorKeyPtrs[RTV_POOL])
 		{
-			const auto table = createRtvTable(tableIter.first);
-			*tableIter.second = *table;
+			const auto table = createRtvTable(*pKey);
+			*m_rtvTables[*pKey] = *table;
 		}
 	}
 
@@ -316,6 +317,7 @@ DescriptorTable DescriptorTableCache::getCbvSrvUavTable(const string &key)
 		{
 			const auto table = createCbvSrvUavTable(key);
 			m_cbvSrvUavTables[key] = table;
+			m_descriptorKeyPtrs[CBV_SRV_UAV_POOL].push_back(&m_cbvSrvUavTables.find(key)->first);
 
 			return table;
 		}
@@ -367,6 +369,7 @@ DescriptorTable DescriptorTableCache::getSamplerTable(const string &key)
 		{
 			const auto table = createSamplerTable(key);
 			m_samplerTables[key] = table;
+			m_descriptorKeyPtrs[SAMPLER_POOL].push_back(&m_samplerTables.find(key)->first);
 
 			return table;
 		}
@@ -418,6 +421,7 @@ RenderTargetTable DescriptorTableCache::getRtvTable(const string &key)
 		{
 			const auto table = createRtvTable(key);
 			m_rtvTables[key] = table;
+			m_descriptorKeyPtrs[RTV_POOL].push_back(&m_rtvTables.find(key)->first);
 
 			return table;
 		}

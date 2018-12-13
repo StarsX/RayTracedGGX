@@ -33,9 +33,10 @@ RayTracer::~RayTracer()
 }
 
 bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resource *ibUploads,
-	Resource &scratch, Resource &instances, const char *fileName)
+	Resource &scratch, Resource &instances, const char *fileName, const XMFLOAT4 &posScale)
 {
 	m_viewport = XMUINT2(width, height);
+	m_posScale = posScale;
 
 	// Load inputs
 	ObjLoader objLoader;
@@ -235,7 +236,7 @@ void RayTracer::createPipeline()
 
 void RayTracer::createDescriptorTables()
 {
-	m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2 + 1);
+	//m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2 + 1);
 
 	for (auto i = 0u; i < FrameCount; ++i)
 	{
@@ -315,8 +316,7 @@ bool RayTracer::buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resou
 	const auto numInstances = NUM_MESH;
 	float *transforms[] =
 	{
-		XMMatrixTranspose((XMMatrixScaling(1.0f, 1.0f, 1.0f) * XMMatrixTranslation(0.0f, 0.0f, 0.0f))).r[0].m128_f32,
-		//XMMatrixTranspose((XMMatrixScaling(0.03f, 0.03f, 0.03f) * XMMatrixTranslation(0.0f, 2.4f, 0.0f))).r[0].m128_f32,
+		XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))).r[0].m128_f32,
 		XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))).r[0].m128_f32
 	};
 	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, m_bottomLevelASs, transforms);
@@ -366,7 +366,7 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 		m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL),
 		m_descriptorTableCache.GetDescriptorPool(SAMPLER_POOL)
 	};
-	SetDescriptorPool(m_device, m_commandList, 2, descriptorPools);
+	SetDescriptorPool(m_device, m_commandList, ARRAYSIZE(descriptorPools), descriptorPools);
 
 	commandList->SetComputeRootDescriptorTable(OUTPUT_VIEW, *m_uavTables[frameIndex][UAV_TABLE_OUTPUT]);
 	SetTopLevelAccelerationStructure(m_device, m_commandList, ACCELERATION_STRUCTURE, m_topLevelAS, m_srvTables[SRV_TABLE_AS]);

@@ -183,9 +183,10 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	const float3 V = -WorldRayDirection();
 	const float3 H = normalize(V + ray.Direction);
-	const float NoV = max(dot(N, V), 1e-5);
-	const float NoL = saturate(dot(N, ray.Direction));
-	const float NoH = saturate(dot(N, H));
+	const float NoV = saturate(dot(N, V));
+	//const float NoL = saturate(dot(N, ray.Direction));
+	//const float NoH = saturate(dot(N, H));
+	const float NoH = 1.0;
 	const float VoH = saturate(dot(V, H));
 
 	const float3 specColors[] =
@@ -194,10 +195,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 		float3(0.95, 0.93, 0.88)
 	};
 	const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
-	const float Vis = Vis_Schlick(0.0, NoV, NoL);
-	//radiance *= F * NoL * Vis * (4.0 * VoH / NoH);
-	//radiance *= F;
-	radiance *= F * saturate(Vis * VoH / NoV);
+	//const float Vis = Vis_Schlick(0.0, NoV, NoL);
+	radiance *= F * saturate(0.25 / (NoV * NoH));
 
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 	

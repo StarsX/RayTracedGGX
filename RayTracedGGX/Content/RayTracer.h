@@ -23,7 +23,8 @@ public:
 	virtual ~RayTracer();
 
 	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
-		XUSG::Resource &scratch, XUSG::Resource &instances, const char *fileName = "Media\\bunny.obj");
+		XUSG::Resource &scratch, XUSG::Resource &instances, const char *fileName,
+		const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
 	void Render(uint32_t frameIndex, const XUSG::Descriptor &dsv);
 
@@ -94,6 +95,7 @@ protected:
 	XUSG::RayTracing::CommandList m_commandList;
 
 	DirectX::XMUINT2	m_viewport;
+	DirectX::XMFLOAT4	m_posScale;
 	RayGenConstants		m_cbRayGens[FrameCount];
 
 	static const uint32_t NumUAVs = FrameCount + NUM_MESH + 1;

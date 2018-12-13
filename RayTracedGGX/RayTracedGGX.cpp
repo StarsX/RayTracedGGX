@@ -42,7 +42,9 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_isDxrSupported(false),
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
-	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height))
+	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
+	m_meshFileName("Media/bunny.obj"),
+	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f)
 {
 }
 
@@ -186,7 +188,7 @@ void RayTracedGGX::LoadAssets()
 	if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
 	Resource vbUploads[RayTracer::NUM_MESH], ibUploads[RayTracer::NUM_MESH], scratch, instances;
-	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, scratch, instances))
+	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, scratch, instances, m_meshFileName.c_str(), m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -339,6 +341,29 @@ void RayTracedGGX::OnMouseWheel(float deltaZ, float posX, float posY)
 void RayTracedGGX::OnMouseLeave()
 {
 	m_tracking = false;
+}
+
+void RayTracedGGX::ParseCommandLineArgs(wchar_t *argv[], int argc)
+{
+	DXFramework::ParseCommandLineArgs(argv, argc);
+
+	for (auto i = 1; i < argc; ++i)
+	{
+		if (_wcsnicmp(argv[i], L"-mesh", wcslen(argv[i])) == 0 ||
+			_wcsnicmp(argv[i], L"/mesh", wcslen(argv[i])) == 0)
+		{
+			if (i + 1 < argc)
+			{
+				wstring meshFileName = argv[i + 1];
+				m_meshFileName.assign(meshFileName.begin(), meshFileName.end());
+			}
+			m_meshPosScale.x = i + 2 < argc ? static_cast<float>(_wtof(argv[i + 2])) : m_meshPosScale.x;
+			m_meshPosScale.y = i + 3 < argc ? static_cast<float>(_wtof(argv[i + 3])) : m_meshPosScale.y;
+			m_meshPosScale.z = i + 4 < argc ? static_cast<float>(_wtof(argv[i + 4])) : m_meshPosScale.z;
+			m_meshPosScale.w = i + 5 < argc ? static_cast<float>(_wtof(argv[i + 5])) : m_meshPosScale.w;
+			break;
+		}
+	}
 }
 
 void RayTracedGGX::PopulateCommandList()

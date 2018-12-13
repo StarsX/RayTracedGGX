@@ -115,6 +115,8 @@ namespace XUSG
 		std::unordered_map<std::string, DescriptorTable> m_samplerTables;
 		std::unordered_map<std::string, RenderTargetTable> m_rtvTables;
 
+		std::vector<const std::string*> m_descriptorKeyPtrs[NUM_DESCRIPTOR_POOL];
+
 		DescriptorPool	m_descriptorPools[NUM_DESCRIPTOR_POOL];
 		uint32_t		m_descriptorStrides[NUM_DESCRIPTOR_POOL];
 		uint32_t		m_descriptorCounts[NUM_DESCRIPTOR_POOL];
