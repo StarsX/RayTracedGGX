@@ -2,7 +2,7 @@
 // By Stars XU Tianchen
 //--------------------------------------------------------------------------------------
 
-#include "DXFramework.h"
+#include "DXFrameworkHelper.h"
 #include "XUSGShaderTable.h"
 
 using namespace std;
@@ -18,7 +18,7 @@ ShaderRecord::ShaderRecord(const RayTracing::Device &device, const RayTracing::P
 	else // DirectX Raytracing
 	{
 		ComPtr<ID3D12StateObjectPropertiesPrototype> stateObjectProperties;
-		ThrowIfFailed(pipeline.DXR.As(&stateObjectProperties));
+		ThrowIfFailed(pipeline.Native.As(&stateObjectProperties));
 		m_shaderID.Ptr = stateObjectProperties->GetShaderIdentifier(reinterpret_cast<const wchar_t*>(shader));
 	}
 

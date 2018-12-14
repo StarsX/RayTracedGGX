@@ -2,8 +2,8 @@
 // By Stars XU Tianchen
 //--------------------------------------------------------------------------------------
 
-#include "DXFramework.h"
-#include "XUSGAccelerationStructure.h"
+#include "DXFrameworkHelper.h"
+#include "XUSGRayTracing.h"
 
 using namespace std;
 using namespace XUSG;
@@ -21,7 +21,7 @@ AccelerationStructure::~AccelerationStructure()
 {
 }
 
-const RawBuffer &AccelerationStructure::GetResult() const
+RawBuffer &AccelerationStructure::GetResult()
 {
 	return m_result;
 }
@@ -76,21 +76,11 @@ bool AccelerationStructure::AllocateUploadBuffer(const XUSG::Device &device, Res
 	return true;
 }
 
-DescriptorTable AccelerationStructure::CreateDescriptorTableCache(const RayTracing::Device &device,
-	DescriptorTableCache &descriptorTableCache, uint32_t numDescriptors, const Descriptor *descriptors)
-{
-	descriptorTableCache.SetDevice(device.Common);
-	Util::DescriptorTable descriptorTable;
-	descriptorTable.SetDescriptors(0, numDescriptors, descriptors);
-
-	return descriptorTable.GetCbvSrvUavTable(descriptorTableCache);
-}
-
-void AccelerationStructure::Barrier(const RayTracing::CommandList &commandList, uint32_t numInstances,
-	const AccelerationStructure *bottomLevelASs)
+void AccelerationStructure::Barrier(RayTracing::CommandList &commandList, uint32_t numInstances,
+	AccelerationStructure *bottomLevelASs)
 {
 	for (auto i = 0u; i < numInstances; ++i)
-		commandList.Common->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::UAV(bottomLevelASs[i].GetResult().GetResource().Get()));
+		bottomLevelASs[i].GetResult().Barrier(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 }
 
 bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t descriptorIndex,
@@ -102,7 +92,7 @@ bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t 
 	if (device.RaytracingAPI == API::FallbackLayer)
 		device.Fallback->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &m_prebuildInfo, numUAVs);
 	else // DirectX Raytracing
-		device.DXR->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &m_prebuildInfo);
+		device.Native->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &m_prebuildInfo);
 
 	N_RETURN(m_prebuildInfo.ResultDataMaxSizeInBytes > 0, false);
 
@@ -156,8 +146,8 @@ bool BottomLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs
 	return preBuild(device, descriptorIndex, numUAVs);
 }
 
-bool BottomLevelAS::Build(const RayTracing::Device &device, const RayTracing::CommandList &commandList,
-	const Resource &scratch, const DescriptorPool &descriptorPool, uint32_t numUAVs)
+void BottomLevelAS::Build(const RayTracing::CommandList &commandList, const Resource &scratch,
+	const DescriptorPool &descriptorPool, uint32_t numUAVs)
 {
 	// Complete Acceleration Structure desc
 	{
@@ -166,16 +156,7 @@ bool BottomLevelAS::Build(const RayTracing::Device &device, const RayTracing::Co
 	}
 
 	// Build acceleration structure.
-	if (device.RaytracingAPI == API::FallbackLayer)
-	{
-		// Set the descriptor heaps to be used during acceleration structure build for the Fallback Layer.
-		commandList.Fallback->SetDescriptorHeaps(1, descriptorPool.GetAddressOf());
-		commandList.Fallback->BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, numUAVs);
-	}
-	else // DirectX Raytracing
-		commandList.DXR->BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr);
-
-	return true;
+	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
 }
 
 void BottomLevelAS::SetGeometries(Geometry *geometries, uint32_t numGeometries, Format vertexFormat,
@@ -232,9 +213,8 @@ bool TopLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs,
 	return preBuild(device, descriptorIndex, numUAVs, 1);
 }
 
-bool TopLevelAS::Build(const RayTracing::Device &device, const RayTracing::CommandList &commandList,
-	const Resource &scratch, const Resource &instanceDescs, const DescriptorPool &descriptorPool,
-	uint32_t numUAVs)
+void TopLevelAS::Build(const RayTracing::CommandList &commandList, const Resource &scratch,
+	const Resource &instanceDescs, const DescriptorPool &descriptorPool, uint32_t numUAVs)
 {
 	// Complete Acceleration Structure desc
 	{
@@ -244,20 +224,11 @@ bool TopLevelAS::Build(const RayTracing::Device &device, const RayTracing::Comma
 	}
 
 	// Build acceleration structure.
-	if (device.RaytracingAPI == API::FallbackLayer)
-	{
-		// Set the descriptor heaps to be used during acceleration structure build for the Fallback Layer.
-		commandList.Fallback->SetDescriptorHeaps(1, descriptorPool.GetAddressOf());
-		commandList.Fallback->BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, numUAVs);
-	}
-	else // DirectX Raytracing
-		commandList.DXR->BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr);
-
-	return true;
+	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
 }
 
 void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instances,
-	uint32_t numInstances, const BottomLevelAS *bottomLevelASs, float *const *transforms)
+	uint32_t numInstances, BottomLevelAS *bottomLevelASs, float *const *transforms)
 {
 	// Note on Emulated GPU pointers (AKA Wrapped pointers) requirement in Fallback Layer:
 	// The primary point of divergence between the DXR API and the compute-based Fallback layer is the handling of GPU pointers. 

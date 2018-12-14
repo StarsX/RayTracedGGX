@@ -45,10 +45,13 @@ namespace XUSG
 	using BlobType = ID3DBlob;
 	using Blob = com_ptr<BlobType>;
 	using Device = com_ptr<ID3D12Device>;
+	using SwapChain = com_ptr<IDXGISwapChain3>;
 
 	// Command lists related
-	using CommandList = ID3D12CommandList*;
 	using GraphicsCommandList = com_ptr<ID3D12GraphicsCommandList>;
+	using CommandAllocator = com_ptr<ID3D12CommandAllocator>;
+	using CommandQueue = com_ptr<ID3D12CommandQueue>;
+	using Fence = com_ptr<ID3D12Fence>;
 
 	// Resources related
 	using Resource = com_ptr<ID3D12Resource>;
@@ -57,7 +60,7 @@ namespace XUSG
 	using Sampler = D3D12_SAMPLER_DESC;
 
 	using ResourceState = D3D12_RESOURCE_STATES;
-	using ResourceBarrier = D3D12_RESOURCE_BARRIER;
+	using ResourceBarrier = CD3DX12_RESOURCE_BARRIER;
 
 	// Descriptors related
 	using DescriptorPool = com_ptr<ID3D12DescriptorHeap>;
@@ -87,6 +90,11 @@ namespace XUSG
 	using PoolType = D3D12_HEAP_TYPE;
 	using ResourceFlags = D3D12_RESOURCE_FLAGS;
 	using SubresourceData = D3D12_SUBRESOURCE_DATA;
+	using ClearFlags = D3D12_CLEAR_FLAGS;
+	using textureCopyLocation = CD3DX12_TEXTURE_COPY_LOCATION;
+	using Viewport = CD3DX12_VIEWPORT;
+	using RectRange = CD3DX12_RECT;
+	using BoxRange = CD3DX12_BOX;
 
 	// Pipeline layouts related
 	struct RootParameter : CD3DX12_ROOT_PARAMETER1

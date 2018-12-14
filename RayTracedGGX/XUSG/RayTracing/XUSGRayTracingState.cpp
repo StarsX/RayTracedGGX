@@ -26,7 +26,7 @@ State::~State()
 void State::SetShaderLibrary(Blob shaderLib)
 {
 	m_isComplete = false;
-	m_pKeyHeader->ShaderLib = shaderLib.Get();
+	m_pKeyHeader->ShaderLib = shaderLib.get();
 }
 
 void State::SetHitGroup(uint32_t index, const void *hitGroup, const void *closestHitShader,
@@ -60,7 +60,7 @@ void State::SetLocalPipelineLayout(uint32_t index, const PipelineLayout &layout,
 		m_keyLocalPipelineLayouts.resize(index + 1);
 
 	auto &keyLocalPipelineLayout = m_keyLocalPipelineLayouts[index];
-	keyLocalPipelineLayout.Header.PipelineLayout = layout.Get();
+	keyLocalPipelineLayout.Header.PipelineLayout = layout.get();
 	keyLocalPipelineLayout.Header.NumShaders = numShaders;
 
 	keyLocalPipelineLayout.Shaders.resize(numShaders);
@@ -70,7 +70,7 @@ void State::SetLocalPipelineLayout(uint32_t index, const PipelineLayout &layout,
 void State::SetGlobalPipelineLayout(const PipelineLayout &layout)
 {
 	m_isComplete = false;
-	m_pKeyHeader->GlobalPipelineLayout = layout.Get();
+	m_pKeyHeader->GlobalPipelineLayout = layout.get();
 }
 
 void State::SetMaxRecursionDepth(uint32_t depth)
@@ -250,7 +250,7 @@ RayTracing::Pipeline PipelineCache::createPipeline(const string &key)
 		H_RETURN(m_device.Fallback->CreateStateObject(pDesc, IID_PPV_ARGS(&pipeline.Fallback)), cerr,
 			L"Couldn't create DirectX Raytracing state object.\n", pipeline)
 	else // DirectX Raytracing
-		H_RETURN(m_device.DXR->CreateStateObject(pDesc, IID_PPV_ARGS(&pipeline.DXR)), cerr,
+		H_RETURN(m_device.Native->CreateStateObject(pDesc, IID_PPV_ARGS(&pipeline.Native)), cerr,
 			L"Couldn't create DirectX Raytracing state object.\n", pipeline);
 
 	return pipeline;

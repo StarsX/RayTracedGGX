@@ -5,6 +5,7 @@
 #pragma once
 
 #include "XUSGDescriptor.h"
+#include "XUSGCommand.h"
 
 #define	BIND_PACKED_UAV	ResourceFlags(0x4 | 0x8000)
 #define ALIGN(x, n)		(((x) + (n - 1)) & ~(n - 1))
@@ -54,7 +55,7 @@ namespace XUSG
 		ResourceBase();
 		virtual ~ResourceBase();
 
-		void Barrier(const GraphicsCommandList &commandList, ResourceState dstState);
+		void Barrier(const CommandList &commandList, ResourceState dstState);
 
 		const Resource	&GetResource() const;
 		Descriptor		GetSRV(uint32_t i = 0) const;
@@ -94,10 +95,10 @@ namespace XUSG
 			uint32_t arraySize = 1, ResourceFlags resourceFlags = ResourceFlags(0),
 			uint8_t numMips = 1, uint8_t sampleCount = 1, PoolType poolType = PoolType(1),
 			ResourceState state = ResourceState(0), const wchar_t *name = nullptr);
-		bool Upload(const GraphicsCommandList &commandList, Resource &resourceUpload,
+		bool Upload(const CommandList &commandList, Resource &resourceUpload,
 			SubresourceData *pSubresourceData, uint32_t numSubresources = 1,
 			ResourceState dstState = ResourceState(0));
-		bool Upload(const GraphicsCommandList &commandList, Resource &resourceUpload, const uint8_t *pData,
+		bool Upload(const CommandList &commandList, Resource &resourceUpload, const uint8_t *pData,
 			uint8_t stride = sizeof(float), ResourceState dstState = ResourceState(0));
 
 		void CreateSRVs(uint32_t arraySize, Format format = Format(0),
@@ -230,7 +231,7 @@ namespace XUSG
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
 			const wchar_t *name = nullptr);
-		bool Upload(const GraphicsCommandList &commandList, Resource &resourceUpload,
+		bool Upload(const CommandList &commandList, Resource &resourceUpload,
 			const void *pData, ResourceState dstState = ResourceState(0));
 
 		void CreateSRVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,

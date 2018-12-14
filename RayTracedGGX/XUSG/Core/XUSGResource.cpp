@@ -192,10 +192,10 @@ ResourceBase::~ResourceBase()
 {
 }
 
-void ResourceBase::Barrier(const GraphicsCommandList &commandList, ResourceState dstState)
+void ResourceBase::Barrier(const CommandList &commandList, ResourceState dstState)
 {
 	if (m_state != dstState || dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-		commandList->ResourceBarrier(1, &Transition(dstState));
+		commandList.Barrier(1, &Transition(dstState));
 }
 
 const Resource &ResourceBase::GetResource() const
@@ -214,8 +214,8 @@ ResourceBarrier ResourceBase::Transition(ResourceState dstState)
 	m_state = dstState;
 
 	return srcState == dstState && dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS ?
-		CD3DX12_RESOURCE_BARRIER::UAV(m_resource.get()) :
-		CD3DX12_RESOURCE_BARRIER::Transition(m_resource.get(), srcState, dstState);
+		ResourceBarrier::UAV(m_resource.get()) :
+		ResourceBarrier::Transition(m_resource.get(), srcState, dstState);
 }
 
 void ResourceBase::setDevice(const Device & device)
@@ -309,7 +309,7 @@ bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Fo
 	return true;
 }
 
-bool Texture2D::Upload(const GraphicsCommandList &commandList, Resource &resourceUpload,
+bool Texture2D::Upload(const CommandList &commandList, Resource &resourceUpload,
 	SubresourceData *pSubresourceData, uint32_t numSubresources, ResourceState dstState)
 {
 	N_RETURN(pSubresourceData, false);
@@ -330,14 +330,15 @@ bool Texture2D::Upload(const GraphicsCommandList &commandList, Resource &resourc
 	// from the upload heap to the Texture2D.
 	dstState = dstState ? dstState : m_state;
 	if (m_state != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
-	M_RETURN(UpdateSubresources(commandList.get(), m_resource.get(), resourceUpload.get(),
-		0, 0, numSubresources, pSubresourceData) <= 0, clog, "Failed to upload the resource.", false);
+	M_RETURN(UpdateSubresources(const_cast<CommandList&>(commandList).GetCommandList().get(),
+		m_resource.get(), resourceUpload.get(), 0, 0, numSubresources, pSubresourceData) <= 0,
+		clog, "Failed to upload the resource.", false);
 	Barrier(commandList, dstState);
 
 	return true;
 }
 
-bool Texture2D::Upload(const GraphicsCommandList &commandList, Resource &resourceUpload,
+bool Texture2D::Upload(const CommandList &commandList, Resource &resourceUpload,
 	const uint8_t *pData, uint8_t stride, ResourceState dstState)
 {
 	const auto desc = m_resource->GetDesc();
@@ -1089,7 +1090,7 @@ bool RawBuffer::Create(const Device &device, uint32_t byteWidth, ResourceFlags r
 	return true;
 }
 
-bool RawBuffer::Upload(const GraphicsCommandList &commandList, Resource &resourceUpload,
+bool RawBuffer::Upload(const CommandList &commandList, Resource &resourceUpload,
 	const void *pData, ResourceState dstState)
 {
 	const auto desc = m_resource->GetDesc();
@@ -1114,8 +1115,9 @@ bool RawBuffer::Upload(const GraphicsCommandList &commandList, Resource &resourc
 
 	dstState = dstState ? dstState : m_state;
 	if (m_state != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
-	M_RETURN(UpdateSubresources(commandList.get(), m_resource.get(), resourceUpload.get(),
-		0, 0, 1, &subresourceData) <= 0, clog, "Failed to upload the resource.", false);
+	M_RETURN(UpdateSubresources(const_cast<CommandList&>(commandList).GetCommandList().get(),
+		m_resource.get(), resourceUpload.get(), 0, 0, 1, &subresourceData) <= 0, clog,
+		"Failed to upload the resource.", false);
 	Barrier(commandList, dstState);
 
 	return true;

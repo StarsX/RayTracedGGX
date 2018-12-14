@@ -4,7 +4,6 @@
 
 #pragma once
 
-#include "DXFramework.h"
 #include "Core/XUSG.h"
 #include "RayTracing/XUSGRayTracing.h"
 
@@ -84,7 +83,7 @@ protected:
 	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
 
 	void createPipelineLayouts();
-	void createPipeline();
+	bool createPipeline();
 	void createDescriptorTables();
 
 	bool buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resource &instances);

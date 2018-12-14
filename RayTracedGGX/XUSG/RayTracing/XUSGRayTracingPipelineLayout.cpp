@@ -47,7 +47,7 @@ XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Devi
 	{
 		H_RETURN(D3D12SerializeRootSignature(&layoutDesc.Desc_1_0, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
 			cerr, reinterpret_cast<wchar_t*>(error->GetBufferPointer()), nullptr);
-		V_RETURN(device.DXR->CreateRootSignature(1, signature->GetBufferPointer(), signature->GetBufferSize(),
+		V_RETURN(device.Native->CreateRootSignature(1, signature->GetBufferPointer(), signature->GetBufferSize(),
 			IID_PPV_ARGS(&layout)), cerr, nullptr);
 	}
 	if (name) layout->SetName(name);

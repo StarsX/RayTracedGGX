@@ -74,31 +74,31 @@ void RayTracedGGX::LoadPipeline()
 	}
 #endif
 
-	ComPtr<IDXGIFactory4> factory;
+	com_ptr<IDXGIFactory4> factory;
 	ThrowIfFailed(CreateDXGIFactory2(dxgiFactoryFlags, IID_PPV_ARGS(&factory)));
 
 	if (m_useWarpDevice)
 	{
-		ComPtr<IDXGIAdapter1> warpAdapter;
+		com_ptr<IDXGIAdapter1> warpAdapter;
 		ThrowIfFailed(factory->EnumWarpAdapter(IID_PPV_ARGS(&warpAdapter)));
 
-		EnableDirectXRaytracing(warpAdapter.Get());
+		EnableDirectXRaytracing(warpAdapter.get());
 
 		ThrowIfFailed(D3D12CreateDevice(
-			warpAdapter.Get(),
+			warpAdapter.get(),
 			D3D_FEATURE_LEVEL_11_0,
 			IID_PPV_ARGS(&m_device.Common)
 			));
 	}
 	else
 	{
-		ComPtr<IDXGIAdapter1> hardwareAdapter;
-		GetHardwareAdapter(factory.Get(), &hardwareAdapter);
+		com_ptr<IDXGIAdapter1> hardwareAdapter;
+		GetHardwareAdapter(factory.get(), &hardwareAdapter);
 
-		EnableDirectXRaytracing(hardwareAdapter.Get());
+		EnableDirectXRaytracing(hardwareAdapter.get());
 
 		ThrowIfFailed(D3D12CreateDevice(
-			hardwareAdapter.Get(),
+			hardwareAdapter.get(),
 			D3D_FEATURE_LEVEL_11_0,
 			IID_PPV_ARGS(&m_device.Common)
 			));
@@ -123,7 +123,7 @@ void RayTracedGGX::LoadPipeline()
 
 	ComPtr<IDXGISwapChain1> swapChain;
 	ThrowIfFailed(factory->CreateSwapChainForHwnd(
-		m_commandQueue.Get(),		// Swap chain needs the queue so that it can force a flush on it.
+		m_commandQueue.get(),		// Swap chain needs the queue so that it can force a flush on it.
 		Win32Application::GetHwnd(),
 		&swapChainDesc,
 		nullptr,
@@ -158,7 +158,7 @@ void RayTracedGGX::LoadPipeline()
 		for (auto n = 0u; n < FrameCount; n++)
 		{
 			ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])));
-			m_device.Common->CreateRenderTargetView(m_renderTargets[n].Get(), nullptr, rtv);
+			m_device.Common->CreateRenderTargetView(m_renderTargets[n].get(), nullptr, rtv);
 
 			Util::DescriptorTable rtvTable;
 			rtvTable.SetDescriptors(0, 1, &rtv);
@@ -178,8 +178,8 @@ void RayTracedGGX::LoadPipeline()
 void RayTracedGGX::LoadAssets()
 {
 	// Create the command list.
-	ThrowIfFailed(m_device.Common->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_frameIndex].Get(),
-		nullptr, IID_PPV_ARGS(&m_commandList.Common)));
+	ThrowIfFailed(m_device.Common->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_frameIndex].get(),
+		nullptr, IID_PPV_ARGS(&m_commandList.GetCommandList())));
 
 	// Create ray tracing interfaces
 	CreateRaytracingInterfaces();
@@ -192,9 +192,9 @@ void RayTracedGGX::LoadAssets()
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
-	ThrowIfFailed(m_commandList.Common->Close());
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Common.Get() };
-	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+	ThrowIfFailed(m_commandList.Close());
+	ID3D12CommandList *const ppCommandLists[] = { m_commandList.GetCommandList().get() };
+	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
@@ -252,8 +252,8 @@ void RayTracedGGX::OnRender()
 	PopulateCommandList();
 
 	// Execute the command list.
-	ID3D12CommandList* ppCommandLists[] = { m_commandList.Common.Get() };
-	m_commandQueue->ExecuteCommandLists(_countof(ppCommandLists), ppCommandLists);
+	ID3D12CommandList *const ppCommandLists[] = { m_commandList.GetCommandList().get() };
+	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
 
 	// Present the frame.
 	ThrowIfFailed(m_swapChain->Present(0, 0));
@@ -376,31 +376,30 @@ void RayTracedGGX::PopulateCommandList()
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	const auto &commandList = m_commandList.Common;
-	ThrowIfFailed(commandList->Reset(m_commandAllocators[m_frameIndex].Get(), nullptr));
+	ThrowIfFailed(m_commandList.Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
 
 	// Indicate that the back buffer will be used as a render target.
-	//commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(),
+	//m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(),
 		//D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
 	// Record commands.
 	//const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-	//commandList->ClearRenderTargetView(*m_rtvTables[m_frameIndex], clearColor, 0, nullptr);
-	//commandList->ClearDepthStencilView(m_depth.GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
+	//m_commandList.ClearRenderTargetView(*m_rtvTables[m_frameIndex], clearColor, 0, nullptr);
+	//m_commandList.ClearDepthStencilView(m_depth.GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
 
 	m_rayTracer->Render(m_frameIndex, m_depth.GetDSV());
 
 	// Indicate that the back buffer will now be used to present.
 	CopyRaytracingOutputToBackbuffer();
 
-	ThrowIfFailed(commandList->Close());
+	ThrowIfFailed(m_commandList.Close());
 }
 
 // Wait for pending GPU work to complete.
 void RayTracedGGX::WaitForGpu()
 {
 	// Schedule a Signal command in the queue.
-	ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), m_fenceValues[m_frameIndex]));
+	ThrowIfFailed(m_commandQueue->Signal(m_fence.get(), m_fenceValues[m_frameIndex]));
 
 	// Wait until the fence has been processed, and increment the fence value for the current frame.
 	ThrowIfFailed(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex]++, m_fenceEvent));
@@ -412,7 +411,7 @@ void RayTracedGGX::MoveToNextFrame()
 {
 	// Schedule a Signal command in the queue.
 	const auto currentFenceValue = m_fenceValues[m_frameIndex];
-	ThrowIfFailed(m_commandQueue->Signal(m_fence.Get(), currentFenceValue));
+	ThrowIfFailed(m_commandQueue->Signal(m_fence.get(), currentFenceValue));
 
 	// Update the frame index.
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
@@ -513,26 +512,22 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
 		CreateRaytracingFallbackDeviceFlags createDeviceFlags = CreateRaytracingFallbackDeviceFlags::None;
-		ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Common.Get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Fallback)));
-		m_device.Fallback->QueryRaytracingCommandList(m_commandList.Common.Get(), IID_PPV_ARGS(&m_commandList.Fallback));
+		ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Common.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Fallback)));
 	}
 	else // DirectX Raytracing
 	{
-		auto hr = m_device.Common->QueryInterface(IID_PPV_ARGS(&m_device.DXR));
+		const auto hr = m_device.Common->QueryInterface(IID_PPV_ARGS(&m_device.Native));
 		if (FAILED(hr)) OutputDebugString(L"Couldn't get DirectX Raytracing interface for the device.\n");
 		ThrowIfFailed(hr);
-
-		hr = m_commandList.Common->QueryInterface(IID_PPV_ARGS(&m_commandList.DXR));
-		if (FAILED(hr)) OutputDebugString(L"Couldn't get DirectX Raytracing interface for the command list.\n");
-		ThrowIfFailed(hr);
 	}
+
+	m_commandList.CreateRaytracingInterfaces(m_device);
 }
 
 // Copy the raytracing output to the backbuffer.
 void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
 {
-	const auto &commandList = m_commandList.Common;
-	commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST));
-	commandList->CopyResource(m_renderTargets[m_frameIndex].Get(), m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().Get());
-	commandList->ResourceBarrier(1, &CD3DX12_RESOURCE_BARRIER::Transition(m_renderTargets[m_frameIndex].Get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+	m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST));
+	m_commandList.CopyResource(m_renderTargets[m_frameIndex], m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource());
+	m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 }

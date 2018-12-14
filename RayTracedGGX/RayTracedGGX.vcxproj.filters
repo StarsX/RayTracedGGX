@@ -108,6 +108,9 @@
     <ClCompile Include="Content\RayTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="XUSG\Core\XUSGCommand.cpp">
+      <Filter>XUSG\Core\Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -180,6 +183,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="XUSG\Core\XUSG.h">
+      <Filter>XUSG\Core\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="XUSG\Core\XUSGCommand.h">
       <Filter>XUSG\Core\Header Files</Filter>
     </ClInclude>
   </ItemGroup>

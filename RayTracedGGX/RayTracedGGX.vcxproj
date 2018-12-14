@@ -115,6 +115,10 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
     </ClCompile>
+    <ClCompile Include="XUSG\Core\XUSGCommand.cpp">
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
+    </ClCompile>
     <ClCompile Include="XUSG\Core\XUSGComputeState.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
@@ -175,6 +179,7 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
     <ClInclude Include="RayTracedGGX.h" />
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="XUSG\Core\XUSG.h" />
+    <ClInclude Include="XUSG\Core\XUSGCommand.h" />
     <ClInclude Include="XUSG\Core\XUSGComputeState.h" />
     <ClInclude Include="XUSG\Core\XUSGDescriptor.h" />
     <ClInclude Include="XUSG\Core\XUSGGraphicsState.h" />

@@ -2,6 +2,7 @@
 // By Stars XU Tianchen
 //--------------------------------------------------------------------------------------
 
+#include "DXFrameworkHelper.h"
 #include "ObjLoader.h"
 #include "RayTracer.h"
 
@@ -48,7 +49,7 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 
 	// Create raytracing pipeline
 	createPipelineLayouts();
-	createPipeline();
+	N_RETURN(createPipeline(), false);
 
 	// Create output view and build acceleration structures
 	for (auto &outputView : m_outputViews)
@@ -80,13 +81,13 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 
 void RayTracer::Render(uint32_t frameIndex, const Descriptor &dsv)
 {
-	m_outputViews[frameIndex].Barrier(m_commandList.Common, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	m_outputViews[frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	rayTrace(frameIndex);
 }
 
 const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, ResourceState dstState)
 {
-	if (dstState) m_outputViews[frameIndex].Barrier(m_commandList.Common, dstState);
+	if (dstState) m_outputViews[frameIndex].Barrier(m_commandList, dstState);
 
 	return m_outputViews[frameIndex];
 }
@@ -97,7 +98,7 @@ bool RayTracer::createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData
 	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride, D3D12_RESOURCE_FLAG_NONE,
 		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
 
-	return vertexBuffer.Upload(m_commandList.Common, vbUpload, pData,
+	return vertexBuffer.Upload(m_commandList, vbUpload, pData,
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
@@ -107,7 +108,7 @@ bool RayTracer::createIB(uint32_t numIndices, const uint32_t *pData, Resource &i
 	N_RETURN(indexBuffers.Create(m_device.Common, sizeof(uint32_t) * numIndices, DXGI_FORMAT_R32_UINT,
 		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
 
-	return indexBuffers.Upload(m_commandList.Common, ibUpload, pData,
+	return indexBuffers.Upload(m_commandList, ibUpload, pData,
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
@@ -150,10 +151,10 @@ bool RayTracer::createGroundMesh(Resource &vbUpload,Resource &ibUpload)
 		};
 
 		auto &vertexBuffer = m_vertexBuffers[GROUND];
-		N_RETURN(vertexBuffer.Create(m_device.Common, ARRAYSIZE(vertices), sizeof(XMFLOAT3[2]),
+		N_RETURN(vertexBuffer.Create(m_device.Common, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
 
-		N_RETURN(vertexBuffer.Upload(m_commandList.Common, vbUpload, vertices,
+		N_RETURN(vertexBuffer.Upload(m_commandList, vbUpload, vertices,
 			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -182,10 +183,10 @@ bool RayTracer::createGroundMesh(Resource &vbUpload,Resource &ibUpload)
 		};
 
 		auto &indexBuffers = m_indexBuffers[GROUND];
-		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(uint32_t) * ARRAYSIZE(indices), DXGI_FORMAT_R32_UINT,
+		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), DXGI_FORMAT_R32_UINT,
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
 
-		N_RETURN(indexBuffers.Upload(m_commandList.Common, ibUpload, indices,
+		N_RETURN(indexBuffers.Upload(m_commandList, ibUpload, indices,
 			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -217,10 +218,10 @@ void RayTracer::createPipelineLayouts()
 	}
 }
 
-void RayTracer::createPipeline()
+bool RayTracer::createPipeline()
 {
 	{
-		ThrowIfFailed(D3DReadFileToBlob(L"RayTracedTest.cso", &m_shaderLib));
+		V_RETURN(D3DReadFileToBlob(L"RayTracedTest.cso", &m_shaderLib), cerr, false);
 
 		RayTracing::State state;
 		state.SetShaderLibrary(m_shaderLib);
@@ -232,6 +233,8 @@ void RayTracer::createPipeline()
 		state.SetMaxRecursionDepth(3);
 		m_pipelines[TEST] = state.GetPipeline(m_pipelineCache);
 	}
+
+	return true;
 }
 
 void RayTracer::createDescriptorTables()
@@ -250,11 +253,11 @@ void RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_bottomLevelASs[i].GetResult().GetUAV();
 		descriptors[NUM_MESH] = m_topLevelAS.GetResult().GetUAV();
 		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
+		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
-	if (m_device.RaytracingAPI == RayTracing::API::DirectXRaytracing)
+	if (m_device.RaytracingAPI == RayTracing::API::NativeRaytracing)
 	{
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, 1, &m_topLevelAS.GetResult().GetSRV());
@@ -265,7 +268,7 @@ void RayTracer::createDescriptorTables()
 		Descriptor descriptors[NUM_MESH];
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_indexBuffers[i].GetSRV();
 		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
+		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		m_srvTables[SRV_TABLE_IB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
@@ -273,7 +276,7 @@ void RayTracer::createDescriptorTables()
 		Descriptor descriptors[NUM_MESH];
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i].GetSRV();
 		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, ARRAYSIZE(descriptors), descriptors);
+		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		m_srvTables[SRV_TABLE_VB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 }
@@ -323,13 +326,15 @@ bool RayTracer::buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resou
 
 	// Build bottom level ASs
 	for (auto &bottomLevelAS : m_bottomLevelASs)
-		N_RETURN(bottomLevelAS.Build(m_device, m_commandList, scratch, descriptorPool, NumUAVs), false);
+		bottomLevelAS.Build(m_commandList, scratch, descriptorPool, NumUAVs);
 
 	// Barrier
 	AccelerationStructure::Barrier(m_commandList, numInstances, m_bottomLevelASs);
 
 	// Build top level AS
-	return m_topLevelAS.Build(m_device, m_commandList, scratch, instances, descriptorPool, NumUAVs);
+	m_topLevelAS.Build(m_commandList, scratch, instances, descriptorPool, NumUAVs);
+
+	return true;
 }
 
 void RayTracer::buildShaderTables()
@@ -357,8 +362,7 @@ void RayTracer::buildShaderTables()
 
 void RayTracer::rayTrace(uint32_t frameIndex)
 {
-	const auto &commandList = m_commandList.Common;
-	commandList->SetComputeRootSignature(m_pipelineLayouts[GLOBAL_LAYOUT].Get());
+	m_commandList.SetComputePipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 
 	// Bind the heaps, acceleration structure and dispatch rays.
 	const DescriptorPool descriptorPools[] =
@@ -366,14 +370,14 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 		m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL),
 		m_descriptorTableCache.GetDescriptorPool(SAMPLER_POOL)
 	};
-	SetDescriptorPool(m_device, m_commandList, ARRAYSIZE(descriptorPools), descriptorPools);
+	m_commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
-	commandList->SetComputeRootDescriptorTable(OUTPUT_VIEW, *m_uavTables[frameIndex][UAV_TABLE_OUTPUT]);
-	SetTopLevelAccelerationStructure(m_device, m_commandList, ACCELERATION_STRUCTURE, m_topLevelAS, m_srvTables[SRV_TABLE_AS]);
-	commandList->SetComputeRootDescriptorTable(SAMPLER, *m_samplerTable);
-	commandList->SetComputeRootDescriptorTable(INDEX_BUFFERS, *m_srvTables[SRV_TABLE_IB]);
-	commandList->SetComputeRootDescriptorTable(VERTEX_BUFFERS, *m_srvTables[SRV_TABLE_VB]);
+	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[frameIndex][UAV_TABLE_OUTPUT]);
+	m_commandList.SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, m_topLevelAS, m_srvTables[SRV_TABLE_AS]);
+	m_commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
+	m_commandList.SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
+	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
 
-	DispatchRays(m_device, m_commandList, m_pipelines[TEST], m_viewport.x, m_viewport.y, 1,
+	m_commandList.DispatchRays(m_pipelines[TEST], m_viewport.x, m_viewport.y, 1,
 		m_hitGroupShaderTable, m_missShaderTable, m_rayGenShaderTables[frameIndex]);
 }
