@@ -13,7 +13,10 @@ using namespace XUSG::RayTracing;
 // Acceleration structure
 //--------------------------------------------------------------------------------------
 
-AccelerationStructure::AccelerationStructure()
+uint32_t AccelerationStructure::FrameCount = 1;
+
+AccelerationStructure::AccelerationStructure() :
+	m_currentFrame(0)
 {
 }
 
@@ -23,7 +26,7 @@ AccelerationStructure::~AccelerationStructure()
 
 RawBuffer &AccelerationStructure::GetResult()
 {
-	return m_result;
+	return m_results[m_currentFrame];
 }
 
 uint32_t AccelerationStructure::GetResultDataMaxSize() const
@@ -43,7 +46,7 @@ uint32_t AccelerationStructure::GetUpdateScratchDataSize() const
 
 const WRAPPED_GPU_POINTER &AccelerationStructure::GetResultPointer() const
 {
-	return m_pointer;
+	return m_pointers[m_currentFrame];
 }
 
 bool AccelerationStructure::AllocateUAVBuffer(const XUSG::Device &device, Resource &resource,
@@ -83,6 +86,11 @@ void AccelerationStructure::Barrier(RayTracing::CommandList &commandList, uint32
 		bottomLevelASs[i].GetResult().Barrier(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 }
 
+void AccelerationStructure::SetFrameCount(uint32_t frameCount)
+{
+	FrameCount = frameCount;
+}
+
 bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t descriptorIndex,
 	uint32_t numUAVs, uint32_t numSRVs)
 {
@@ -107,13 +115,17 @@ bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t 
 		device.Fallback->GetAccelerationStructureResourceState() :
 		D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 
-	N_RETURN(m_result.Create(device.Common, GetResultDataMaxSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-		D3D12_HEAP_TYPE_DEFAULT, initialState, numSRVs), false);
+	m_results.resize(FrameCount);
+	for (auto &result : m_results)
+		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+			D3D12_HEAP_TYPE_DEFAULT, initialState, numSRVs), false);
 
 	// The Fallback Layer interface uses WRAPPED_GPU_POINTER to encapsulate the underlying pointer
 	// which will either be an emulated GPU pointer for the compute - based path or a GPU_VIRTUAL_ADDRESS for the DXR path.
-	m_pointer = device.Fallback->GetWrappedPointerSimple(descriptorIndex,
-		m_result.GetResource()->GetGPUVirtualAddress());
+	m_pointers.resize(FrameCount);
+	for (auto i = 0u; i < FrameCount; ++i)
+		m_pointers[i] = device.Fallback->GetWrappedPointerSimple(descriptorIndex,
+			m_results[i].GetResource()->GetGPUVirtualAddress());
 
 	return true;
 }
@@ -147,12 +159,20 @@ bool BottomLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs
 }
 
 void BottomLevelAS::Build(const RayTracing::CommandList &commandList, const Resource &scratch,
-	const DescriptorPool &descriptorPool, uint32_t numUAVs)
+	const DescriptorPool &descriptorPool, uint32_t numUAVs, bool update)
 {
 	// Complete Acceleration Structure desc
 	{
+		if (update && (m_buildDesc.Inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
+			== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
+		{
+			m_buildDesc.SourceAccelerationStructureData = m_results[m_currentFrame].GetResource()->GetGPUVirtualAddress();
+			m_buildDesc.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+			m_currentFrame = (m_currentFrame + 1) % FrameCount;
+		}
+
+		m_buildDesc.DestAccelerationStructureData = m_results[m_currentFrame].GetResource()->GetGPUVirtualAddress();
 		m_buildDesc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
-		m_buildDesc.DestAccelerationStructureData = m_result.GetResource()->GetGPUVirtualAddress();
 	}
 
 	// Build acceleration structure.
@@ -214,13 +234,22 @@ bool TopLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs,
 }
 
 void TopLevelAS::Build(const RayTracing::CommandList &commandList, const Resource &scratch,
-	const Resource &instanceDescs, const DescriptorPool &descriptorPool, uint32_t numUAVs)
+	const Resource &instanceDescs, const DescriptorPool &descriptorPool,
+	uint32_t numUAVs, bool update)
 {
 	// Complete Acceleration Structure desc
 	{
-		m_buildDesc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
-		m_buildDesc.DestAccelerationStructureData = m_result.GetResource()->GetGPUVirtualAddress();
+		if (update && (m_buildDesc.Inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
+			== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
+		{
+			m_buildDesc.SourceAccelerationStructureData = m_results[m_currentFrame].GetResource()->GetGPUVirtualAddress();
+			m_buildDesc.Inputs.Flags |= D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PERFORM_UPDATE;
+			m_currentFrame = (m_currentFrame + 1) % FrameCount;
+		}
+
+		m_buildDesc.DestAccelerationStructureData = m_results[m_currentFrame].GetResource()->GetGPUVirtualAddress();
 		m_buildDesc.Inputs.InstanceDescs = instanceDescs->GetGPUVirtualAddress();
+		m_buildDesc.ScratchAccelerationStructureData = scratch->GetGPUVirtualAddress();
 	}
 
 	// Build acceleration structure.
@@ -245,23 +274,37 @@ void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instan
 		vector<D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC> instanceDescs(numInstances);
 		for (auto i = 0u; i < numInstances; ++i)
 		{
-			//instanceDescs[i] = {};
 			memcpy(instanceDescs[i].Transform, transforms[i], sizeof(instanceDescs[i].Transform));
 			instanceDescs[i].InstanceMask = 1;
 			instanceDescs[i].AccelerationStructure = bottomLevelASs[i].GetResultPointer();
 		}
-		AllocateUploadBuffer(device.Common, instances, sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances, instanceDescs.data());
+
+		if (instances)
+		{
+			void *pMappedData;
+			instances->Map(0, nullptr, &pMappedData);
+			memcpy(pMappedData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances);
+			instances->Unmap(0, nullptr);
+		}
+		else AllocateUploadBuffer(device.Common, instances, sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances, instanceDescs.data());
 	}
 	else // DirectX Raytracing
 	{
 		vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs(numInstances);
 		for (auto i = 0u; i < numInstances; ++i)
 		{
-			//instanceDescs[i] = {};
 			memcpy(instanceDescs[i].Transform, transforms[i], sizeof(instanceDescs[i].Transform));
 			instanceDescs[i].InstanceMask = 1;
 			instanceDescs[i].AccelerationStructure = bottomLevelASs[i].GetResult().GetResource()->GetGPUVirtualAddress();
 		}
-		AllocateUploadBuffer(device.Common, instances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances, instanceDescs.data());
+
+		if (instances)
+		{
+			void *pMappedData;
+			instances->Map(0, nullptr, &pMappedData);
+			memcpy(pMappedData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances);
+			instances->Unmap(0, nullptr);
+		}
+		else AllocateUploadBuffer(device.Common, instances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances, instanceDescs.data());
 	}
 }

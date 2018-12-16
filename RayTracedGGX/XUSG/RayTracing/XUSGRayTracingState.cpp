@@ -245,7 +245,7 @@ RayTracing::Pipeline PipelineCache::createPipeline(const string &key)
 	//PrintStateObjectDesc(desc);
 
 	// Create pipeline
-	Pipeline pipeline = { nullptr, nullptr };
+	Pipeline pipeline = {};
 	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 		H_RETURN(m_device.Fallback->CreateStateObject(pDesc, IID_PPV_ARGS(&pipeline.Fallback)), cerr,
 			L"Couldn't create DirectX Raytracing state object.\n", pipeline)

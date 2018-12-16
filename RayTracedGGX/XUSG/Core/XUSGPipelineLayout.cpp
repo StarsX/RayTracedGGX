@@ -245,8 +245,7 @@ DescriptorTableLayout PipelineLayoutCache::createDescriptorTableLayout(const str
 	auto layout = make_shared<DescriptorTableLayout::element_type>();
 
 	// Set ranges
-	const auto numRanges = static_cast<uint32_t>((key.size() - 1) / sizeof(DescriptorRange));
-	const auto pRanges = reinterpret_cast<const DescriptorRange*>(&key[1]);
+	const auto numRanges = key.size() > 0 ? static_cast<uint32_t>((key.size() - 1) / sizeof(DescriptorRange)) : 0;
 
 	if (numRanges > 0)
 	{
@@ -259,6 +258,7 @@ DescriptorTableLayout PipelineLayoutCache::createDescriptorTableLayout(const str
 		visibilities[Shader::Stage::GS] = D3D12_SHADER_VISIBILITY_GEOMETRY;
 		visibilities[Shader::Stage::ALL] = D3D12_SHADER_VISIBILITY_ALL;
 
+		const auto pRanges = reinterpret_cast<const DescriptorRange*>(&key[1]);
 		switch (pRanges->ViewType)
 		{
 		case DescriptorType::CONSTANT:

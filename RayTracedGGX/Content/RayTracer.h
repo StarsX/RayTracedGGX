@@ -22,8 +22,7 @@ public:
 	virtual ~RayTracer();
 
 	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
-		XUSG::Resource &scratch, XUSG::Resource &instances, const char *fileName,
-		const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
+		const char *fileName, const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
 	void Render(uint32_t frameIndex, const XUSG::Descriptor &dsv);
 
@@ -36,6 +35,7 @@ protected:
 	{
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
+		//HIT_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
 	};
@@ -46,7 +46,8 @@ protected:
 		ACCELERATION_STRUCTURE,
 		SAMPLER,
 		INDEX_BUFFERS,
-		VERTEX_BUFFERS
+		VERTEX_BUFFERS,
+		SCENE_CONSTANTS
 	};
 
 	enum PipelineIndex
@@ -86,8 +87,9 @@ protected:
 	bool createPipeline();
 	void createDescriptorTables();
 
-	bool buildAccelerationStructures(XUSG::Resource &scratch, XUSG::Resource &instances);
+	bool buildAccelerationStructures();
 	void buildShaderTables();
+	void updateAccelerationStructures();
 	void rayTrace(uint32_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
@@ -95,6 +97,7 @@ protected:
 
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
+	DirectX::XMFLOAT4X4	m_rot;
 	RayGenConstants		m_cbRayGens[FrameCount];
 
 	static const uint32_t NumUAVs = FrameCount + NUM_MESH + 1;
@@ -113,6 +116,9 @@ protected:
 	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];
 
 	XUSG::Texture2D			m_outputViews[FrameCount];
+
+	XUSG::Resource			m_scratch;
+	XUSG::Resource			m_instances;
 
 	// Shader tables
 	static const wchar_t *HitGroupName;

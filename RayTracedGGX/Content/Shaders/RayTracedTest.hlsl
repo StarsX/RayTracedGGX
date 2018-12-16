@@ -31,10 +31,16 @@ struct RayGenConstants
 	float3	EyePt;
 };
 
+struct SceneConstants
+{
+	float3x3 Normal;
+};
+
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<RayGenConstants> l_rayGenCB : register(b0);
+ConstantBuffer<RayGenConstants>	l_rayGenCB	: register(b0);
+ConstantBuffer<SceneConstants>	g_sceneCB	: register(b1);
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
@@ -176,7 +182,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// Trace a reflection ray.
 	RayDesc ray;
-	const float3 N = normalize(input.Nrm);
+	const float3 N = normalize(InstanceIndex() ? input.Nrm : mul(input.Nrm, g_sceneCB.Normal));
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), N);
 	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;

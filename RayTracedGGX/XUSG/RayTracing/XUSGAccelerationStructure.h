@@ -32,6 +32,8 @@ namespace XUSG
 			static void Barrier(RayTracing::CommandList &commandList,
 				uint32_t numInstances, AccelerationStructure *bottomLevelASs);
 
+			static void SetFrameCount(uint32_t frameCount);
+
 		protected:
 			bool preBuild(const RayTracing::Device &device, uint32_t descriptorIndex,
 				uint32_t numUAVs, uint32_t numSRVs = 0);
@@ -39,8 +41,12 @@ namespace XUSG
 			BuildDesc		m_buildDesc;
 			PrebuildInfo	m_prebuildInfo;
 
-			RawBuffer		m_result;
-			WRAPPED_GPU_POINTER m_pointer;
+			std::vector<RawBuffer> m_results;
+			std::vector<WRAPPED_GPU_POINTER> m_pointers;
+
+			uint32_t		m_currentFrame;
+
+			static uint32_t FrameCount;
 		};
 
 		class BottomLevelAS :
@@ -53,7 +59,7 @@ namespace XUSG
 			bool PreBuild(const RayTracing::Device &device, uint32_t numDescs, Geometry *geometries,
 				uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags = BuildFlags(0x4));
 			void Build(const RayTracing::CommandList &commandList, const Resource &scratch,
-				const DescriptorPool &descriptorPool, uint32_t numUAVs);
+				const DescriptorPool &descriptorPool, uint32_t numUAVs, bool update = false);
 
 			static void SetGeometries(Geometry *geometries, uint32_t numGeometries, Format vertexFormat,
 				const VertexBufferView *pVBs, const IndexBufferView *pIBs = nullptr,
@@ -70,7 +76,8 @@ namespace XUSG
 			bool PreBuild(const RayTracing::Device &device, uint32_t numDescs, uint32_t descriptorIndex,
 				uint32_t numUAVs, BuildFlags flags = BuildFlags(0x4));
 			void Build(const RayTracing::CommandList &commandList, const Resource &scratch,
-				const Resource &instanceDescs, const DescriptorPool &descriptorPool, uint32_t numUAVs);
+				const Resource &instanceDescs, const DescriptorPool &descriptorPool,
+				uint32_t numUAVs, bool update = false);
 
 			static void SetInstances(const RayTracing::Device &device, Resource &instances,
 				uint32_t numInstances, BottomLevelAS *bottomLevelASs, float *const *transforms);
