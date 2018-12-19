@@ -31,7 +31,7 @@ struct RayGenConstants
 	float3	EyePt;
 };
 
-struct SceneConstants
+struct HitGroupConstants
 {
 	float3x3 Normal;
 };
@@ -39,8 +39,8 @@ struct SceneConstants
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<RayGenConstants>	l_rayGenCB	: register(b0);
-ConstantBuffer<SceneConstants>	g_sceneCB	: register(b1);
+ConstantBuffer<RayGenConstants>		l_rayGenCB		: register(b0);
+ConstantBuffer<HitGroupConstants>	l_hitGroupCB	: register(b1);
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
@@ -182,7 +182,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// Trace a reflection ray.
 	RayDesc ray;
-	const float3 N = normalize(InstanceIndex() ? input.Nrm : mul(input.Nrm, g_sceneCB.Normal));
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, l_hitGroupCB.Normal) : input.Nrm);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), N);
 	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;
@@ -197,8 +197,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	const float3 specColors[] =
 	{
-		float3(1.00, 0.71, 0.29),
-		float3(0.95, 0.93, 0.88)
+		float3(0.95, 0.93, 0.88),	// Silver
+		float3(1.00, 0.71, 0.29)	// Gold
 	};
 	const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
 	//const float Vis = Vis_Schlick(0.0, NoV, NoL);

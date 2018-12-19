@@ -24,15 +24,12 @@ namespace XUSG
 			uint32_t GetUpdateScratchDataSize() const;
 			const WRAPPED_GPU_POINTER &GetResultPointer() const;
 			
-			static bool AllocateUAVBuffer(const XUSG::Device &device, Resource &resource,
-				uint64_t byteWidth, ResourceState dstState = ResourceState(0x8));
-			static bool AllocateUploadBuffer(const XUSG::Device &device, Resource &resource,
-				uint64_t byteWidth, void *pData);
-
-			static void Barrier(RayTracing::CommandList &commandList,
-				uint32_t numInstances, AccelerationStructure *bottomLevelASs);
-
 			static void SetFrameCount(uint32_t frameCount);
+
+			static bool AllocateUAVBuffer(const Device &device, Resource &resource,
+				uint64_t byteWidth, ResourceState dstState = ResourceState(0x8));
+			static bool AllocateUploadBuffer(const Device &device, Resource &resource,
+				uint64_t byteWidth, void *pData);
 
 		protected:
 			bool preBuild(const RayTracing::Device &device, uint32_t descriptorIndex,

@@ -49,46 +49,39 @@ const WRAPPED_GPU_POINTER &AccelerationStructure::GetResultPointer() const
 	return m_pointers[m_currentFrame];
 }
 
-bool AccelerationStructure::AllocateUAVBuffer(const XUSG::Device &device, Resource &resource,
+void AccelerationStructure::SetFrameCount(uint32_t frameCount)
+{
+	FrameCount = frameCount;
+}
+
+bool AccelerationStructure::AllocateUAVBuffer(const RayTracing::Device &device, Resource &resource,
 	uint64_t byteWidth, ResourceState dstState)
 {
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	const auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-	V_RETURN(device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE,
+	V_RETURN(device.Common->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE,
 		&bufferDesc, dstState, nullptr, IID_PPV_ARGS(&resource)), cerr, false);
 
 	return true;
 }
 
-bool AccelerationStructure::AllocateUploadBuffer(const XUSG::Device &device, Resource &resource,
+bool AccelerationStructure::AllocateUploadBuffer(const RayTracing::Device &device, Resource &resource,
 	uint64_t byteWidth, void *pData)
 {
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	const auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth);
 
-	V_RETURN(device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE,
+	V_RETURN(device.Common->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE,
 		&bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
 		IID_PPV_ARGS(&resource)), cerr, false);
-	
+
 	void *pMappedData;
 	resource->Map(0, nullptr, &pMappedData);
 	memcpy(pMappedData, pData, byteWidth);
 	resource->Unmap(0, nullptr);
 
 	return true;
-}
-
-void AccelerationStructure::Barrier(RayTracing::CommandList &commandList, uint32_t numInstances,
-	AccelerationStructure *bottomLevelASs)
-{
-	for (auto i = 0u; i < numInstances; ++i)
-		bottomLevelASs[i].GetResult().Barrier(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-}
-
-void AccelerationStructure::SetFrameCount(uint32_t frameCount)
-{
-	FrameCount = frameCount;
 }
 
 bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t descriptorIndex,
@@ -115,17 +108,23 @@ bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t 
 		device.Fallback->GetAccelerationStructureResourceState() :
 		D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
 
-	m_results.resize(FrameCount);
+	const auto bufferCount = (inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
+		== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE ? FrameCount : 1;
+
+	m_results.resize(bufferCount);
 	for (auto &result : m_results)
 		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
 			D3D12_HEAP_TYPE_DEFAULT, initialState, numSRVs), false);
 
 	// The Fallback Layer interface uses WRAPPED_GPU_POINTER to encapsulate the underlying pointer
 	// which will either be an emulated GPU pointer for the compute - based path or a GPU_VIRTUAL_ADDRESS for the DXR path.
-	m_pointers.resize(FrameCount);
-	for (auto i = 0u; i < FrameCount; ++i)
-		m_pointers[i] = device.Fallback->GetWrappedPointerSimple(descriptorIndex,
-			m_results[i].GetResource()->GetGPUVirtualAddress());
+	if (device.RaytracingAPI == API::FallbackLayer)
+	{
+		m_pointers.resize(bufferCount);
+		for (auto i = 0u; i < bufferCount; ++i)
+			m_pointers[i] = device.Fallback->GetWrappedPointerSimple(descriptorIndex,
+				m_results[i].GetResource()->GetGPUVirtualAddress());
+	}
 
 	return true;
 }
@@ -177,6 +176,9 @@ void BottomLevelAS::Build(const RayTracing::CommandList &commandList, const Reso
 
 	// Build acceleration structure.
 	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
+
+	// Resource barrier
+	m_results[m_currentFrame].Barrier(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 }
 
 void BottomLevelAS::SetGeometries(Geometry *geometries, uint32_t numGeometries, Format vertexFormat,
@@ -187,10 +189,10 @@ void BottomLevelAS::SetGeometries(Geometry *geometries, uint32_t numGeometries, 
 		auto &geometryDesc = geometries[i];
 
 		assert(pIBs[i].Format == DXGI_FORMAT_R32_UINT || pIBs[i].Format == DXGI_FORMAT_R16_UINT);
-		const auto strideIB = pIBs[i].Format == DXGI_FORMAT_R32_UINT ? 4 : 2;
+		const uint32_t strideIB = pIBs[i].Format == DXGI_FORMAT_R32_UINT ? sizeof(uint32_t) : sizeof(uint16_t);
 
+		geometryDesc = {};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
-		geometryDesc.Triangles.Transform3x4 = 0;
 		geometryDesc.Triangles.IndexFormat = pIBs[i].Format;
 		geometryDesc.Triangles.VertexFormat = vertexFormat;
 		geometryDesc.Triangles.IndexCount = pIBs[i].SizeInBytes / strideIB;
@@ -286,7 +288,7 @@ void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instan
 			memcpy(pMappedData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances);
 			instances->Unmap(0, nullptr);
 		}
-		else AllocateUploadBuffer(device.Common, instances, sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances, instanceDescs.data());
+		else AllocateUploadBuffer(device, instances, sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances, instanceDescs.data());
 	}
 	else // DirectX Raytracing
 	{
@@ -305,6 +307,6 @@ void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instan
 			memcpy(pMappedData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances);
 			instances->Unmap(0, nullptr);
 		}
-		else AllocateUploadBuffer(device.Common, instances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances, instanceDescs.data());
+		else AllocateUploadBuffer(device, instances, sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances, instanceDescs.data());
 	}
 }

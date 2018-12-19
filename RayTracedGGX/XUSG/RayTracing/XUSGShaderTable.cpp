@@ -11,7 +11,7 @@ using namespace XUSG::RayTracing;
 
 ShaderRecord::ShaderRecord(const RayTracing::Device &device, const RayTracing::Pipeline &pipeline,
 	const void *shader, void *pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
-	m_localRootArgs(pLocalDescriptorArgs, localDescriptorArgSize)
+	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {
 	if (device.RaytracingAPI == RayTracing::API::FallbackLayer)
 		m_shaderID.Ptr = pipeline.Fallback->GetShaderIdentifier(reinterpret_cast<const wchar_t*>(shader));
@@ -28,7 +28,7 @@ ShaderRecord::ShaderRecord(const RayTracing::Device &device, const RayTracing::P
 ShaderRecord::ShaderRecord(void *pShaderID, uint32_t shaderIDSize,
 	void *pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
 	m_shaderID(pShaderID, shaderIDSize),
-	m_localRootArgs(pLocalDescriptorArgs, localDescriptorArgSize)
+	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {
 }
 
@@ -41,8 +41,8 @@ void ShaderRecord::CopyTo(void *dest) const
 	const auto byteDest = static_cast<uint8_t*>(dest);
 	memcpy(dest, m_shaderID.Ptr, m_shaderID.Size);
 
-	if (m_localRootArgs.Ptr)
-		memcpy(byteDest + m_shaderID.Size, m_localRootArgs.Ptr, m_localRootArgs.Size);
+	if (m_localDescriptorArgs.Ptr)
+		memcpy(byteDest + m_shaderID.Size, m_localDescriptorArgs.Ptr, m_localDescriptorArgs.Size);
 }
 
 uint32_t ShaderRecord::GetShaderIDSize(const RayTracing::Device &device)
@@ -125,13 +125,14 @@ uint32_t ShaderTable::GetShaderRecordSize() const
 	return m_shaderRecordSize;
 }
 
-bool ShaderTable::allocate(const RayTracing::Device &device, uint32_t bufferWidth, const wchar_t *name)
+bool ShaderTable::allocate(const RayTracing::Device &device, uint32_t byteWidth, const wchar_t *name)
 {
-	auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
+	const auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth);
 
-	auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(bufferWidth);
-	V_RETURN(device.Common->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
-		D3D12_RESOURCE_STATE_GENERIC_READ, nullptr, IID_PPV_ARGS(&m_resource)), cerr, false);
+	V_RETURN(device.Common->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE,
+		&bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
+		IID_PPV_ARGS(&m_resource)), cerr, false);
 	m_resource->SetName(name);
 
 	return true;

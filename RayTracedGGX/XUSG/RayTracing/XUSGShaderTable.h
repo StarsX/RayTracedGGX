@@ -34,7 +34,7 @@ namespace XUSG
 				uint32_t Size;
 			};
 			PointerWithSize m_shaderID;
-			PointerWithSize m_localRootArgs;
+			PointerWithSize m_localDescriptorArgs;
 		};
 
 		class ShaderTable
@@ -56,7 +56,7 @@ namespace XUSG
 			uint32_t GetShaderRecordSize() const;
 
 		protected:
-			bool allocate(const Device &device, uint32_t bufferWidth, const wchar_t *name);
+			bool allocate(const Device &device, uint32_t byteWidth, const wchar_t *name);
 
 			Resource m_resource;
 

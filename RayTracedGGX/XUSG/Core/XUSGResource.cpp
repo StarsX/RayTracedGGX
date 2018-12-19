@@ -80,7 +80,8 @@ bool ConstantBuffer::Create(const Device &device, uint32_t byteWidth, uint32_t n
 	if (!offsets)
 	{
 		auto numBytes = 0u;
-		const auto cbvSize = ALIGN(byteWidth / numCBVs, 256);	// CB size is required to be 256-byte aligned.
+		// CB size is required to be D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT-byte aligned.
+		const auto cbvSize = ALIGN(byteWidth / numCBVs, D3D12_CONSTANT_BUFFER_DATA_PLACEMENT_ALIGNMENT);
 		offsetList.resize(numCBVs);
 
 		for (auto &offset : offsetList)
@@ -276,7 +277,7 @@ bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Fo
 
 	// Setup the texture description.
 	const auto desc = CD3DX12_RESOURCE_DESC::Tex2D(formatResource, width, height, arraySize,
-		numMips, sampleCount, 0, D3D12_RESOURCE_FLAGS(resourceFlags));
+		numMips, sampleCount, 0, resourceFlags);
 
 	// Determine initial state
 	if (state) m_state = state;
@@ -932,7 +933,7 @@ bool Texture3D::Create(const Device &device, uint32_t width, uint32_t height,
 
 	// Setup the texture description.
 	const auto desc = CD3DX12_RESOURCE_DESC::Tex3D(formatResource, width, height, depth,
-		numMips, D3D12_RESOURCE_FLAGS(resourceFlags));
+		numMips, resourceFlags);
 
 	// Determine initial state
 	if (state) m_state = state;
@@ -1214,7 +1215,7 @@ bool RawBuffer::create(const Device &device, uint32_t byteWidth, ResourceFlags r
 	if (name) m_name = name;
 
 	// Setup the buffer description.
-	const auto desc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth, D3D12_RESOURCE_FLAGS(resourceFlags));
+	const auto desc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth, resourceFlags);
 
 	// Determine initial state
 	if (state) m_state = state;

@@ -226,11 +226,8 @@ namespace FallbackLayer
                 const auto descriptorCount = descriptorCounts[descriptorType];
                 UINT numSpacesNeeded = descriptorCount > 0 ? 1 : 0;
                 //if (descriptorType == D3D12_DESCRIPTOR_RANGE_TYPE_SRV || descriptorType == D3D12_DESCRIPTOR_RANGE_TYPE_UAV)
-                //{
-                //    numSpacesNeeded = descriptorCount > 0 ? FallbackLayerNumDescriptorHeapSpacesPerView : 0;
-                //}
                 if (descriptorType == D3D12_DESCRIPTOR_RANGE_TYPE_SRV)
-					numSpacesNeeded = descriptorCount > 0 ? FallbackLayerNumDescriptorHeapSpacesPerView : 0;
+                    numSpacesNeeded = descriptorCount > 0 ? FallbackLayerNumDescriptorHeapSpacesPerView : 0;
 
                 auto range = TD3DX12_DESCRIPTOR_RANGE(
                     descriptorType, descriptorCounts[descriptorType], FallbackLayerDescriptorHeapTable, FallbackLayerRegisterSpace + FallbackLayerDescriptorHeapSpaceOffset);

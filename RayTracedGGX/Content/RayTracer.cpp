@@ -35,7 +35,7 @@ RayTracer::~RayTracer()
 }
 
 bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resource *ibUploads,
-	const char *fileName, const XMFLOAT4 &posScale)
+	Geometry *geometries, const char *fileName, const XMFLOAT4 &posScale)
 {
 	m_viewport = XMUINT2(width, height);
 	m_posScale = posScale;
@@ -55,7 +55,7 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 	// Create output view and build acceleration structures
 	for (auto &outputView : m_outputViews)
 		outputView.Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	N_RETURN(buildAccelerationStructures(), false);
+	N_RETURN(buildAccelerationStructures(geometries), false);
 	buildShaderTables();
 
 	// Create the sampler
@@ -71,17 +71,25 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 
 void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj)
 {
-	const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
-	XMStoreFloat4x4(&m_cbRayGens[frameIndex].ProjToWorld, XMMatrixTranspose(projToWorld));
-	XMStoreFloat3(&m_cbRayGens[frameIndex].EyePt, eyePt);
+	{
+		const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
+		XMStoreFloat4x4(&m_cbRayGens[frameIndex].ProjToWorld, XMMatrixTranspose(projToWorld));
+		XMStoreFloat3(&m_cbRayGens[frameIndex].EyePt, eyePt);
 
-	m_rayGenShaderTables[frameIndex].Reset();
-	m_rayGenShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
-		RaygenShaderName, &m_cbRayGens[frameIndex], sizeof(RayGenConstants)));
+		m_rayGenShaderTables[frameIndex].Reset();
+		m_rayGenShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
+			RaygenShaderName, &m_cbRayGens[frameIndex], sizeof(RayGenConstants)));
+	}
 
-	static float angle = 0.0f;
-	angle += 0.1f * XM_PI / 180.0f;
-	XMStoreFloat4x4(&m_rot, XMMatrixRotationY(angle));
+	{
+		static float angle = 0.0f;
+		angle += 0.1f * XM_PI / 180.0f;
+		XMStoreFloat4x4(&m_rot, XMMatrixRotationY(angle));
+
+		m_hitGroupShaderTables[frameIndex].Reset();
+		m_hitGroupShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
+			HitGroupName, &XMMatrixTranspose(XMLoadFloat4x4(&m_rot)), sizeof(XMFLOAT4X4)));
+	}
 }
 
 void RayTracer::Render(uint32_t frameIndex, const Descriptor &dsv)
@@ -210,7 +218,6 @@ void RayTracer::createPipelineLayouts()
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout.SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
-		pipelineLayout.SetConstants(SCENE_CONSTANTS, SizeOfInUint32(XMFLOAT4X4), 1);
 		m_pipelineLayouts[GLOBAL_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
 			D3D12_ROOT_SIGNATURE_FLAG_NONE, NumUAVs, L"RayTracerGlobalPipelineLayout");
 	}
@@ -222,6 +229,15 @@ void RayTracer::createPipelineLayouts()
 		pipelineLayout.SetConstants(0, SizeOfInUint32(RayGenConstants), 0);
 		m_pipelineLayouts[RAY_GEN_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
 			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerRayGenPipelineLayout");
+	}
+
+	// Local Root Signature for Hit group
+	// This is a root signature that enables a shader to have unique arguments that come from shader tables.
+	{
+		RayTracing::PipelineLayout pipelineLayout;
+		pipelineLayout.SetConstants(0, SizeOfInUint32(XMFLOAT4X4), 1);
+		m_pipelineLayouts[HIT_GROUP_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerHitGroupPipelineLayout");
 	}
 }
 
@@ -236,6 +252,8 @@ bool RayTracer::createPipeline()
 		state.SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
 		state.SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
+		state.SetLocalPipelineLayout(1, m_pipelineLayouts[HIT_GROUP_LAYOUT],
+			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 		state.SetMaxRecursionDepth(3);
 		m_pipelines[TEST] = state.GetPipeline(m_pipelineCache);
@@ -246,7 +264,7 @@ bool RayTracer::createPipeline()
 
 void RayTracer::createDescriptorTables()
 {
-	//m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2 + 1);
+	//m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2);
 
 	for (auto i = 0u; i < FrameCount; ++i)
 	{
@@ -255,6 +273,7 @@ void RayTracer::createDescriptorTables()
 		m_uavTables[i][UAV_TABLE_OUTPUT] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
+	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
 		Descriptor descriptors[NUM_MESH + 1];
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_bottomLevelASs[i].GetResult().GetUAV();
@@ -263,8 +282,7 @@ void RayTracer::createDescriptorTables()
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
-
-	if (m_device.RaytracingAPI == RayTracing::API::NativeRaytracing)
+	else
 	{
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, 1, &m_topLevelAS.GetResult().GetSRV());
@@ -288,7 +306,7 @@ void RayTracer::createDescriptorTables()
 	}
 }
 
-bool RayTracer::buildAccelerationStructures()
+bool RayTracer::buildAccelerationStructures(Geometry *geometries)
 {
 	AccelerationStructure::SetFrameCount(FrameCount);
 
@@ -300,8 +318,7 @@ bool RayTracer::buildAccelerationStructures()
 		vertexBufferViews[i] = m_vertexBuffers[i].GetVBV();
 		indexBufferViews[i] = m_indexBuffers[i].GetIBV();
 	}
-	vector<Geometry> geometries(NUM_MESH);
-	BottomLevelAS::SetGeometries(geometries.data(), NUM_MESH, DXGI_FORMAT_R32G32B32_FLOAT,
+	BottomLevelAS::SetGeometries(geometries, NUM_MESH, DXGI_FORMAT_R32G32B32_FLOAT,
 		vertexBufferViews, indexBufferViews);
 
 	// Descriptor index in descriptor pool
@@ -320,27 +337,27 @@ bool RayTracer::buildAccelerationStructures()
 	auto scratchSize = m_topLevelAS.GetScratchDataMaxSize();
 	for (const auto &bottomLevelAS : m_bottomLevelASs)
 		scratchSize = (max)(bottomLevelAS.GetScratchDataMaxSize(), scratchSize);
-	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device.Common, m_scratch, scratchSize), false);
+	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device, m_scratch, scratchSize), false);
 
 	// Get descriptor pool and create descriptor tables
 	createDescriptorTables();
 	const auto &descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
-	const auto numInstances = NUM_MESH;
-	float *transforms[] =
+	XMFLOAT4X4 matrices[NUM_MESH];
+	XMStoreFloat4x4(&matrices[GROUND], XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))));
+	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
+		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))));
+	float *const transforms[] =
 	{
-		XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))).r[0].m128_f32,
-		XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))).r[0].m128_f32
+		reinterpret_cast<float*>(&matrices[GROUND]),
+		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
 	};
 	TopLevelAS::SetInstances(m_device, m_instances, NUM_MESH, m_bottomLevelASs, transforms);
 
 	// Build bottom level ASs
 	for (auto &bottomLevelAS : m_bottomLevelASs)
 		bottomLevelAS.Build(m_commandList, m_scratch, descriptorPool, NumUAVs);
-
-	// Barrier
-	AccelerationStructure::Barrier(m_commandList, numInstances, m_bottomLevelASs);
 
 	// Build top level AS
 	m_topLevelAS.Build(m_commandList, m_scratch, m_instances, descriptorPool, NumUAVs);
@@ -360,11 +377,12 @@ void RayTracer::buildShaderTables()
 			(L"RayGenShaderTable" + to_wstring(i)).c_str());
 		m_rayGenShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
 			RaygenShaderName, &m_cbRayGens[i], sizeof(RayGenConstants)));
-	}
 
-	// Hit group shader table
-	m_hitGroupShaderTable.Create(m_device, 1, shaderIDSize, L"HitGroupShaderTable");
-	m_hitGroupShaderTable.AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST], HitGroupName));
+		// Hit group shader table
+		m_hitGroupShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(XMFLOAT4X4), L"HitGroupShaderTable");
+		m_hitGroupShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST], HitGroupName,
+			&XMMatrixTranspose(XMLoadFloat4x4(&m_rot)), sizeof(XMFLOAT4X4)));
+	}
 
 	// Miss shader table
 	m_missShaderTable.Create(m_device, 1, shaderIDSize, L"MissShaderTable");
@@ -374,12 +392,14 @@ void RayTracer::buildShaderTables()
 void RayTracer::updateAccelerationStructures()
 {
 	// Set instance
-	const auto numInstances = NUM_MESH;
-	float *transforms[] =
+	XMFLOAT4X4 matrices[NUM_MESH];
+	XMStoreFloat4x4(&matrices[GROUND], XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))));
+	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMLoadFloat4x4(&m_rot) *
+		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))));
+	float *const transforms[] =
 	{
-		XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMLoadFloat4x4(&m_rot) *
-		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))).r[0].m128_f32,
-		XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))).r[0].m128_f32
+		reinterpret_cast<float*>(&matrices[GROUND]),
+		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
 	};
 	TopLevelAS::SetInstances(m_device, m_instances, NUM_MESH, m_bottomLevelASs, transforms);
 
@@ -405,9 +425,7 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	m_commandList.SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
-	m_commandList.SetCompute32BitConstants(SCENE_CONSTANTS, SizeOfInUint32(XMFLOAT4X4),
-		&XMMatrixTranspose(XMLoadFloat4x4(&m_rot)), 0);
 
 	m_commandList.DispatchRays(m_pipelines[TEST], m_viewport.x, m_viewport.y, 1,
-		m_hitGroupShaderTable, m_missShaderTable, m_rayGenShaderTables[frameIndex]);
+		m_hitGroupShaderTables[frameIndex], m_missShaderTable, m_rayGenShaderTables[frameIndex]);
 }

@@ -188,7 +188,8 @@ void RayTracedGGX::LoadAssets()
 	if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
 	Resource vbUploads[RayTracer::NUM_MESH], ibUploads[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, m_meshFileName.c_str(), m_meshPosScale))
+	Geometry geometries[RayTracer::NUM_MESH];
+	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, geometries, m_meshFileName.c_str(), m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -511,7 +512,7 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 {
 	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
-		CreateRaytracingFallbackDeviceFlags createDeviceFlags = CreateRaytracingFallbackDeviceFlags::None;
+		CreateRaytracingFallbackDeviceFlags createDeviceFlags = CreateRaytracingFallbackDeviceFlags::EnableRootDescriptorsInShaderRecords;
 		ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Common.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Fallback)));
 	}
 	else // DirectX Raytracing

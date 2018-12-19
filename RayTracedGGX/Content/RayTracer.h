@@ -12,8 +12,8 @@ class RayTracer
 public:
 	enum MeshIndex
 	{
-		MODEL_OBJ,
 		GROUND,
+		MODEL_OBJ,
 
 		NUM_MESH
 	};
@@ -22,7 +22,8 @@ public:
 	virtual ~RayTracer();
 
 	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
-		const char *fileName, const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
+		XUSG::RayTracing::Geometry *geometries, const char *fileName, const DirectX::XMFLOAT4 &posScale
+		= DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
 	void Render(uint32_t frameIndex, const XUSG::Descriptor &dsv);
 
@@ -35,7 +36,7 @@ protected:
 	{
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
-		//HIT_LAYOUT,
+		HIT_GROUP_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
 	};
@@ -46,8 +47,7 @@ protected:
 		ACCELERATION_STRUCTURE,
 		SAMPLER,
 		INDEX_BUFFERS,
-		VERTEX_BUFFERS,
-		SCENE_CONSTANTS
+		VERTEX_BUFFERS
 	};
 
 	enum PipelineIndex
@@ -87,7 +87,7 @@ protected:
 	bool createPipeline();
 	void createDescriptorTables();
 
-	bool buildAccelerationStructures();
+	bool buildAccelerationStructures(XUSG::RayTracing::Geometry *geometries);
 	void buildShaderTables();
 	void updateAccelerationStructures();
 	void rayTrace(uint32_t frameIndex);
@@ -126,7 +126,7 @@ protected:
 	static const wchar_t *ClosestHitShaderName;
 	static const wchar_t *MissShaderName;
 	XUSG::RayTracing::ShaderTable	m_missShaderTable;
-	XUSG::RayTracing::ShaderTable	m_hitGroupShaderTable;
+	XUSG::RayTracing::ShaderTable	m_hitGroupShaderTables[FrameCount];
 	XUSG::RayTracing::ShaderTable	m_rayGenShaderTables[FrameCount];
 
 	XUSG::RayTracing::PipelineCache	m_pipelineCache;

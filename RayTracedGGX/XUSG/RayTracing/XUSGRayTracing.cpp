@@ -52,7 +52,7 @@ void RayTracing::CommandList::BuildRaytracingAccelerationStructure(const BuildDe
 
 void RayTracing::CommandList::SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool *pDescriptorPools) const
 {
-	vector<DescriptorPool::InterfaceType*> ppDescriptorPools(numDescriptorPools);
+	vector<DescriptorPool::element_type*> ppDescriptorPools(numDescriptorPools);
 	for (auto i = 0u; i < numDescriptorPools; ++i)
 		ppDescriptorPools[i] = pDescriptorPools[i].get();
 

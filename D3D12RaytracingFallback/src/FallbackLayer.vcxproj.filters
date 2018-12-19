@@ -195,6 +195,9 @@
     <FxCompile Include="*Lib.hlsl" />
     <FxCompile Include="*Lib.hlsl" />
     <FxCompile Include="*Lib.hlsl" />
+    <FxCompile Include="*Lib.hlsl" />
+    <FxCompile Include="*Lib.hlsl" />
+    <FxCompile Include="*Lib.hlsl" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="AccelerationStructureBuilderFactory.cpp">
@@ -468,9 +471,6 @@
     <None Include="TraverseShader.hlsli">
       <Filter>Shaders</Filter>
     </None>
-    <None Include="..\contributing.md" />
-    <None Include="..\developerguide.md" />
-    <None Include="..\readme.md" />
     <None Include="packages.config" />
     <None Include="CalculateMortonCodes.hlsli">
       <Filter>Shaders</Filter>
