@@ -158,6 +158,36 @@ void CommandList::SetGraphics32BitConstants(uint32_t index, uint32_t num32BitVal
 	m_commandList->SetGraphicsRoot32BitConstants(index, num32BitValuesToSet, pSrcData, destOffsetIn32BitValues);
 }
 
+void CommandList::SetComputeRootConstantBufferView(uint32_t index, const Resource &resource, int offset) const
+{
+	m_commandList->SetComputeRootConstantBufferView(index, resource->GetGPUVirtualAddress() + offset);
+}
+
+void CommandList::SetGraphicsRootConstantBufferView(uint32_t index, const Resource &resource, int offset) const
+{
+	m_commandList->SetGraphicsRootConstantBufferView(index, resource->GetGPUVirtualAddress() + offset);
+}
+
+void CommandList::SetComputeRootShaderResourceView(uint32_t index, const Resource &resource, int offset) const
+{
+	m_commandList->SetComputeRootShaderResourceView(index, resource->GetGPUVirtualAddress() + offset);
+}
+
+void CommandList::SetGraphicsRootShaderResourceView(uint32_t index, const Resource &resource, int offset) const
+{
+	m_commandList->SetGraphicsRootShaderResourceView(index, resource->GetGPUVirtualAddress() + offset);
+}
+
+void CommandList::SetComputeRootUnorderedAccessView(uint32_t index, const Resource &resource, int offset) const
+{
+	m_commandList->SetComputeRootUnorderedAccessView(index, resource->GetGPUVirtualAddress() + offset);
+}
+
+void CommandList::SetGraphicsRootUnorderedAccessView(uint32_t index, const Resource &resource, int offset) const
+{
+	m_commandList->SetGraphicsRootUnorderedAccessView(index, resource->GetGPUVirtualAddress() + offset);
+}
+
 void CommandList::IASetIndexBuffer(const IndexBufferView &view) const
 {
 	m_commandList->IASetIndexBuffer(&view);

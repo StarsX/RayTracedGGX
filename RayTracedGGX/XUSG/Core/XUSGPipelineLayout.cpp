@@ -47,20 +47,29 @@ void Util::PipelineLayout::SetRange(uint32_t index, DescriptorType type, uint32_
 void Util::PipelineLayout::SetConstants(uint32_t index, uint32_t num32BitValues,
 	uint32_t binding, uint32_t space, Shader::Stage stage)
 {
-	auto &key = checkKeySpace(index);
-	key[0] = stage;
+	SetRange(index, DescriptorType::CONSTANT, num32BitValues, binding, space, 0);
+	SetShaderStage(index, stage);
+}
 
-	key.resize(1 + sizeof(DescriptorRange));
+void Util::PipelineLayout::SetRootSRV(uint32_t index, uint32_t binding, uint32_t space,
+	uint8_t flags, Shader::Stage stage)
+{
+	SetRange(index, DescriptorType::ROOT_SRV, 1, binding, space, flags);
+	SetShaderStage(index, stage);
+}
 
-	// Interpret key data as the layout of constants
-	auto &contantLayout = reinterpret_cast<DescriptorRange&>(key[1]);
+void Util::PipelineLayout::SetRootUAV(uint32_t index, uint32_t binding, uint32_t space,
+	uint8_t flags, Shader::Stage stage)
+{
+	SetRange(index, DescriptorType::ROOT_UAV, 1, binding, space, flags);
+	SetShaderStage(index, stage);
+}
 
-	// Fill key entries
-	contantLayout.ViewType = DescriptorType::CONSTANT;
-	contantLayout.NumDescriptors = num32BitValues;
-	contantLayout.BaseBinding = binding;
-	contantLayout.Space = space;
-	contantLayout.Flags = 0;
+void Util::PipelineLayout::SetRootCBV(uint32_t index, uint32_t binding, uint32_t space,
+	uint8_t flags, Shader::Stage stage)
+{
+	SetRange(index, DescriptorType::ROOT_CBV, 1, binding, space, flags);
+	SetShaderStage(index, stage);
 }
 
 PipelineLayout Util::PipelineLayout::CreatePipelineLayout(PipelineLayoutCache &pipelineLayoutCache, uint8_t flags, const wchar_t *name)
@@ -265,6 +274,24 @@ DescriptorTableLayout PipelineLayoutCache::createDescriptorTableLayout(const str
 			// Set param
 			layout->InitAsConstants(pRanges->NumDescriptors, pRanges->BaseBinding,
 				pRanges->Space, visibilities[stage]);
+			break;
+
+		case DescriptorType::ROOT_SRV:
+			// Set param
+			layout->InitAsShaderResourceView(pRanges->BaseBinding, pRanges->Space,
+				D3D12_ROOT_DESCRIPTOR_FLAGS(pRanges->Flags), visibilities[stage]);
+			break;
+
+		case DescriptorType::ROOT_UAV:
+			// Set param
+			layout->InitAsUnorderedAccessView(pRanges->BaseBinding, pRanges->Space,
+				D3D12_ROOT_DESCRIPTOR_FLAGS(pRanges->Flags), visibilities[stage]);
+			break;
+
+		case DescriptorType::ROOT_CBV:
+			// Set param
+			layout->InitAsConstantBufferView(pRanges->BaseBinding, pRanges->Space,
+				D3D12_ROOT_DESCRIPTOR_FLAGS(pRanges->Flags), visibilities[stage]);
 			break;
 
 		default:

@@ -512,7 +512,7 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 {
 	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
-		CreateRaytracingFallbackDeviceFlags createDeviceFlags = CreateRaytracingFallbackDeviceFlags::EnableRootDescriptorsInShaderRecords;
+		const auto createDeviceFlags = CreateRaytracingFallbackDeviceFlags::EnableRootDescriptorsInShaderRecords;
 		ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Common.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Fallback)));
 	}
 	else // DirectX Raytracing

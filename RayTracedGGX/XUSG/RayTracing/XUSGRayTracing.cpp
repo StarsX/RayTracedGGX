@@ -62,13 +62,12 @@ void RayTracing::CommandList::SetDescriptorPools(uint32_t numDescriptorPools, co
 		m_commandList->SetDescriptorHeaps(numDescriptorPools, ppDescriptorPools.data());
 }
 
-void RayTracing::CommandList::SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS &topLevelAS,
-	const DescriptorTable &srvTopLevelASTable) const
+void RayTracing::CommandList::SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS &topLevelAS) const
 {
 	if (m_raytracingAPI == API::FallbackLayer)
 		m_fallback->SetTopLevelAccelerationStructure(index, topLevelAS.GetResultPointer());
 	else // DirectX Raytracing
-		SetComputeDescriptorTable(index, srvTopLevelASTable);
+		SetComputeRootShaderResourceView(index, const_cast<TopLevelAS&>(topLevelAS).GetResult().GetResource());
 }
 
 void RayTracing::CommandList::DispatchRays(const RayTracing::Pipeline &pipeline,

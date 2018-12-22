@@ -59,7 +59,6 @@ protected:
 
 	enum SRVTable
 	{
-		SRV_TABLE_AS,
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
 

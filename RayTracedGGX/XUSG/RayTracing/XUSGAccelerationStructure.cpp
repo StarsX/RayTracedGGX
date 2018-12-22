@@ -178,7 +178,7 @@ void BottomLevelAS::Build(const RayTracing::CommandList &commandList, const Reso
 	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
 
 	// Resource barrier
-	m_results[m_currentFrame].Barrier(commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	commandList.Barrier(1, &ResourceBarrier::UAV(m_results[m_currentFrame].GetResource().get()));
 }
 
 void BottomLevelAS::SetGeometries(Geometry *geometries, uint32_t numGeometries, Format vertexFormat,

@@ -16,6 +16,9 @@ namespace XUSG
 		CBV,
 		SAMPLER,
 		CONSTANT,
+		ROOT_SRV,
+		ROOT_UAV,
+		ROOT_CBV,
 
 		NUM
 	};
@@ -44,6 +47,12 @@ namespace XUSG
 				uint32_t space = 0, uint8_t flags = 0);
 			void SetConstants(uint32_t index, uint32_t num32BitValues, uint32_t binding,
 				uint32_t space = 0, Shader::Stage stage = Shader::Stage::ALL);
+			void SetRootSRV(uint32_t index, uint32_t binding,
+				uint32_t space = 0, uint8_t flags = 0x8, Shader::Stage stage = Shader::Stage::ALL);
+			void SetRootUAV(uint32_t index, uint32_t binding,
+				uint32_t space = 0, uint8_t flags = 0, Shader::Stage stage = Shader::Stage::ALL);
+			void SetRootCBV(uint32_t index, uint32_t binding,
+				uint32_t space = 0, uint8_t flags = 0, Shader::Stage stage = Shader::Stage::ALL);
 
 			XUSG::PipelineLayout CreatePipelineLayout(PipelineLayoutCache &pipelineLayoutCache, uint8_t flags,
 				const wchar_t *name = nullptr);

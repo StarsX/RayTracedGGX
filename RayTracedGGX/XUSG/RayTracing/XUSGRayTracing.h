@@ -28,8 +28,7 @@ namespace XUSG
 				uint32_t numUAVs) const;
 
 			void SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool *pDescriptorPools) const;
-			void SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS &topLevelAS,
-				const DescriptorTable &srvTopLevelASTable) const;
+			void SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS &topLevelAS) const;
 			void DispatchRays(const Pipeline &pipeline, uint32_t width, uint32_t height, uint32_t depth,
 				const ShaderTable &hitGroup, const ShaderTable &miss, const ShaderTable &rayGen) const;
 

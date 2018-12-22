@@ -214,7 +214,7 @@ void RayTracer::createPipelineLayouts()
 	{
 		RayTracing::PipelineLayout pipelineLayout;
 		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
-		pipelineLayout.SetRange(ACCELERATION_STRUCTURE, DescriptorType::SRV, 1, 0);
+		pipelineLayout.SetRootSRV(ACCELERATION_STRUCTURE, 0);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout.SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
@@ -273,7 +273,6 @@ void RayTracer::createDescriptorTables()
 		m_uavTables[i][UAV_TABLE_OUTPUT] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
-	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
 		Descriptor descriptors[NUM_MESH + 1];
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_bottomLevelASs[i].GetResult().GetUAV();
@@ -281,12 +280,6 @@ void RayTracer::createDescriptorTables()
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
-	}
-	else
-	{
-		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, 1, &m_topLevelAS.GetResult().GetSRV());
-		m_srvTables[SRV_TABLE_AS] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 
 	{
@@ -421,7 +414,7 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	m_commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
 	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[frameIndex][UAV_TABLE_OUTPUT]);
-	m_commandList.SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, m_topLevelAS, m_srvTables[SRV_TABLE_AS]);
+	m_commandList.SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, m_topLevelAS);
 	m_commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	m_commandList.SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
