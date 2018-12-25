@@ -193,6 +193,12 @@
     <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Content\Shaders\TemporalSS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\RayTracedGGX.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="XUSG\Core\XUSGBlend.inl">
@@ -208,6 +214,9 @@
       <Filter>XUSG\Core\Inc</Filter>
     </None>
     <None Include="Content\Shaders\BRDFModels.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Content\Shaders\RayTracedGGX.hlsli">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

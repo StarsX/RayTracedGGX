@@ -49,6 +49,8 @@ RaytracingAS		g_scene			: register(t0);
 Buffer<uint>				g_indexBuffers[]	: register(t0, space1);
 StructuredBuffer<Vertex>	g_vertexBuffers[]	: register(t0, space2);
 
+//Texture2D g_textures[] : register(t0, space3);
+
 //--------------------------------------------------------------------------------------
 // Samplers
 //--------------------------------------------------------------------------------------
@@ -201,9 +203,9 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// BRDF
 	// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-	// pdf = D * NoH
+	// pdf = D * NoH / (4 * VoH)
 	const float NoH = saturate(dot(N, H));
-	radiance *= F * min(NoL * vis / NoH, 1.0);
+	radiance *= NoL * F * vis * (4.0 * VoH / NoH);
 
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 

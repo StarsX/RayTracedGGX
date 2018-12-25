@@ -17,20 +17,6 @@ using namespace std;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
 
-enum VertexShader
-{
-	VS_TRIANGLE,
-
-	NUM_VS
-};
-
-enum PixelShader
-{
-	PS_TRIANGLE,
-
-	NUM_PS
-};
-
 #define	PIDIV4		0.785398163f
 
 static const float g_FOVAngleY = PIDIV4;

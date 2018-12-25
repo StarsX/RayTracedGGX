@@ -196,6 +196,16 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
     <ClInclude Include="XUSG\RayTracing\XUSGShaderTable.h" />
   </ItemGroup>
   <ItemGroup>
+    <FxCompile Include="Content\Shaders\RayTracedGGX.hlsl">
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
+      </EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.3</ShaderModel>
+      <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
+      </EntryPointName>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Library</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.3</ShaderModel>
+    </FxCompile>
     <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Library</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.3</ShaderModel>
@@ -206,9 +216,16 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
       <EntryPointName Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </EntryPointName>
     </FxCompile>
+    <FxCompile Include="Content\Shaders\TemporalSS.hlsl">
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">5.0</ShaderModel>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">5.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Content\Shaders\BRDFModels.hlsli" />
+    <None Include="Content\Shaders\RayTracedGGX.hlsli" />
     <None Include="XUSG\Core\XUSGBlend.inl" />
     <None Include="XUSG\Core\XUSGDepthStencil.inl" />
     <None Include="XUSG\Core\XUSGRasterizer.inl" />

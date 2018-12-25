@@ -61,8 +61,9 @@ protected:
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
+		SRV_TABLE_FB,
 
-		NUM_SRV_TABLE
+		NUM_SRV_TABLE = SRV_TABLE_FB + FrameCount
 	};
 
 	enum UAVTable
@@ -75,7 +76,8 @@ protected:
 	struct RayGenConstants
 	{
 		DirectX::XMFLOAT4X4	ProjToWorld;
-		DirectX::XMFLOAT3	EyePt;
+		DirectX::XMFLOAT4	EyePt;
+		DirectX::XMFLOAT2	Jitter;
 	};
 
 	bool createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
@@ -96,7 +98,7 @@ protected:
 
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
-	DirectX::XMFLOAT4X4	m_rot;
+	DirectX::XMFLOAT3X4	m_rot;
 	RayGenConstants		m_cbRayGens[FrameCount];
 
 	static const uint32_t NumUAVs = FrameCount + NUM_MESH + 1;

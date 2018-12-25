@@ -74,7 +74,8 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 	{
 		const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
 		XMStoreFloat4x4(&m_cbRayGens[frameIndex].ProjToWorld, XMMatrixTranspose(projToWorld));
-		XMStoreFloat3(&m_cbRayGens[frameIndex].EyePt, eyePt);
+		XMStoreFloat4(&m_cbRayGens[frameIndex].EyePt, eyePt);
+		m_cbRayGens[frameIndex].Jitter = XMFLOAT2(0.5f, 0.5f);
 
 		m_rayGenShaderTables[frameIndex].Reset();
 		m_rayGenShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
@@ -84,11 +85,12 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 	{
 		static float angle = 0.0f;
 		angle += 0.1f * XM_PI / 180.0f;
-		XMStoreFloat4x4(&m_rot, XMMatrixRotationY(angle));
+		const auto rot = XMMatrixRotationY(angle);
+		XMStoreFloat3x4(&m_rot, rot);
 
 		m_hitGroupShaderTables[frameIndex].Reset();
 		m_hitGroupShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
-			HitGroupName, &XMMatrixTranspose(XMLoadFloat4x4(&m_rot)), sizeof(XMFLOAT4X4)));
+			HitGroupName, &XMMatrixTranspose(rot), sizeof(XMFLOAT4X3)));
 	}
 }
 
@@ -245,6 +247,7 @@ bool RayTracer::createPipeline()
 {
 	{
 		V_RETURN(D3DReadFileToBlob(L"RayTracedTest.cso", &m_shaderLib), cerr, false);
+		//V_RETURN(D3DReadFileToBlob(L"RayTracedGGX.cso", &m_shaderLib), cerr, false);
 
 		RayTracing::State state;
 		state.SetShaderLibrary(m_shaderLib);
@@ -296,6 +299,18 @@ void RayTracer::createDescriptorTables()
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		m_srvTables[SRV_TABLE_VB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+	}
+
+	for (auto i = 0u; i < FrameCount; ++i)
+	{
+		Descriptor descriptors[] =
+		{
+			m_outputViews[i].GetSRV(),
+			m_outputViews[(i + FrameCount - 1) % FrameCount].GetSRV()
+		};
+		Util::DescriptorTable descriptorTable;
+		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
+		m_srvTables[SRV_TABLE_FB + i] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
 }
 
@@ -372,9 +387,9 @@ void RayTracer::buildShaderTables()
 			RaygenShaderName, &m_cbRayGens[i], sizeof(RayGenConstants)));
 
 		// Hit group shader table
-		m_hitGroupShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(XMFLOAT4X4), L"HitGroupShaderTable");
+		m_hitGroupShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(XMFLOAT4X3), L"HitGroupShaderTable");
 		m_hitGroupShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST], HitGroupName,
-			&XMMatrixTranspose(XMLoadFloat4x4(&m_rot)), sizeof(XMFLOAT4X4)));
+			&XMMatrixTranspose(XMLoadFloat3x4(&m_rot)), sizeof(XMFLOAT4X3)));
 	}
 
 	// Miss shader table
@@ -387,7 +402,7 @@ void RayTracer::updateAccelerationStructures()
 	// Set instance
 	XMFLOAT4X4 matrices[NUM_MESH];
 	XMStoreFloat4x4(&matrices[GROUND], XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))));
-	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMLoadFloat4x4(&m_rot) *
+	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMLoadFloat3x4(&m_rot) *
 		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))));
 	float *const transforms[] =
 	{
