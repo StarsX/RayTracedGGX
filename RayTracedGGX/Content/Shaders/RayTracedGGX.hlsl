@@ -5,7 +5,7 @@
 #include "BRDFModels.hlsli"
 #include "RayTracedGGX.hlsli"
 
-#define ROUGHNESS			0.0
+#define ROUGHNESS			0.2
 
 #define MAX_RECURSION_DEPTH	3
 
@@ -48,8 +48,6 @@ RaytracingAS		g_scene			: register(t0);
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register(t0, space1);
 StructuredBuffer<Vertex>	g_vertexBuffers[]	: register(t0, space2);
-
-//Texture2D g_textures[] : register(t0, space3);
 
 //--------------------------------------------------------------------------------------
 // Samplers
@@ -180,12 +178,12 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	// Trace a reflection ray.
 	RayDesc ray;
 	const float a = ROUGHNESS * ROUGHNESS;
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, l_hitGroupCB.Normal) : input.Nrm);
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_hitGroupCB.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);
 	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;
-	
+
 	// Calculate fresnel
 	const float3 specColors[] =
 	{
@@ -203,9 +201,11 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// BRDF
 	// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-	// pdf = D * NoH / (4 * VoH)
 	const float NoH = saturate(dot(N, H));
-	radiance *= NoL * F * vis * (4.0 * VoH / NoH);
+	// pdf = D * NoH / (4 * VoH)
+	//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
+	// pdf = D * NoH
+	radiance *= F * max(NoL, 1e-3) * vis / NoH;
 
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 

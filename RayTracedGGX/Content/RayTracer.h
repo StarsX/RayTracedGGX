@@ -37,6 +37,7 @@ protected:
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
 		HIT_GROUP_LAYOUT,
+		TEMPORAL_SS_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
 	};
@@ -44,7 +45,8 @@ protected:
 	enum GlobalPipelineLayoutSlot
 	{
 		OUTPUT_VIEW,
-		ACCELERATION_STRUCTURE,
+		SHADER_RESOURCES,
+		ACCELERATION_STRUCTURE = SHADER_RESOURCES,
 		SAMPLER,
 		INDEX_BUFFERS,
 		VERTEX_BUFFERS
@@ -53,6 +55,7 @@ protected:
 	enum PipelineIndex
 	{
 		TEST,
+		GGX,
 
 		NUM_PIPELINE_INDEX
 	};
@@ -61,14 +64,15 @@ protected:
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
-		SRV_TABLE_FB,
+		SRV_TABLE_TS,
 
-		NUM_SRV_TABLE = SRV_TABLE_FB + FrameCount
+		NUM_SRV_TABLE = SRV_TABLE_TS + FrameCount
 	};
 
 	enum UAVTable
 	{
 		UAV_TABLE_OUTPUT,
+		UAV_TABLE_TSAMP,
 
 		NUM_UAV_TABLE
 	};
@@ -80,34 +84,41 @@ protected:
 		DirectX::XMFLOAT2	Jitter;
 	};
 
+	struct HitGroupConstants
+	{
+		DirectX::XMMATRIX	Normal;
+		DirectX::XMFLOAT2	Hammersley;
+	};
+
 	bool createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
 	bool createIB(uint32_t numIndices, const uint32_t *pData, XUSG::Resource &ibUpload);
 	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
 
 	void createPipelineLayouts();
-	bool createPipeline();
+	bool createPipelines();
 	void createDescriptorTables();
 
 	bool buildAccelerationStructures(XUSG::RayTracing::Geometry *geometries);
 	void buildShaderTables();
 	void updateAccelerationStructures();
 	void rayTrace(uint32_t frameIndex);
+	void temporalSS(uint32_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
 	XUSG::RayTracing::CommandList m_commandList;
 
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
-	DirectX::XMFLOAT3X4	m_rot;
+	DirectX::XMFLOAT3X3	m_rot;
 	RayGenConstants		m_cbRayGens[FrameCount];
 
-	static const uint32_t NumUAVs = FrameCount + NUM_MESH + 1;
+	static const uint32_t NumUAVs = NUM_MESH + 1 + FrameCount * NUM_UAV_TABLE;
 	XUSG::RayTracing::BottomLevelAS m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 
-	XUSG::Blob m_shaderLib;
 	XUSG::PipelineLayout m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
 	XUSG::RayTracing::Pipeline m_pipelines[NUM_PIPELINE_INDEX];
+	XUSG::Pipeline m_pipeline;
 
 	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable	m_uavTables[FrameCount][NUM_UAV_TABLE];
@@ -116,7 +127,7 @@ protected:
 	XUSG::VertexBuffer		m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D			m_outputViews[FrameCount];
+	XUSG::Texture2D			m_outputViews[FrameCount][NUM_UAV_TABLE];
 
 	XUSG::Resource			m_scratch;
 	XUSG::Resource			m_instances;
@@ -130,7 +141,9 @@ protected:
 	XUSG::RayTracing::ShaderTable	m_hitGroupShaderTables[FrameCount];
 	XUSG::RayTracing::ShaderTable	m_rayGenShaderTables[FrameCount];
 
-	XUSG::RayTracing::PipelineCache	m_pipelineCache;
+	XUSG::ShaderPool				m_shaderPool;
+	XUSG::RayTracing::PipelineCache	m_rayTracingPipelineCache;
+	XUSG::Compute::PipelineCache	m_computePipelineCache;
 	XUSG::PipelineLayoutCache		m_pipelineLayoutCache;
 	XUSG::DescriptorTableCache		m_descriptorTableCache;
 };

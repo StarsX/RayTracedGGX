@@ -7,7 +7,7 @@
 //--------------------------------------------------------------------------------------
 struct HitGroupConstants
 {
-	float3x3 Normal;
+	matrix Normal;
 	float2 Hammersley;
 };
 

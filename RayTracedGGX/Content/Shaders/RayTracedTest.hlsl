@@ -178,12 +178,12 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	// Trace a reflection ray.
 	RayDesc ray;
 	const float a = ROUGHNESS * ROUGHNESS;
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, l_hitGroupCB.Normal) : input.Nrm);
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_hitGroupCB.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);
 	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;
-	
+
 	// Calculate fresnel
 	const float3 specColors[] =
 	{
@@ -201,8 +201,10 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// BRDF
 	// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-	// pdf = D * NoH
 	const float NoH = saturate(dot(N, H));
+	// pdf = D * NoH / (4 * VoH)
+	//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
+	// pdf = D * NoH
 	radiance *= F * min(NoL * vis / NoH, 1.0);
 
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);

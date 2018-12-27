@@ -22,9 +22,19 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const float2 tex = (DTid + 0.5) / texSize;
 
 	const float4 current = g_currentImage[DTid];
-	const float4 history = g_historyImage.SampleLevel(g_sampler, tex, 0);
+	float4 history = g_historyImage.SampleLevel(g_sampler, tex, 0);
 
-	const float blend = history.w / (history.w + 1.0);
+	const float historyFrames = history.w * 255.0;
+	const float totalFrames = historyFrames + 1.0;
+	float3 result = historyFrames < 255.0 ?
+		(history.xyz * historyFrames + current.xyz) / totalFrames :
+		history.xyz;
 
-	RenderTarget[DTid] = lerp(history, current, blend);
+	//history.w = history.w > 0.0 ? history.w / (history.w + 1.0) : 1.0;
+
+	//const float blend = history.w <= 1.0 / 24.0 ? 0.0 : history.w;
+	//history.w = history.w <= 1.0 / 24.0 ? 1.0 / 24.0 : history.w;
+
+	RenderTarget[DTid] = float4(result, totalFrames / 255.0);
+	//RenderTarget[DTid] = float4(lerp(history.xyz, current.xyz, blend), history.w);
 }
