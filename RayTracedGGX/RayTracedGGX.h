@@ -78,6 +78,8 @@ private:
 	uint64_t	m_fenceValues[FrameCount];
 
 	// Application state
+	bool		m_testing;
+	bool		m_pipeChanged;
 	bool		m_pausing;
 	StepTimer	m_timer;
 

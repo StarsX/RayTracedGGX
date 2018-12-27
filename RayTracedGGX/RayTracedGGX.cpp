@@ -29,6 +29,10 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
+	m_testing(true),
+	m_pipeChanged(false),
+	m_pausing(false),
+	m_tracking(false),
 	m_meshFileName("Media/bunny.obj"),
 	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f)
 {
@@ -265,6 +269,10 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	case 0x20:	// case VK_SPACE:
 		m_pausing = !m_pausing;
 		break;
+	case 'T':
+		m_testing = !m_testing;
+		m_pipeChanged = true;
+		break;
 	}
 }
 
@@ -364,6 +372,12 @@ void RayTracedGGX::PopulateCommandList()
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	ThrowIfFailed(m_commandList.Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
+
+	if (m_pipeChanged)
+	{
+		m_rayTracer->SetPipeline(m_testing ? RayTracer::TEST : RayTracer::GGX);
+		m_pipeChanged = false;
+	}
 
 	// Indicate that the back buffer will be used as a render target.
 	//m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(),

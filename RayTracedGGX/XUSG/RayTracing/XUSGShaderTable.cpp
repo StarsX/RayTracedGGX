@@ -55,7 +55,9 @@ uint32_t ShaderRecord::GetShaderIDSize(const RayTracing::Device &device)
 
 //--------------------------------------------------------------------------------------
 
-ShaderTable::ShaderTable()
+ShaderTable::ShaderTable() :
+	m_resource(nullptr),
+	m_mappedShaderRecords(nullptr)
 {
 }
 
@@ -67,6 +69,8 @@ ShaderTable::~ShaderTable()
 bool ShaderTable::Create(const RayTracing::Device &device, uint32_t numShaderRecords,
 	uint32_t shaderRecordSize, const wchar_t *name)
 {
+	if (m_resource) Unmap();
+	
 	m_shaderRecordSize = ALIGN(shaderRecordSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
 	//m_shaderRecords.reserve(numShaderRecords);
 

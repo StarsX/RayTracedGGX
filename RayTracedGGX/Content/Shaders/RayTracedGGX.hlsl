@@ -42,8 +42,8 @@ ConstantBuffer<RayGenConstants> l_rayGenCB : register(b0);
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float4> RenderTarget	: register(u0);
-RaytracingAS		g_scene			: register(t0);
+RWTexture2DArray<float4>	RenderTarget	: register(u0);
+RaytracingAS				g_scene			: register(t0);
 
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register(t0, space1);
@@ -89,10 +89,14 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 // Generate a ray in world space for a camera pixel corresponding to an index
 // from the dispatched 2D grid.
 //--------------------------------------------------------------------------------------
-void generateCameraRay(uint2 index, out float3 origin, out float3 direction)
+void generateCameraRay(uint3 index, out float3 origin, out float3 direction)
 {
-	const float2 xy = index + l_rayGenCB.Jitter; // jitter from the middle of the pixel.
-	float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0 - 1.0;
+	// Fallback layer has no depth
+	uint2 dim = DispatchRaysDimensions().xy;
+	dim.y >>= 1;
+
+	const float2 xy = index.xy + (index.z ? 0.5 : l_rayGenCB.Jitter); // jitter from the middle of the pixel.
+	float2 screenPos = xy / dim * 2.0 - 1.0;
 
 	// Invert Y for Y-up-style NDC.
 	screenPos.y = -screenPos.y;
@@ -114,15 +118,19 @@ void raygenMain()
 	// Trace the ray.
 	RayDesc ray;
 
+	// Fallback layer has no depth
+	uint3 index = DispatchRaysIndex();
+	index.yz = uint2(index.y >> 1, index.y & 1);
+
 	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
-	generateCameraRay(DispatchRaysIndex().xy, ray.Origin, ray.Direction);
+	generateCameraRay(index, ray.Origin, ray.Direction);
 
 	RayPayload payload = traceRadianceRay(ray, 0);
 	float3 color = sqrt(payload.Color);
 
 	// Write the raytraced color to the output texture.
 	const float a = payload.RecursionDepth > 1 ? 1.0 : 0.0;
-	RenderTarget[DispatchRaysIndex().xy] = float4(color, a);
+	RenderTarget[index] = float4(color, a);
 }
 
 //--------------------------------------------------------------------------------------

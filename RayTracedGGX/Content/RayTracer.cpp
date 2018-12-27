@@ -6,8 +6,7 @@
 #include "ObjLoader.h"
 #include "RayTracer.h"
 
-#define GGX_GI	0
-
+#define SAMPLE_COUNT 2
 #define SizeOfInUint32(obj) ((sizeof(obj) - 1) / sizeof(uint32_t) + 1)
 
 using namespace std;
@@ -23,7 +22,8 @@ const wchar_t *RayTracer::MissShaderName = L"missMain";
 RayTracer::RayTracer(const RayTracing::Device &device, const RayTracing::CommandList &commandList) :
 	m_device(device),
 	m_commandList(commandList),
-	m_instances(nullptr)
+	m_instances(nullptr),
+	m_pipeIndex(TEST)
 {
 	m_rayTracingPipelineCache.SetDevice(device);
 	m_computePipelineCache.SetDevice(device.Common);
@@ -57,8 +57,10 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 
 	// Create output view and build acceleration structures
 	for (auto &outputViews : m_outputViews)
-		for (auto &outputView : outputViews)
-			outputView.Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	{
+		outputViews[UAV_TABLE_OUTPUT].Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, SAMPLE_COUNT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+		outputViews[UAV_TABLE_TSAMP].Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	}
 	N_RETURN(buildAccelerationStructures(geometries), false);
 	buildShaderTables();
 
@@ -71,6 +73,21 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 	}
 
 	return true;
+}
+
+void RayTracer::SetPipeline(PipelineIndex pipeline)
+{
+	m_pipeIndex = pipeline;
+
+	const float clearColor[4] = {};
+	for (auto i = 0ui8; i < FrameCount; ++i)
+	{
+		m_outputViews[i][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		m_commandList.ClearUnorderedAccessViewFloat(*m_uavTables[i][UAV_TABLE_TSAMP],
+			m_outputViews[i][UAV_TABLE_TSAMP].GetUAV(),
+			m_outputViews[i][UAV_TABLE_TSAMP].GetResource(),
+			clearColor, 0, nullptr);
+	}
 }
 
 static const XMFLOAT2 &IncrementalHalton()
@@ -147,37 +164,26 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 {
 	{
 		const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
-		XMStoreFloat4x4(&m_cbRayGens[frameIndex].ProjToWorld, XMMatrixTranspose(projToWorld));
-		XMStoreFloat4(&m_cbRayGens[frameIndex].EyePt, eyePt);
-#if GGX_GI
-		m_cbRayGens[frameIndex].Jitter = IncrementalHalton();
-#else
-		m_cbRayGens[frameIndex].Jitter = XMFLOAT2(0.5f, 0.5f);
-#endif
+		RayGenConstants cbRayGen = { XMMatrixTranspose(projToWorld), eyePt, IncrementalHalton() };
 
-		m_rayGenShaderTables[frameIndex].Reset();
-		m_rayGenShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
-			RaygenShaderName, &m_cbRayGens[frameIndex], sizeof(RayGenConstants)));
+		m_rayGenShaderTables[frameIndex][m_pipeIndex].Reset();
+		m_rayGenShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[m_pipeIndex],
+			RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)));
 	}
 
 	{
 		static auto angle = 0.0f;
-#if !GGX_GI
-		angle += 0.1f * XM_PI / 180.0f;
-#endif
+		angle += m_pipeIndex == TEST ? 0.1f * XM_PI / 180.0f : 0.0f;
 		const auto rot = XMMatrixRotationY(angle);
 		XMStoreFloat3x3(&m_rot, rot);
 
-		HitGroupConstants cbHitGroup = { XMMatrixTranspose(rot) };
-#if GGX_GI
 		const auto n = 255u;
 		static auto i = 0u;
-		cbHitGroup.Hammersley = Hammersley(i, n);
+		HitGroupConstants cbHitGroup = { XMMatrixTranspose(rot), Hammersley(i, n) };
 		i = (i + 1) % n;
-#endif
 
-		m_hitGroupShaderTables[frameIndex].Reset();
-		m_hitGroupShaderTables[frameIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
+		m_hitGroupShaderTables[frameIndex][m_pipeIndex].Reset();
+		m_hitGroupShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[m_pipeIndex],
 			HitGroupName, &cbHitGroup, sizeof(HitGroupConstants)));
 	}
 }
@@ -187,22 +193,15 @@ void RayTracer::Render(uint32_t frameIndex, const Descriptor &dsv)
 	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	updateAccelerationStructures();
 	rayTrace(frameIndex);
-#if GGX_GI
-	temporalSS(frameIndex);
-#endif
+	if (m_pipeIndex == GGX) temporalSS(frameIndex);
 }
 
 const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, ResourceState dstState)
 {
-#if GGX_GI
-#define UAV_OUTPUT	UAV_TABLE_TSAMP
-#else
-#define UAV_OUTPUT	UAV_TABLE_OUTPUT
-#endif
+	const auto uavOut = m_pipeIndex == GGX ? UAV_TABLE_TSAMP : UAV_TABLE_OUTPUT;
+	if (dstState) m_outputViews[frameIndex][uavOut].Barrier(m_commandList, dstState);
 
-	if (dstState) m_outputViews[frameIndex][UAV_OUTPUT].Barrier(m_commandList, dstState);
-
-	return m_outputViews[frameIndex][UAV_OUTPUT];
+	return m_outputViews[frameIndex][uavOut];
 }
 
 bool RayTracer::createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, Resource &vbUpload)
@@ -528,24 +527,26 @@ void RayTracer::buildShaderTables()
 	// Get shader identifiers.
 	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
 
-	for (auto i = 0ui8; i < FrameCount; ++i)
+	for (auto k = 0ui8; k < NUM_PIPELINE_INDEX; ++k)
 	{
-		// Ray gen shader table
-		m_rayGenShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
-			(L"RayGenShaderTable" + to_wstring(i)).c_str());
-		m_rayGenShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
-			RaygenShaderName, &m_cbRayGens[i], sizeof(RayGenConstants)));
+		for (auto i = 0ui8; i < FrameCount; ++i)
+		{
+			// Ray gen shader table
+			m_rayGenShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
+				(L"RayGenShaderTable" + to_wstring(i)).c_str());
+			m_rayGenShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_pipelines[k],
+				RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants)));
 
-		// Hit group shader table
-		HitGroupConstants cbHitGroup = { XMMatrixTranspose(XMLoadFloat3x3(&m_rot)) };
-		m_hitGroupShaderTables[i].Create(m_device, 1, shaderIDSize + sizeof(HitGroupConstants), L"HitGroupShaderTable");
-		m_hitGroupShaderTables[i].AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST],
-			HitGroupName, &cbHitGroup, sizeof(HitGroupConstants)));
+			// Hit group shader table
+			m_hitGroupShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(HitGroupConstants), L"HitGroupShaderTable");
+			m_hitGroupShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_pipelines[k],
+				HitGroupName, &HitGroupConstants(), sizeof(HitGroupConstants)));
+		}
+
+		// Miss shader table
+		m_missShaderTables[k].Create(m_device, 1, shaderIDSize, L"MissShaderTable");
+		m_missShaderTables[k].AddShaderRecord(ShaderRecord(m_device, m_pipelines[k], MissShaderName));
 	}
-
-	// Miss shader table
-	m_missShaderTable.Create(m_device, 1, shaderIDSize, L"MissShaderTable");
-	m_missShaderTable.AddShaderRecord(ShaderRecord(m_device, m_pipelines[TEST], MissShaderName));
 }
 
 void RayTracer::updateAccelerationStructures()
@@ -585,13 +586,10 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
 
-#if GGX_GI
-#define PIPELINE	GGX
-#else
-#define PIPELINE	TEST
-#endif
-	m_commandList.DispatchRays(m_pipelines[PIPELINE], m_viewport.x, m_viewport.y, 1,
-		m_hitGroupShaderTables[frameIndex], m_missShaderTable, m_rayGenShaderTables[frameIndex]);
+	// Fallback layer has no depth
+	m_commandList.DispatchRays(m_pipelines[m_pipeIndex], m_viewport.x, m_pipeIndex == GGX ? (m_viewport.y << 1) :
+		m_viewport.y, 1, m_hitGroupShaderTables[frameIndex][m_pipeIndex], m_missShaderTables[m_pipeIndex],
+		m_rayGenShaderTables[frameIndex][m_pipeIndex]);
 }
 
 void RayTracer::temporalSS(uint32_t frameIndex)

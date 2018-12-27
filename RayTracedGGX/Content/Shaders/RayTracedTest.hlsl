@@ -91,7 +91,7 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 //--------------------------------------------------------------------------------------
 void generateCameraRay(uint2 index, out float3 origin, out float3 direction)
 {
-	const float2 xy = index + l_rayGenCB.Jitter; // jitter from the middle of the pixel.
+	const float2 xy = index + 0.5; // center in the middle of the pixel.
 	float2 screenPos = xy / DispatchRaysDimensions().xy * 2.0 - 1.0;
 
 	// Invert Y for Y-up-style NDC.
