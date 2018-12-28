@@ -18,12 +18,12 @@ public:
 		NUM_MESH
 	};
 
-	enum PipelineIndex : uint8_t
+	enum RayTracingPipeline : uint8_t
 	{
 		TEST,
 		GGX,
 
-		NUM_PIPELINE_INDEX
+		NUM_RAYTRACE_PIPELINE
 	};
 
 	RayTracer(const XUSG::RayTracing::Device &device, const XUSG::RayTracing::CommandList &commandList);
@@ -32,9 +32,10 @@ public:
 	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
 		XUSG::RayTracing::Geometry *geometries, const char *fileName, const DirectX::XMFLOAT4 &posScale
 		= DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
-	void SetPipeline(PipelineIndex pipeline);
+	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
 	void Render(uint32_t frameIndex, const XUSG::Descriptor &dsv);
+	void ClearHistory();
 
 	const XUSG::Texture2D &GetOutputView(uint32_t frameIndex, XUSG::ResourceState dstState = XUSG::ResourceState(0));
 
@@ -46,6 +47,7 @@ protected:
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
 		HIT_GROUP_LAYOUT,
+		GBUFFER_PASS_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
@@ -59,6 +61,14 @@ protected:
 		SAMPLER,
 		INDEX_BUFFERS,
 		VERTEX_BUFFERS
+	};
+
+	enum PipelineIndex : uint8_t
+	{
+		GBUFFER_PASS,
+		TEMPORAL_SS,
+
+		NUM_PIPELINE
 	};
 
 	enum SRVTable : uint8_t
@@ -117,8 +127,8 @@ protected:
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 
 	XUSG::PipelineLayout m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
-	XUSG::RayTracing::Pipeline m_pipelines[NUM_PIPELINE_INDEX];
-	XUSG::Pipeline m_pipeline;
+	XUSG::RayTracing::Pipeline m_rayTracingPipelines[NUM_RAYTRACE_PIPELINE];
+	XUSG::Pipeline m_pipelines[NUM_PIPELINE];
 
 	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable	m_uavTables[FrameCount][NUM_UAV_TABLE];
@@ -128,23 +138,25 @@ protected:
 	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];
 
 	XUSG::Texture2D			m_outputViews[FrameCount][NUM_UAV_TABLE];
+	XUSG::RenderTarget		m_velocities[FrameCount];
 
 	XUSG::Resource			m_scratch;
 	XUSG::Resource			m_instances;
 
-	PipelineIndex			m_pipeIndex;
+	RayTracingPipeline		m_pipeIndex;
 
 	// Shader tables
 	static const wchar_t *HitGroupName;
 	static const wchar_t *RaygenShaderName;
 	static const wchar_t *ClosestHitShaderName;
 	static const wchar_t *MissShaderName;
-	XUSG::RayTracing::ShaderTable	m_missShaderTables[NUM_PIPELINE_INDEX];
-	XUSG::RayTracing::ShaderTable	m_hitGroupShaderTables[FrameCount][NUM_PIPELINE_INDEX];
-	XUSG::RayTracing::ShaderTable	m_rayGenShaderTables[FrameCount][NUM_PIPELINE_INDEX];
+	XUSG::RayTracing::ShaderTable	m_missShaderTables[NUM_RAYTRACE_PIPELINE];
+	XUSG::RayTracing::ShaderTable	m_hitGroupShaderTables[FrameCount][NUM_RAYTRACE_PIPELINE];
+	XUSG::RayTracing::ShaderTable	m_rayGenShaderTables[FrameCount][NUM_RAYTRACE_PIPELINE];
 
 	XUSG::ShaderPool				m_shaderPool;
 	XUSG::RayTracing::PipelineCache	m_rayTracingPipelineCache;
+	XUSG::Graphics::PipelineCache	m_graphicsPipelineCache;
 	XUSG::Compute::PipelineCache	m_computePipelineCache;
 	XUSG::PipelineLayoutCache		m_pipelineLayoutCache;
 	XUSG::DescriptorTableCache		m_descriptorTableCache;

@@ -8,6 +8,7 @@
 RWTexture2D<float4> RenderTarget;
 Texture2DArray g_currentImage;
 Texture2D g_historyImage;
+Texture2D g_velocity;
 
 //--------------------------------------------------------------------------------------
 // Samplers

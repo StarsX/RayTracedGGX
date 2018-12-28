@@ -60,11 +60,11 @@ void CommandList::CopyBufferRegion(const Resource &dstBuffer, uint64_t dstOffset
 	m_commandList->CopyBufferRegion(dstBuffer.get(), dstOffset, srcBuffer.get(), srcOffset, numBytes);
 }
 
-void CommandList::CopyTextureRegion(const textureCopyLocation &dst,
-	uint32_t dstX, uint32_t dstY, uint32_t dstZ, const textureCopyLocation &src,
-	const BoxRange & srcBox) const
+void CommandList::CopyTextureRegion(const TextureCopyLocation &dst,
+	uint32_t dstX, uint32_t dstY, uint32_t dstZ, const TextureCopyLocation &src,
+	const BoxRange *pSrcBox) const
 {
-	m_commandList->CopyTextureRegion(&dst, dstX, dstY, dstZ, &src, &srcBox);
+	m_commandList->CopyTextureRegion(&dst, dstX, dstY, dstZ, &src, pSrcBox);
 }
 
 void CommandList::CopyResource(const Resource &dstResource, const Resource &srcResource) const

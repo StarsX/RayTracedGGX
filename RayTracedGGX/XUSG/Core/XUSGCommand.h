@@ -36,9 +36,9 @@ namespace XUSG
 			uint32_t threadGroupCountZ) const;
 		virtual void CopyBufferRegion(const Resource &dstBuffer, uint64_t dstOffset,
 			const Resource &srcBuffer, uint64_t srcOffset, uint64_t numBytes) const;
-		virtual void CopyTextureRegion(const textureCopyLocation &dst,
+		virtual void CopyTextureRegion(const TextureCopyLocation &dst,
 			uint32_t dstX, uint32_t dstY, uint32_t dstZ,
-			const textureCopyLocation &src, const BoxRange &srcBox) const;
+			const TextureCopyLocation &src, const BoxRange *pSrcBox = nullptr) const;
 		virtual void CopyResource(const Resource &dstResource, const Resource &srcResource) const;
 		virtual void IASetPrimitiveTopology(PrimitiveTopology primitiveTopology) const;
 		virtual void RSSetViewports(uint32_t numViewports, const Viewport *pViewports) const;
@@ -74,15 +74,15 @@ namespace XUSG
 			const Descriptor &depthStencilView,
 			bool rtsSingleHandleToDescriptorRange = false) const;
 		virtual void ClearDepthStencilView(const Descriptor &depthStencilView, ClearFlags clearFlags,
-			float depth, uint8_t stencil, uint32_t numRects, const RectRange *pRects) const;
+			float depth, uint8_t stencil, uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
 		virtual void ClearRenderTargetView(const Descriptor &renderTargetView, const float colorRGBA[4],
-			uint32_t numRects, const RectRange *pRects) const;
+			uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
 		virtual void ClearUnorderedAccessViewUint(const DescriptorView &descriptorView,
 			const Descriptor &descriptor, const Resource &resource, const uint32_t values[4],
-			uint32_t numRects, const RectRange *pRects) const;
+			uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
 		virtual void ClearUnorderedAccessViewFloat(const DescriptorView &descriptorView,
 			const Descriptor &descriptor, const Resource &resource, const float values[4],
-			uint32_t numRects, const RectRange *pRects) const;
+			uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
 		//virtual void BeginEvent(uint32_t metaData, const void *pData, uint32_t size) const = 0;
 		//virtual void EndEvent() = 0;
 

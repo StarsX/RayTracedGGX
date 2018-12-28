@@ -272,6 +272,7 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	case 'T':
 		m_testing = !m_testing;
 		m_pipeChanged = true;
+		m_rayTracer->SetPipeline(m_testing ? RayTracer::TEST : RayTracer::GGX);
 		break;
 	}
 }
@@ -375,7 +376,7 @@ void RayTracedGGX::PopulateCommandList()
 
 	if (m_pipeChanged)
 	{
-		m_rayTracer->SetPipeline(m_testing ? RayTracer::TEST : RayTracer::GGX);
+		m_rayTracer->ClearHistory();
 		m_pipeChanged = false;
 	}
 
@@ -512,7 +513,7 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 {
 	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
-		const auto createDeviceFlags = CreateRaytracingFallbackDeviceFlags::EnableRootDescriptorsInShaderRecords;
+		const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
 		ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Common.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Fallback)));
 	}
 	else // DirectX Raytracing
@@ -528,7 +529,9 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 // Copy the raytracing output to the backbuffer.
 void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
 {
+	TextureCopyLocation dstCopyLoc(m_renderTargets[m_frameIndex].get(), 0);
+	TextureCopyLocation srcCopyLoc(m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().get(), 0);
 	m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST));
-	m_commandList.CopyResource(m_renderTargets[m_frameIndex], m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource());
+	m_commandList.CopyTextureRegion(dstCopyLoc, 0, 0, 0, srcCopyLoc);
 	m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
 }

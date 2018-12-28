@@ -26,6 +26,7 @@ RayTracer::RayTracer(const RayTracing::Device &device, const RayTracing::Command
 	m_pipeIndex(TEST)
 {
 	m_rayTracingPipelineCache.SetDevice(device);
+	m_graphicsPipelineCache.SetDevice(device.Common);
 	m_computePipelineCache.SetDevice(device.Common);
 	m_descriptorTableCache.SetDevice(device.Common);
 	m_pipelineLayoutCache.SetDevice(device.Common);
@@ -61,6 +62,8 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 		outputViews[UAV_TABLE_OUTPUT].Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, SAMPLE_COUNT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 		outputViews[UAV_TABLE_TSAMP].Create(m_device.Common, width, height, DXGI_FORMAT_R8G8B8A8_UNORM, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 	}
+	for (auto &velocity : m_velocities)
+		velocity.Create(m_device.Common, width, height, DXGI_FORMAT_R16G16_FLOAT);
 	N_RETURN(buildAccelerationStructures(geometries), false);
 	buildShaderTables();
 
@@ -75,19 +78,9 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 	return true;
 }
 
-void RayTracer::SetPipeline(PipelineIndex pipeline)
+void RayTracer::SetPipeline(RayTracingPipeline pipeline)
 {
 	m_pipeIndex = pipeline;
-
-	const float clearColor[4] = {};
-	for (auto i = 0ui8; i < FrameCount; ++i)
-	{
-		m_outputViews[i][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-		m_commandList.ClearUnorderedAccessViewFloat(*m_uavTables[i][UAV_TABLE_TSAMP],
-			m_outputViews[i][UAV_TABLE_TSAMP].GetUAV(),
-			m_outputViews[i][UAV_TABLE_TSAMP].GetResource(),
-			clearColor, 0, nullptr);
-	}
 }
 
 static const XMFLOAT2 &IncrementalHalton()
@@ -167,7 +160,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		RayGenConstants cbRayGen = { XMMatrixTranspose(projToWorld), eyePt, IncrementalHalton() };
 
 		m_rayGenShaderTables[frameIndex][m_pipeIndex].Reset();
-		m_rayGenShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[m_pipeIndex],
+		m_rayGenShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[m_pipeIndex],
 			RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)));
 	}
 
@@ -183,7 +176,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		i = (i + 1) % n;
 
 		m_hitGroupShaderTables[frameIndex][m_pipeIndex].Reset();
-		m_hitGroupShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_pipelines[m_pipeIndex],
+		m_hitGroupShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[m_pipeIndex],
 			HitGroupName, &cbHitGroup, sizeof(HitGroupConstants)));
 	}
 }
@@ -194,6 +187,17 @@ void RayTracer::Render(uint32_t frameIndex, const Descriptor &dsv)
 	updateAccelerationStructures();
 	rayTrace(frameIndex);
 	if (m_pipeIndex == GGX) temporalSS(frameIndex);
+}
+
+void RayTracer::ClearHistory()
+{
+	const float clearColor[4] = {};
+	for (auto i = 0ui8; i < FrameCount; ++i)
+	{
+		m_outputViews[i][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+		m_commandList.ClearUnorderedAccessViewFloat(*m_uavTables[i][UAV_TABLE_TSAMP], m_outputViews[i][UAV_TABLE_TSAMP].GetUAV(),
+			m_outputViews[i][UAV_TABLE_TSAMP].GetResource(), clearColor);
+	}
 }
 
 const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, ResourceState dstState)
@@ -338,12 +342,20 @@ void RayTracer::createPipelineLayouts()
 			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerHitGroupPipelineLayout");
 	}
 
+	// This is a pipeline layout for g-buffer pass
+	{
+		Util::PipelineLayout pipelineLayout;
+		pipelineLayout.SetConstants(0, SizeOfInUint32(XMMATRIX[2]), 0, 0, Shader::Stage::VS);
+		m_pipelineLayouts[GBUFFER_PASS_LAYOUT] = pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"GBufferPipelineLayout");
+	}
+
 	// This is a pipeline layout for temporal SS
 	{
 		Util::PipelineLayout pipelineLayout;
 		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
 		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 0);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
@@ -368,7 +380,7 @@ bool RayTracer::createPipelines()
 			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 		state.SetMaxRecursionDepth(3);
-		m_pipelines[TEST] = state.GetPipeline(m_rayTracingPipelineCache);
+		m_rayTracingPipelines[TEST] = state.GetPipeline(m_rayTracingPipelineCache);
 	}
 
 	{
@@ -385,7 +397,22 @@ bool RayTracer::createPipelines()
 			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 		state.SetMaxRecursionDepth(3);
-		m_pipelines[GGX] = state.GetPipeline(m_rayTracingPipelineCache);
+		m_rayTracingPipelines[GGX] = state.GetPipeline(m_rayTracingPipelineCache);
+	}
+
+	{
+		const auto vs = m_shaderPool.CreateShader(Shader::Stage::VS, 0, L"VSBasePass.cso");
+		const auto ps = m_shaderPool.CreateShader(Shader::Stage::PS, 0, L"PSGBuffer.cso");
+
+		Graphics::State state;
+		state.SetPipelineLayout(m_pipelineLayouts[GBUFFER_PASS]);
+		state.SetShader(Shader::Stage::VS, m_shaderPool.GetShader(Shader::Stage::VS, 0));
+		state.SetShader(Shader::Stage::PS, m_shaderPool.GetShader(Shader::Stage::PS, 0));
+		state.IASetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
+		state.OMSetNumRenderTargets(1);
+		state.OMSetRTVFormat(0, DXGI_FORMAT_R16G16_FLOAT);
+		state.OMSetDSVFormat(DXGI_FORMAT_D24_UNORM_S8_UINT);
+		m_pipelines[GBUFFER_PASS] = state.GetPipeline(m_graphicsPipelineCache);
 	}
 
 	{
@@ -394,7 +421,7 @@ bool RayTracer::createPipelines()
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
 		state.SetShader(shader);
-		m_pipeline = state.GetPipeline(m_computePipelineCache);
+		m_pipelines[TEMPORAL_SS] = state.GetPipeline(m_computePipelineCache);
 	}
 
 	return true;
@@ -455,7 +482,8 @@ void RayTracer::createDescriptorTables()
 		Descriptor descriptors[] =
 		{
 			m_outputViews[i][UAV_TABLE_OUTPUT].GetSRV(),
-			m_outputViews[(i + FrameCount - 1) % FrameCount][UAV_TABLE_TSAMP].GetSRV()
+			m_outputViews[(i + FrameCount - 1) % FrameCount][UAV_TABLE_TSAMP].GetSRV(),
+			m_velocities[i].GetSRV()
 		};
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
@@ -527,25 +555,25 @@ void RayTracer::buildShaderTables()
 	// Get shader identifiers.
 	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
 
-	for (auto k = 0ui8; k < NUM_PIPELINE_INDEX; ++k)
+	for (auto k = 0ui8; k < NUM_RAYTRACE_PIPELINE; ++k)
 	{
 		for (auto i = 0ui8; i < FrameCount; ++i)
 		{
 			// Ray gen shader table
 			m_rayGenShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
 				(L"RayGenShaderTable" + to_wstring(i)).c_str());
-			m_rayGenShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_pipelines[k],
+			m_rayGenShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
 				RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants)));
 
 			// Hit group shader table
 			m_hitGroupShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(HitGroupConstants), L"HitGroupShaderTable");
-			m_hitGroupShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_pipelines[k],
+			m_hitGroupShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
 				HitGroupName, &HitGroupConstants(), sizeof(HitGroupConstants)));
 		}
 
 		// Miss shader table
 		m_missShaderTables[k].Create(m_device, 1, shaderIDSize, L"MissShaderTable");
-		m_missShaderTables[k].AddShaderRecord(ShaderRecord(m_device, m_pipelines[k], MissShaderName));
+		m_missShaderTables[k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k], MissShaderName));
 	}
 }
 
@@ -587,7 +615,7 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
 
 	// Fallback layer has no depth
-	m_commandList.DispatchRays(m_pipelines[m_pipeIndex], m_viewport.x, m_pipeIndex == GGX ? (m_viewport.y << 1) :
+	m_commandList.DispatchRays(m_rayTracingPipelines[m_pipeIndex], m_viewport.x, m_pipeIndex == GGX ? (m_viewport.y << 1) :
 		m_viewport.y, 1, m_hitGroupShaderTables[frameIndex][m_pipeIndex], m_missShaderTables[m_pipeIndex],
 		m_rayGenShaderTables[frameIndex][m_pipeIndex]);
 }
@@ -613,6 +641,6 @@ void RayTracer::temporalSS(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TS + frameIndex]);
 	m_commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
-	m_commandList.SetPipelineState(m_pipeline);
+	m_commandList.SetPipelineState(m_pipelines[TEMPORAL_SS]);
 	m_commandList.Dispatch((m_viewport.x - 1) / 8 + 1, (m_viewport.y - 1) / 8 + 1, 1);
 }

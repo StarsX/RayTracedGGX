@@ -91,7 +91,7 @@ namespace XUSG
 	using ResourceFlags = D3D12_RESOURCE_FLAGS;
 	using SubresourceData = D3D12_SUBRESOURCE_DATA;
 	using ClearFlags = D3D12_CLEAR_FLAGS;
-	using textureCopyLocation = CD3DX12_TEXTURE_COPY_LOCATION;
+	using TextureCopyLocation = CD3DX12_TEXTURE_COPY_LOCATION;
 	using Viewport = CD3DX12_VIEWPORT;
 	using RectRange = CD3DX12_RECT;
 	using BoxRange = CD3DX12_BOX;
