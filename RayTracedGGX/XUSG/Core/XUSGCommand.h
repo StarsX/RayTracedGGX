@@ -53,12 +53,12 @@ namespace XUSG
 		virtual void SetGraphicsPipelineLayout(const PipelineLayout &pipelineLayout) const;
 		virtual void SetComputeDescriptorTable(uint32_t index, const DescriptorTable &descriptorTable) const;
 		virtual void SetGraphicsDescriptorTable(uint32_t index, const DescriptorTable &descriptorTable) const;
-		virtual void SetCompute32BitConstant(uint32_t index, uint32_t srcData, uint32_t destOffsetIn32BitValues) const;
-		virtual void SetGraphics32BitConstant(uint32_t index, uint32_t srcData, uint32_t destOffsetIn32BitValues) const;
+		virtual void SetCompute32BitConstant(uint32_t index, uint32_t srcData, uint32_t destOffsetIn32BitValues = 0) const;
+		virtual void SetGraphics32BitConstant(uint32_t index, uint32_t srcData, uint32_t destOffsetIn32BitValues = 0) const;
 		virtual void SetCompute32BitConstants(uint32_t index, uint32_t num32BitValuesToSet,
-			const void *pSrcData, uint32_t destOffsetIn32BitValues) const;
+			const void *pSrcData, uint32_t destOffsetIn32BitValues = 0) const;
 		virtual void SetGraphics32BitConstants(uint32_t index, uint32_t num32BitValuesToSet,
-			const void *pSrcData, uint32_t destOffsetIn32BitValues) const;;
+			const void *pSrcData, uint32_t destOffsetIn32BitValues = 0) const;;
 		virtual void SetComputeRootConstantBufferView(uint32_t index, const Resource &resource, int offset = 0) const;
 		virtual void SetGraphicsRootConstantBufferView(uint32_t index, const Resource &resource, int offset = 0) const;
 		virtual void SetComputeRootShaderResourceView(uint32_t index, const Resource &resource, int offset = 0) const;
@@ -74,7 +74,7 @@ namespace XUSG
 			const Descriptor &depthStencilView,
 			bool rtsSingleHandleToDescriptorRange = false) const;
 		virtual void ClearDepthStencilView(const Descriptor &depthStencilView, ClearFlags clearFlags,
-			float depth, uint8_t stencil, uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
+			float depth, uint8_t stencil = 0, uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
 		virtual void ClearRenderTargetView(const Descriptor &renderTargetView, const float colorRGBA[4],
 			uint32_t numRects = 0, const RectRange *pRects = nullptr) const;
 		virtual void ClearUnorderedAccessViewUint(const DescriptorView &descriptorView,

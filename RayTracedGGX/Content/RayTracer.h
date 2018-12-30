@@ -34,7 +34,7 @@ public:
 		= DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
-	void Render(uint32_t frameIndex, const XUSG::Descriptor &dsv);
+	void Render(uint32_t frameIndex);
 	void ClearHistory();
 
 	const XUSG::Texture2D &GetOutputView(uint32_t frameIndex, XUSG::ResourceState dstState = XUSG::ResourceState(0));
@@ -101,47 +101,61 @@ protected:
 		DirectX::XMFLOAT2	Hammersley;
 	};
 
+	struct BasePassConstants
+	{
+		DirectX::XMFLOAT4X4	WorldViewProj;
+		DirectX::XMFLOAT4X4	WorldViewProjPrev;
+	};
+
 	bool createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
 	bool createIB(uint32_t numIndices, const uint32_t *pData, XUSG::Resource &ibUpload);
 	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
 
+	void createInputLayout();
 	void createPipelineLayouts();
 	bool createPipelines();
 	void createDescriptorTables();
 
 	bool buildAccelerationStructures(XUSG::RayTracing::Geometry *geometries);
 	void buildShaderTables();
-	void updateAccelerationStructures();
+	void updateAccelerationStructures(uint32_t frameIndex);
 	void rayTrace(uint32_t frameIndex);
+	void gbufferPass(uint32_t frameIndex);
 	void temporalSS(uint32_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
 	XUSG::RayTracing::CommandList m_commandList;
 
+	uint32_t m_numIndices[NUM_MESH];
+
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
-	DirectX::XMFLOAT3X3	m_rot;
+	DirectX::XMFLOAT4X4 m_worlds[NUM_MESH];
+	BasePassConstants	m_cbBasePass[NUM_MESH];
 
 	static const uint32_t NumUAVs = NUM_MESH + 1 + FrameCount * NUM_UAV_TABLE;
 	XUSG::RayTracing::BottomLevelAS m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 
-	XUSG::PipelineLayout m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
-	XUSG::RayTracing::Pipeline m_rayTracingPipelines[NUM_RAYTRACE_PIPELINE];
-	XUSG::Pipeline m_pipelines[NUM_PIPELINE];
+	XUSG::InputLayout			m_inputLayout;
+	XUSG::PipelineLayout		m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
+	XUSG::RayTracing::Pipeline	m_rayTracingPipelines[NUM_RAYTRACE_PIPELINE];
+	XUSG::Pipeline				m_pipelines[NUM_PIPELINE];
 
 	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable	m_uavTables[FrameCount][NUM_UAV_TABLE];
 	XUSG::DescriptorTable	m_samplerTable;
+	XUSG::RenderTargetTable	m_rtvTables[FrameCount];
 
 	XUSG::VertexBuffer		m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];
 
 	XUSG::Texture2D			m_outputViews[FrameCount][NUM_UAV_TABLE];
 	XUSG::RenderTarget		m_velocities[FrameCount];
+	XUSG::DepthStencil		m_depth;
 
 	XUSG::Resource			m_scratch;
-	XUSG::Resource			m_instances;
+	XUSG::Resource			m_instances[FrameCount];
 
 	RayTracingPipeline		m_pipeIndex;
 

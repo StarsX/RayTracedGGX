@@ -65,7 +65,6 @@ private:
 	std::unique_ptr<RayTracer> m_rayTracer;
 	XUSG::DescriptorPool	m_rtvPool;
 	XUSG::RenderTargetTable	m_rtvTables[FrameCount];
-	XUSG::DepthStencil		m_depth;
 	DirectX::XMFLOAT4X4		m_proj;
 	DirectX::XMFLOAT4X4		m_view;
 	DirectX::XMFLOAT3		m_focusPt;

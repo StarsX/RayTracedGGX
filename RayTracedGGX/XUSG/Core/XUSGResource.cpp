@@ -490,10 +490,10 @@ RenderTarget::~RenderTarget()
 
 bool RenderTarget::Create(const Device &device, uint32_t width, uint32_t height, Format format,
 	uint32_t arraySize, ResourceFlags resourceFlags, uint8_t numMips, uint8_t sampleCount,
-	ResourceState state, const wchar_t *name)
+	ResourceState state, const float *pClearColor, const wchar_t *name)
 {
 	N_RETURN(create(device, width, height, arraySize, format, numMips,
-		sampleCount, resourceFlags, state, name), false);
+		sampleCount, resourceFlags, state, pClearColor, name), false);
 
 	numMips = (max)(numMips, 1ui8);
 	N_RETURN(allocateRtvPool(numMips * arraySize), false);
@@ -550,10 +550,10 @@ bool RenderTarget::Create(const Device &device, uint32_t width, uint32_t height,
 
 bool RenderTarget::CreateArray(const Device &device, uint32_t width, uint32_t height,
 	uint32_t arraySize, Format format, ResourceFlags resourceFlags, uint8_t numMips,
-	uint8_t sampleCount, ResourceState state, const wchar_t *name)
+	uint8_t sampleCount, ResourceState state, const float *pClearColor, const wchar_t *name)
 {
 	N_RETURN(create(device, width, height, arraySize, format, numMips,
-		sampleCount, resourceFlags, state, name), false);
+		sampleCount, resourceFlags, state, pClearColor, name), false);
 
 	numMips = (max)(numMips, 1ui8);
 	N_RETURN(allocateRtvPool(numMips), false);
@@ -608,7 +608,8 @@ uint8_t RenderTarget::GetNumMips(uint32_t slice) const
 
 bool RenderTarget::create(const Device &device, uint32_t width, uint32_t height,
 	uint32_t arraySize, Format format, uint8_t numMips, uint8_t sampleCount,
-	ResourceFlags resourceFlags, ResourceState state, const wchar_t *name)
+	ResourceFlags resourceFlags, ResourceState state, const float *pClearColor,
+	const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
@@ -634,9 +635,13 @@ bool RenderTarget::create(const Device &device, uint32_t width, uint32_t height,
 	// Determine initial state
 	m_state = state ? state : D3D12_RESOURCE_STATE_RENDER_TARGET;
 
+	// Optimized clear value
+	D3D12_CLEAR_VALUE clearValue = { format };
+	if (pClearColor) memcpy(clearValue.Color, pClearColor, sizeof(clearValue.Color));
+
 	// Create the render target texture.
 	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-		D3D12_HEAP_FLAG_NONE, &desc, m_state, nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
+		D3D12_HEAP_FLAG_NONE, &desc, m_state, &clearValue, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 	
 	// Allocate descriptor pool
@@ -687,7 +692,7 @@ DepthStencil::~DepthStencil()
 
 bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height, Format format,
 	ResourceFlags resourceFlags, uint32_t arraySize, uint8_t numMips, uint8_t sampleCount,
-	ResourceState state, uint8_t clearStencil, float clearDepth, const wchar_t *name)
+	ResourceState state, float clearDepth, uint8_t clearStencil, const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
@@ -739,8 +744,7 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 		m_state = state ? state : D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
 		// Optimized clear value
-		D3D12_CLEAR_VALUE clearValue;
-		clearValue.Format = format;
+		D3D12_CLEAR_VALUE clearValue = { format };
 		clearValue.DepthStencil.Depth = clearDepth;
 		clearValue.DepthStencil.Stencil = clearStencil;
 

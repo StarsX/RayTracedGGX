@@ -128,11 +128,11 @@ namespace XUSG
 		bool Create(const Device &device, uint32_t width, uint32_t height, Format format,
 			uint32_t arraySize = 1, ResourceFlags resourceFlags = ResourceFlags(0),
 			uint8_t numMips = 1, uint8_t sampleCount = 1, ResourceState state = ResourceState(0),
-			const wchar_t *name = nullptr);
+			const float *pClearColor = nullptr, const wchar_t *name = nullptr);
 		bool CreateArray(const Device &device, uint32_t width, uint32_t height, uint32_t arraySize,
 			Format format, ResourceFlags resourceFlags = ResourceFlags(0), uint8_t numMips = 1,
 			uint8_t sampleCount = 1, ResourceState state = ResourceState(0),
-			const wchar_t *name = nullptr);
+			const float *pClearColor = nullptr, const wchar_t *name = nullptr);
 
 		//void Populate(const CPDXShaderResourceView &pSRVSrc, const spShader &pShader,
 			//const uint8_t uSRVSlot = 0, const uint8_t uSlice = 0, const uint8_t uMip = 0);
@@ -144,7 +144,8 @@ namespace XUSG
 	protected:
 		bool create(const Device &device, uint32_t width, uint32_t height,
 			uint32_t arraySize, Format format, uint8_t numMips, uint8_t sampleCount,
-			ResourceFlags resourceFlags, ResourceState state, const wchar_t *name);
+			ResourceFlags resourceFlags, ResourceState state, const float *pClearColor,
+			const wchar_t *name);
 		bool allocateRtvPool(uint32_t numDescriptors);
 
 		DescriptorPool	m_rtvPool;
@@ -167,8 +168,8 @@ namespace XUSG
 		bool Create(const Device &device, uint32_t width, uint32_t height, Format format =
 			DXGI_FORMAT_D24_UNORM_S8_UINT, ResourceFlags resourceFlags = ResourceFlags(0),
 			uint32_t arraySize = 1, uint8_t numMips = 1, uint8_t sampleCount = 1,
-			ResourceState state = ResourceState(0), uint8_t clearStencil = 0,
-			float clearDepth = 1.0f, const wchar_t *name = nullptr);
+			ResourceState state = ResourceState(0), float clearDepth = 1.0f,
+			uint8_t clearStencil = 0, const wchar_t *name = nullptr);
 
 		Descriptor GetDSV(uint8_t mipLevel = 0) const;
 		Descriptor GetReadOnlyDSV(uint8_t mipLevel = 0) const;

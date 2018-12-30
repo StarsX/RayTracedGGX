@@ -159,9 +159,6 @@ void RayTracedGGX::LoadPipeline()
 			ThrowIfFailed(m_device.Common->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[n])));
 		}
 	}
-
-	// Create a DSV
-	m_depth.Create(m_device.Common, m_width, m_height, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 }
 
 // Load the sample assets.
@@ -385,11 +382,7 @@ void RayTracedGGX::PopulateCommandList()
 		//D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
 	// Record commands.
-	//const float clearColor[] = { 0.0f, 0.2f, 0.4f, 1.0f };
-	//m_commandList.ClearRenderTargetView(*m_rtvTables[m_frameIndex], clearColor, 0, nullptr);
-	//m_commandList.ClearDepthStencilView(m_depth.GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 1.0f, 0, 0, nullptr);
-
-	m_rayTracer->Render(m_frameIndex, m_depth.GetDSV());
+	m_rayTracer->Render(m_frameIndex);
 
 	// Indicate that the back buffer will now be used to present.
 	CopyRaytracingOutputToBackbuffer();

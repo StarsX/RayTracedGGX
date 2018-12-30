@@ -22,7 +22,7 @@ const wchar_t *RayTracer::MissShaderName = L"missMain";
 RayTracer::RayTracer(const RayTracing::Device &device, const RayTracing::CommandList &commandList) :
 	m_device(device),
 	m_commandList(commandList),
-	m_instances(nullptr),
+	m_instances(),
 	m_pipeIndex(TEST)
 {
 	m_rayTracingPipelineCache.SetDevice(device);
@@ -52,7 +52,8 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 
 	N_RETURN(createGroundMesh(vbUploads[GROUND], ibUploads[GROUND]), false);
 
-	// Create raytracing pipeline
+	// Create raytracing pipelines
+	createInputLayout();
 	createPipelineLayouts();
 	N_RETURN(createPipelines(), false);
 
@@ -64,6 +65,7 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 	}
 	for (auto &velocity : m_velocities)
 		velocity.Create(m_device.Common, width, height, DXGI_FORMAT_R16G16_FLOAT);
+	m_depth.Create(m_device.Common, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 	N_RETURN(buildAccelerationStructures(geometries), false);
 	buildShaderTables();
 
@@ -168,8 +170,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		static auto angle = 0.0f;
 		angle += m_pipeIndex == TEST ? 0.1f * XM_PI / 180.0f : 0.0f;
 		const auto rot = XMMatrixRotationY(angle);
-		XMStoreFloat3x3(&m_rot, rot);
-
+		
 		const auto n = 255u;
 		static auto i = 0u;
 		HitGroupConstants cbHitGroup = { XMMatrixTranspose(rot), Hammersley(i, n) };
@@ -178,15 +179,34 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		m_hitGroupShaderTables[frameIndex][m_pipeIndex].Reset();
 		m_hitGroupShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[m_pipeIndex],
 			HitGroupName, &cbHitGroup, sizeof(HitGroupConstants)));
+
+		XMMATRIX worlds[NUM_MESH] =
+		{
+			XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f),
+			XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * rot *
+			XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)
+		};
+
+		for (auto i = 0; i < NUM_MESH; ++i)
+		{
+			m_cbBasePass[i].WorldViewProjPrev = m_cbBasePass[i].WorldViewProj;
+			XMStoreFloat4x4(&m_worlds[i], XMMatrixTranspose(worlds[i]));
+			XMStoreFloat4x4(&m_cbBasePass[i].WorldViewProj, XMMatrixTranspose(worlds[i] * viewProj));
+		}
 	}
 }
 
-void RayTracer::Render(uint32_t frameIndex, const Descriptor &dsv)
+void RayTracer::Render(uint32_t frameIndex)
 {
 	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	updateAccelerationStructures();
+	updateAccelerationStructures(frameIndex);
 	rayTrace(frameIndex);
-	if (m_pipeIndex == GGX) temporalSS(frameIndex);
+
+	if (m_pipeIndex == GGX)
+	{
+		gbufferPass(frameIndex);
+		temporalSS(frameIndex);
+	}
 }
 
 void RayTracer::ClearHistory()
@@ -220,6 +240,8 @@ bool RayTracer::createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData
 
 bool RayTracer::createIB(uint32_t numIndices, const uint32_t *pData, Resource &ibUpload)
 {
+	m_numIndices[MODEL_OBJ] = numIndices;
+
 	auto &indexBuffers = m_indexBuffers[MODEL_OBJ];
 	N_RETURN(indexBuffers.Create(m_device.Common, sizeof(uint32_t) * numIndices, DXGI_FORMAT_R32_UINT,
 		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
@@ -298,6 +320,8 @@ bool RayTracer::createGroundMesh(Resource &vbUpload,Resource &ibUpload)
 			23,20,22
 		};
 
+		m_numIndices[GROUND] = static_cast<uint32_t>(size(indices));
+
 		auto &indexBuffers = m_indexBuffers[GROUND];
 		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), DXGI_FORMAT_R32_UINT,
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
@@ -307,6 +331,20 @@ bool RayTracer::createGroundMesh(Resource &vbUpload,Resource &ibUpload)
 	}
 
 	return true;
+}
+
+void RayTracer::createInputLayout()
+{
+	const auto offset = D3D12_APPEND_ALIGNED_ELEMENT;
+
+	// Define the vertex input layout.
+	InputElementTable inputElementDescs =
+	{
+		{ "POSITION",	0, DXGI_FORMAT_R32G32B32_FLOAT, 0, 0,		D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+		{ "NORMAL",		0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offset,	D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
+	};
+
+	m_inputLayout = m_graphicsPipelineCache.CreateInputLayout(inputElementDescs);
 }
 
 void RayTracer::createPipelineLayouts()
@@ -345,9 +383,9 @@ void RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for g-buffer pass
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetConstants(0, SizeOfInUint32(XMMATRIX[2]), 0, 0, Shader::Stage::VS);
+		pipelineLayout.SetConstants(0, SizeOfInUint32(BasePassConstants), 0, 0, Shader::Stage::VS);
 		m_pipelineLayouts[GBUFFER_PASS_LAYOUT] = pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"GBufferPipelineLayout");
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout");
 	}
 
 	// This is a pipeline layout for temporal SS
@@ -405,7 +443,8 @@ bool RayTracer::createPipelines()
 		const auto ps = m_shaderPool.CreateShader(Shader::Stage::PS, 0, L"PSGBuffer.cso");
 
 		Graphics::State state;
-		state.SetPipelineLayout(m_pipelineLayouts[GBUFFER_PASS]);
+		state.IASetInputLayout(m_inputLayout);
+		state.SetPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);
 		state.SetShader(Shader::Stage::VS, m_shaderPool.GetShader(Shader::Stage::VS, 0));
 		state.SetShader(Shader::Stage::PS, m_shaderPool.GetShader(Shader::Stage::PS, 0));
 		state.IASetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
@@ -489,6 +528,14 @@ void RayTracer::createDescriptorTables()
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		m_srvTables[SRV_TABLE_TS + i] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
 	}
+
+	// RTV tables
+	for (auto i = 0u; i < FrameCount; ++i)
+	{
+		Util::DescriptorTable rtvTable;
+		rtvTable.SetDescriptors(0, 1, &m_velocities[i].GetRTV());
+		m_rtvTables[i] = rtvTable.GetRtvTable(m_descriptorTableCache);
+	}
 }
 
 bool RayTracer::buildAccelerationStructures(Geometry *geometries)
@@ -538,14 +585,15 @@ bool RayTracer::buildAccelerationStructures(Geometry *geometries)
 		reinterpret_cast<float*>(&matrices[GROUND]),
 		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
 	};
-	TopLevelAS::SetInstances(m_device, m_instances, NUM_MESH, m_bottomLevelASs, transforms);
+	auto &instances = m_instances[FrameCount - 1];
+	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, m_bottomLevelASs, transforms);
 
 	// Build bottom level ASs
 	for (auto &bottomLevelAS : m_bottomLevelASs)
 		bottomLevelAS.Build(m_commandList, m_scratch, descriptorPool, NumUAVs);
 
 	// Build top level AS
-	m_topLevelAS.Build(m_commandList, m_scratch, m_instances, descriptorPool, NumUAVs);
+	m_topLevelAS.Build(m_commandList, m_scratch, instances, descriptorPool, NumUAVs);
 
 	return true;
 }
@@ -577,23 +625,19 @@ void RayTracer::buildShaderTables()
 	}
 }
 
-void RayTracer::updateAccelerationStructures()
+void RayTracer::updateAccelerationStructures(uint32_t frameIndex)
 {
 	// Set instance
-	XMFLOAT4X4 matrices[NUM_MESH];
-	XMStoreFloat4x4(&matrices[GROUND], XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))));
-	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * XMLoadFloat3x3(&m_rot) *
-		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))));
 	float *const transforms[] =
 	{
-		reinterpret_cast<float*>(&matrices[GROUND]),
-		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
+		reinterpret_cast<float*>(&m_worlds[GROUND]),
+		reinterpret_cast<float*>(&m_worlds[MODEL_OBJ])
 	};
-	TopLevelAS::SetInstances(m_device, m_instances, NUM_MESH, m_bottomLevelASs, transforms);
+	TopLevelAS::SetInstances(m_device, m_instances[frameIndex], NUM_MESH, m_bottomLevelASs, transforms);
 
 	// Update top level AS
 	const auto &descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
-	m_topLevelAS.Build(m_commandList, m_scratch, m_instances, descriptorPool, NumUAVs, true);
+	m_topLevelAS.Build(m_commandList, m_scratch, m_instances[frameIndex], descriptorPool, NumUAVs, true);
 }
 
 void RayTracer::rayTrace(uint32_t frameIndex)
@@ -620,6 +664,41 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 		m_rayGenShaderTables[frameIndex][m_pipeIndex]);
 }
 
+void RayTracer::gbufferPass(uint32_t frameIndex)
+{
+	// Set render target
+	m_velocities[frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList.OMSetRenderTargets(1, m_rtvTables[frameIndex], m_depth.GetDSV());
+
+	// Clear render target
+	const float clearColor[4] = {};
+	m_commandList.ClearRenderTargetView(m_velocities[frameIndex].GetRTV(), clearColor);
+	m_commandList.ClearDepthStencilView(m_depth.GetDSV(), D3D12_CLEAR_FLAG_DEPTH, 1.0f);
+
+	// Set pipeline state
+	m_commandList.SetGraphicsPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);
+	m_commandList.SetPipelineState(m_pipelines[GBUFFER_PASS]);
+
+	// Set viewport
+	Viewport viewport(0.0f, 0.0f, static_cast<float>(m_viewport.x), static_cast<float>(m_viewport.y));
+	RectRange scissorRect(0, 0, m_viewport.x, m_viewport.y);
+	m_commandList.RSSetViewports(1, &viewport);
+	m_commandList.RSSetScissorRects(1, &scissorRect);
+
+	m_commandList.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+
+	for (auto i = 0ui8; i < NUM_MESH; ++i)
+	{
+		// Set descriptor tables
+		m_commandList.SetGraphics32BitConstants(0, SizeOfInUint32(BasePassConstants), &m_cbBasePass[i]);
+
+		m_commandList.IASetVertexBuffers(0, 1, &m_vertexBuffers[i].GetVBV());
+		m_commandList.IASetIndexBuffer(m_indexBuffers[i].GetIBV());
+
+		m_commandList.DrawIndexed(m_numIndices[i], 1, 0, 0, 0);
+	}
+}
+
 void RayTracer::temporalSS(uint32_t frameIndex)
 {
 	m_commandList.SetComputePipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
@@ -636,6 +715,7 @@ void RayTracer::temporalSS(uint32_t frameIndex)
 	m_outputViews[frameIndex][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	m_outputViews[prevFrame][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	m_velocities[frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
 	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[frameIndex][UAV_TABLE_TSAMP]);
 	m_commandList.SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TS + frameIndex]);
