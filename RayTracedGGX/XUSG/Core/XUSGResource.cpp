@@ -730,6 +730,7 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 			formatResource = DXGI_FORMAT_R32_TYPELESS;
 			formatDepth = DXGI_FORMAT_R32_FLOAT;
 		default:
+			format = DXGI_FORMAT_D24_UNORM_S8_UINT;
 			formatResource = DXGI_FORMAT_R24G8_TYPELESS;
 			formatDepth = DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
 		}
