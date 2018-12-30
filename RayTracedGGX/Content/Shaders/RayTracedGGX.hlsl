@@ -185,9 +185,10 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 	// Trace a reflection ray.
 	RayDesc ray;
+	const bool isCentroidSample = DispatchRaysIndex().y & 1;
 	const float a = ROUGHNESS * ROUGHNESS;
 	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_hitGroupCB.Normal) : input.Nrm);
-	const float3 H = computeDirectionGGX(a, N);
+	const float3 H = computeDirectionGGX(a, N, isCentroidSample);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);
 	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;
@@ -213,7 +214,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	// pdf = D * NoH / (4 * VoH)
 	//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
 	// pdf = D * NoH
-	radiance *= F * max(NoL, 1e-3) * vis / NoH;
+	const float lightAmt = max(NoL, 1e-3) * vis / NoH;
+	radiance *= F * (isCentroidSample ? min(lightAmt, 1.0) : lightAmt);
 
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 

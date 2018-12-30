@@ -34,5 +34,6 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	float3 result = history.w < 1.0 ? lerp(current.xyz, history.xyz, blend) : history.xyz;
 
 	RenderTarget[DTid] = float4(result, alpha);
+	//RenderTarget[DTid] = g_currentImage[uint3(DTid, 1)];
 	//RenderTarget[DTid] = float4(abs(velocity.x) > 1e-5 ? 1.0 : 0.0, abs(velocity.y) > 1e-5 ? 1.0 : 0.0, 0.0, alpha);
 }
