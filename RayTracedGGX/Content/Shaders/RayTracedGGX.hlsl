@@ -5,7 +5,7 @@
 #include "BRDFModels.hlsli"
 #include "RayTracedGGX.hlsli"
 
-#define ROUGHNESS			0.2
+#define ROUGHNESS			0.25
 
 #define MAX_RECURSION_DEPTH	3
 
@@ -78,7 +78,7 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 		ray.TMin = 0.0;
 		ray.TMax = 10000.0;
 		payload.Color = 0.0.xxx;
-		payload.RecursionDepth = currentRayRecursionDepth + 1;
+		payload.RecursionDepth = currentRayRecursionDepth;
 		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
 	}
 
@@ -129,7 +129,7 @@ void raygenMain()
 	float3 color = sqrt(payload.Color);
 
 	// Write the raytraced color to the output texture.
-	const float a = payload.RecursionDepth > 1 ? 1.0 : 0.0;
+	const float a = payload.RecursionDepth > 0 ? 1.0 : 0.0;
 	RenderTarget[index] = float4(color, a);
 }
 
@@ -191,7 +191,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	const float3 H = computeDirectionGGX(a, N, isCentroidSample);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);
-	float3 radiance = traceRadianceRay(ray, payload.RecursionDepth).Color;
+	float3 radiance = traceRadianceRay(ray, ++payload.RecursionDepth).Color;
 
 	// Calculate fresnel
 	const float3 specColors[] =
