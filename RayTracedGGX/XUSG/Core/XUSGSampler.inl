@@ -51,7 +51,7 @@ namespace XUSG
 	Sampler SamplerPointLessEqual()
 	{
 		Sampler sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_POINT;
+		sampler.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_MIP_POINT;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -111,7 +111,7 @@ namespace XUSG
 	Sampler SamplerLinearLessEqual()
 	{
 		Sampler sampler = {};
-		sampler.Filter = D3D12_FILTER_MIN_MAG_MIP_LINEAR;
+		sampler.Filter = D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
@@ -174,7 +174,7 @@ namespace XUSG
 	Sampler SamplerAnisotropicLessEqual()
 	{
 		Sampler sampler = {};
-		sampler.Filter = D3D12_FILTER_ANISOTROPIC;
+		sampler.Filter = D3D12_FILTER_COMPARISON_ANISOTROPIC;
 		sampler.AddressU = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		sampler.AddressV = D3D12_TEXTURE_ADDRESS_MODE_BORDER;
 		sampler.AddressW = D3D12_TEXTURE_ADDRESS_MODE_BORDER;

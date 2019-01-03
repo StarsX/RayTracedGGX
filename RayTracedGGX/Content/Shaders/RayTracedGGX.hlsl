@@ -126,11 +126,10 @@ void raygenMain()
 	generateCameraRay(index, ray.Origin, ray.Direction);
 
 	RayPayload payload = traceRadianceRay(ray, 0);
-	float3 color = sqrt(payload.Color);
 
 	// Write the raytraced color to the output texture.
 	const float a = payload.RecursionDepth > 0 ? 1.0 : 0.0;
-	RenderTarget[index] = float4(color, a);
+	RenderTarget[index] = float4(payload.Color, a);
 }
 
 //--------------------------------------------------------------------------------------

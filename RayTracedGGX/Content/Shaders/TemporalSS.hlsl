@@ -152,6 +152,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
 	min16float4 history = g_historyImage.SampleLevel(g_sampler, texBack, 0);
+	history.xyz *= history.xyz;
 	
 	min16float4 neighborMin, neighborMax;
 	min16float3 filtered = NeighborMinMax(neighborMin, neighborMax, mu.xyz, current.xyz, DTid);
@@ -166,7 +167,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const min16float blend = history.w / alpha;
 	min16float3 result = history.w < 1.0 ? lerp(current.xyz, history.xyz, blend) : history.xyz;
 
-	RenderTarget[DTid] = min16float4(result, alpha);
+	RenderTarget[DTid] = min16float4(sqrt(result), alpha);
 	//RenderTarget[DTid] = min16float4(result, alpha) * current.w;
 	//RenderTarget[DTid] = g_currentImage[uint3(DTid, 1)];
 	//RenderTarget[DTid] = float4(abs(velocity.x) > 1e-5 ? 1.0 : 0.0, abs(velocity.y) > 1e-5 ? 1.0 : 0.0, 0.0, alpha);
