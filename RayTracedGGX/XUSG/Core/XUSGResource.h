@@ -165,8 +165,8 @@ namespace XUSG
 		DepthStencil();
 		virtual ~DepthStencil();
 
-		bool Create(const Device &device, uint32_t width, uint32_t height, Format format =
-			DXGI_FORMAT_D24_UNORM_S8_UINT, ResourceFlags resourceFlags = ResourceFlags(0),
+		bool Create(const Device &device, uint32_t width, uint32_t height,
+			Format format = Format(0), ResourceFlags resourceFlags = ResourceFlags(0),
 			uint32_t arraySize = 1, uint8_t numMips = 1, uint8_t sampleCount = 1,
 			ResourceState state = ResourceState(0), float clearDepth = 1.0f,
 			uint8_t clearStencil = 0, const wchar_t *name = nullptr);

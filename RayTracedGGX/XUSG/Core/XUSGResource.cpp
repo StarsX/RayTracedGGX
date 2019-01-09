@@ -772,8 +772,8 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 		{
 			// Setup the description of the shader resource view.
 			D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
-			desc.Format = format;
-			desc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+			desc.Format = formatStencil;
+			desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(1, 4, 4, 4);
 
 			if (arraySize > 1)
 			{
