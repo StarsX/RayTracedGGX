@@ -736,6 +736,8 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 		}
 	}
 
+	m_dsvFormat = format;
+
 	// Setup the render depth stencil description.
 	{
 		const auto desc = CD3DX12_RESOURCE_DESC::Tex2D(formatResource, width, height, arraySize,
@@ -883,7 +885,12 @@ const Descriptor &DepthStencil::GetStencilSRV() const
 	return m_stencilSrv;
 }
 
-const uint8_t DepthStencil::GetNumMips() const
+Format DepthStencil::GetDSVFormat() const
+{
+	return m_dsvFormat;
+}
+
+uint8_t DepthStencil::GetNumMips() const
 {
 	return static_cast<uint8_t>(m_dsvs.size());
 }

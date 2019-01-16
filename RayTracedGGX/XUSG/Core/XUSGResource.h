@@ -175,7 +175,8 @@ namespace XUSG
 		Descriptor GetReadOnlyDSV(uint8_t mipLevel = 0) const;
 		const Descriptor &GetStencilSRV() const;
 
-		const uint8_t GetNumMips() const;
+		Format	GetDSVFormat() const;
+		uint8_t	GetNumMips() const;
 
 	protected:
 		bool allocateDsvPool(uint32_t numDescriptors);
@@ -187,6 +188,7 @@ namespace XUSG
 		Descriptor	m_currentDsv;
 
 		uint32_t	m_dsvStride;
+		Format		m_dsvFormat;
 	};
 
 	//--------------------------------------------------------------------------------------
