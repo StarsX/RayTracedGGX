@@ -94,16 +94,18 @@ namespace XUSG
 		bool Create(const Device &device, uint32_t width, uint32_t height, Format format,
 			uint32_t arraySize = 1, ResourceFlags resourceFlags = ResourceFlags(0),
 			uint8_t numMips = 1, uint8_t sampleCount = 1, PoolType poolType = PoolType(1),
-			ResourceState state = ResourceState(0), const wchar_t *name = nullptr);
+			ResourceState state = ResourceState(0), bool isCubeMap = false,
+			const wchar_t *name = nullptr);
 		bool Upload(const CommandList &commandList, Resource &resourceUpload,
 			SubresourceData *pSubresourceData, uint32_t numSubresources = 1,
 			ResourceState dstState = ResourceState(0));
 		bool Upload(const CommandList &commandList, Resource &resourceUpload, const uint8_t *pData,
 			uint8_t stride = sizeof(float), ResourceState dstState = ResourceState(0));
 
-		void CreateSRVs(uint32_t arraySize, Format format = Format(0),
-			uint8_t numMips = 1, uint8_t sampleCount = 1);
-		void CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format format = Format(0), uint8_t sampleCount = 1);
+		void CreateSRVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1,
+			uint8_t sampleCount = 1, bool isCubeMap = false);
+		void CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format format = Format(0),
+			uint8_t sampleCount = 1, bool isCubeMap = false);
 		void CreateUAVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1);
 
 		Descriptor GetUAV(uint8_t i = 0) const;
@@ -128,11 +130,11 @@ namespace XUSG
 		bool Create(const Device &device, uint32_t width, uint32_t height, Format format,
 			uint32_t arraySize = 1, ResourceFlags resourceFlags = ResourceFlags(0),
 			uint8_t numMips = 1, uint8_t sampleCount = 1, ResourceState state = ResourceState(0),
-			const float *pClearColor = nullptr, const wchar_t *name = nullptr);
+			const float *pClearColor = nullptr, bool isCubeMap = false, const wchar_t *name = nullptr);
 		bool CreateArray(const Device &device, uint32_t width, uint32_t height, uint32_t arraySize,
 			Format format, ResourceFlags resourceFlags = ResourceFlags(0), uint8_t numMips = 1,
 			uint8_t sampleCount = 1, ResourceState state = ResourceState(0),
-			const float *pClearColor = nullptr, const wchar_t *name = nullptr);
+			const float *pClearColor = nullptr, bool isCubeMap = false, const wchar_t *name = nullptr);
 
 		//void Populate(const CPDXShaderResourceView &pSRVSrc, const spShader &pShader,
 			//const uint8_t uSRVSlot = 0, const uint8_t uSlice = 0, const uint8_t uMip = 0);
@@ -145,7 +147,7 @@ namespace XUSG
 		bool create(const Device &device, uint32_t width, uint32_t height,
 			uint32_t arraySize, Format format, uint8_t numMips, uint8_t sampleCount,
 			ResourceFlags resourceFlags, ResourceState state, const float *pClearColor,
-			const wchar_t *name);
+			bool isCubeMap, const wchar_t *name);
 		bool allocateRtvPool(uint32_t numDescriptors);
 
 		DescriptorPool	m_rtvPool;
@@ -169,21 +171,31 @@ namespace XUSG
 			Format format = Format(0), ResourceFlags resourceFlags = ResourceFlags(0),
 			uint32_t arraySize = 1, uint8_t numMips = 1, uint8_t sampleCount = 1,
 			ResourceState state = ResourceState(0), float clearDepth = 1.0f,
-			uint8_t clearStencil = 0, const wchar_t *name = nullptr);
+			uint8_t clearStencil = 0, bool isCubeMap = false, const wchar_t *name = nullptr);
+		bool CreateArray(const Device &device, uint32_t width, uint32_t height, uint32_t arraySize,
+			Format format = Format(0), ResourceFlags resourceFlags = ResourceFlags(0),
+			uint8_t numMips = 1, uint8_t sampleCount = 1, ResourceState state = ResourceState(0),
+			float clearDepth = 1.0f, uint8_t clearStencil = 0, bool isCubeMap = false,
+			const wchar_t *name = nullptr);
 
-		Descriptor GetDSV(uint8_t mipLevel = 0) const;
-		Descriptor GetReadOnlyDSV(uint8_t mipLevel = 0) const;
+		Descriptor GetDSV(uint32_t slice = 0, uint8_t mipLevel = 0) const;
+		Descriptor GetReadOnlyDSV(uint32_t slice = 0, uint8_t mipLevel = 0) const;
 		const Descriptor &GetStencilSRV() const;
 
-		Format	GetDSVFormat() const;
-		uint8_t	GetNumMips() const;
+		Format		GetDSVFormat() const;
+		uint32_t	GetArraySize() const;
+		uint8_t		GetNumMips() const;
 
 	protected:
+		bool create(const Device &device, uint32_t width, uint32_t height, uint32_t arraySize,
+			uint8_t numMips, uint8_t sampleCount, Format &format, ResourceFlags resourceFlags,
+			ResourceState state, float clearDepth, uint8_t clearStencil, bool &hasSRV,
+			Format &formatStencil, bool isCubeMap, const wchar_t *name);
 		bool allocateDsvPool(uint32_t numDescriptors);
 
 		DescriptorPool m_dsvPool;
-		std::vector<Descriptor> m_dsvs;
-		std::vector<Descriptor> m_readOnlyDsvs;
+		std::vector<std::vector<Descriptor>> m_dsvs;
+		std::vector<std::vector<Descriptor>> m_readOnlyDsvs;
 		Descriptor	m_stencilSrv;
 		Descriptor	m_currentDsv;
 

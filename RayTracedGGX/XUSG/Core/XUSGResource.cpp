@@ -258,7 +258,7 @@ Texture2D::~Texture2D()
 
 bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Format format,
 	uint32_t arraySize, ResourceFlags resourceFlags, uint8_t numMips, uint8_t sampleCount,
-	PoolType poolType, ResourceState state, const wchar_t *name)
+	PoolType poolType, ResourceState state, bool isCubeMap, const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
@@ -299,13 +299,13 @@ bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Fo
 	N_RETURN(allocateDescriptorPool(numDescriptors), false);
 
 	// Create SRV
-	if (hasSRV) CreateSRVs(arraySize, format, numMips, sampleCount);
+	if (hasSRV) CreateSRVs(arraySize, format, numMips, sampleCount, isCubeMap);
 
 	// Create UAVs
 	if (hasUAV) CreateUAVs(arraySize, formatUAV, numMips);
 
 	// Create SRV for each level
-	if (hasSRV && hasUAV) CreateSRVLevels(arraySize, numMips, format, sampleCount);
+	if (hasSRV && hasUAV) CreateSRVLevels(arraySize, numMips, format, sampleCount, isCubeMap);
 
 	return true;
 }
@@ -352,7 +352,8 @@ bool Texture2D::Upload(const CommandList &commandList, Resource &resourceUpload,
 	return Upload(commandList, resourceUpload, &subresourceData, 1, dstState);
 }
 
-void Texture2D::CreateSRVs(uint32_t arraySize, Format format, uint8_t numMips, uint8_t sampleCount)
+void Texture2D::CreateSRVs(uint32_t arraySize, Format format, uint8_t numMips,
+	uint8_t sampleCount, bool isCubeMap)
 {
 	// Setup the description of the shader resource view.
 	D3D12_SHADER_RESOURCE_VIEW_DESC desc = {};
@@ -364,7 +365,24 @@ void Texture2D::CreateSRVs(uint32_t arraySize, Format format, uint8_t numMips, u
 
 	for (auto &descriptor : m_srvs)
 	{
-		if (arraySize > 1)
+		if (isCubeMap)
+		{
+			assert(arraySize % 6 == 0);
+			if (arraySize > 6)
+			{
+				desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+				desc.TextureCubeArray.MipLevels = numMips - mipLevel;
+				desc.TextureCubeArray.MostDetailedMip = mipLevel++;
+				desc.TextureCubeArray.NumCubes = arraySize / 6;
+			}
+			else
+			{
+				desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+				desc.TextureCube.MipLevels = numMips - mipLevel;
+				desc.TextureCube.MostDetailedMip = mipLevel++;
+			}
+		}
+		else if (arraySize > 1)
 		{
 			if (sampleCount > 1)
 			{
@@ -398,7 +416,8 @@ void Texture2D::CreateSRVs(uint32_t arraySize, Format format, uint8_t numMips, u
 	}
 }
 
-void Texture2D::CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format format, uint8_t sampleCount)
+void Texture2D::CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format format,
+	uint8_t sampleCount, bool isCubeMap)
 {
 	if (numMips > 1)
 	{
@@ -413,7 +432,24 @@ void Texture2D::CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format form
 		for (auto &descriptor : m_srvLevels)
 		{
 			// Setup the description of the shader resource view.
-			if (arraySize > 1)
+			if (isCubeMap)
+			{
+				assert(arraySize % 6 == 0);
+				if (arraySize > 6)
+				{
+					desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+					desc.TextureCubeArray.MostDetailedMip = mipLevel++;
+					desc.TextureCubeArray.MipLevels = 1;
+					desc.TextureCubeArray.NumCubes = arraySize / 6;
+				}
+				else
+				{
+					desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+					desc.TextureCube.MostDetailedMip = mipLevel++;
+					desc.TextureCube.MipLevels = 1;
+				}
+			}
+			else if (arraySize > 1)
 			{
 				desc.Texture2DArray.MostDetailedMip = mipLevel++;
 				desc.Texture2DArray.MipLevels = 1;
@@ -490,10 +526,10 @@ RenderTarget::~RenderTarget()
 
 bool RenderTarget::Create(const Device &device, uint32_t width, uint32_t height, Format format,
 	uint32_t arraySize, ResourceFlags resourceFlags, uint8_t numMips, uint8_t sampleCount,
-	ResourceState state, const float *pClearColor, const wchar_t *name)
+	ResourceState state, const float *pClearColor, bool isCubeMap, const wchar_t *name)
 {
-	N_RETURN(create(device, width, height, arraySize, format, numMips,
-		sampleCount, resourceFlags, state, pClearColor, name), false);
+	N_RETURN(create(device, width, height, arraySize, format, numMips, sampleCount,
+		resourceFlags, state, pClearColor, isCubeMap, name), false);
 
 	numMips = (max)(numMips, 1ui8);
 	N_RETURN(allocateRtvPool(numMips * arraySize), false);
@@ -550,10 +586,11 @@ bool RenderTarget::Create(const Device &device, uint32_t width, uint32_t height,
 
 bool RenderTarget::CreateArray(const Device &device, uint32_t width, uint32_t height,
 	uint32_t arraySize, Format format, ResourceFlags resourceFlags, uint8_t numMips,
-	uint8_t sampleCount, ResourceState state, const float *pClearColor, const wchar_t *name)
+	uint8_t sampleCount, ResourceState state, const float *pClearColor, bool isCubeMap,
+	const wchar_t *name)
 {
-	N_RETURN(create(device, width, height, arraySize, format, numMips,
-		sampleCount, resourceFlags, state, pClearColor, name), false);
+	N_RETURN(create(device, width, height, arraySize, format, numMips, sampleCount,
+		resourceFlags, state, pClearColor, isCubeMap, name), false);
 
 	numMips = (max)(numMips, 1ui8);
 	N_RETURN(allocateRtvPool(numMips), false);
@@ -609,7 +646,7 @@ uint8_t RenderTarget::GetNumMips(uint32_t slice) const
 bool RenderTarget::create(const Device &device, uint32_t width, uint32_t height,
 	uint32_t arraySize, Format format, uint8_t numMips, uint8_t sampleCount,
 	ResourceFlags resourceFlags, ResourceState state, const float *pClearColor,
-	const wchar_t *name)
+	bool isCubeMap, const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
@@ -651,7 +688,7 @@ bool RenderTarget::create(const Device &device, uint32_t width, uint32_t height,
 	N_RETURN(allocateDescriptorPool(numDescriptors), false);
 
 	// Create SRV
-	if (hasSRV) CreateSRVs(arraySize, format, numMips, sampleCount);
+	if (hasSRV) CreateSRVs(arraySize, format, numMips, sampleCount, isCubeMap);
 
 	// Create UAV
 	if (hasUAV) CreateUAVs(arraySize, formatUAV, numMips);
@@ -692,21 +729,193 @@ DepthStencil::~DepthStencil()
 
 bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height, Format format,
 	ResourceFlags resourceFlags, uint32_t arraySize, uint8_t numMips, uint8_t sampleCount,
-	ResourceState state, float clearDepth, uint8_t clearStencil, const wchar_t *name)
+	ResourceState state, float clearDepth, uint8_t clearStencil, bool isCubeMap,
+	const wchar_t *name)
+{
+	bool hasSRV;
+	Format formatStencil;
+	N_RETURN(create(device, width, height, arraySize, numMips, sampleCount, format, resourceFlags,
+		state, clearDepth, clearStencil, hasSRV, formatStencil, isCubeMap, name), false);
+
+	numMips = (max)(numMips, 1ui8);
+	N_RETURN(allocateDsvPool(hasSRV ? numMips * arraySize * 2 : numMips * arraySize), false);
+
+	// Setup the description of the depth stencil view.
+	D3D12_DEPTH_STENCIL_VIEW_DESC desc = {};
+	desc.Format = format;
+
+	m_dsvs.resize(arraySize);
+	m_readOnlyDsvs.resize(arraySize);
+
+	for (auto i = 0u; i < arraySize; ++i)
+	{
+		auto mipLevel = 0ui8;
+		m_dsvs[i].resize(numMips);
+		m_readOnlyDsvs[i].resize(numMips);
+
+		for (auto j = 0ui8; j < numMips; ++j)
+		{
+			auto &dsv = m_dsvs[i][j];
+			auto &readOnlyDsv = m_readOnlyDsvs[i][j];
+
+			// Setup the description of the depth stencil view.
+			if (sampleCount > 1)
+				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+			else
+			{
+				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+				desc.Texture2D.MipSlice = i;
+			}
+
+			// Create a depth stencil view
+			dsv = m_currentDsv;
+			m_device->CreateDepthStencilView(m_resource.get(), &desc, dsv);
+			m_currentDsv.Offset(m_dsvStride);
+
+			// Read-only depth stencil
+			if (hasSRV)
+			{
+				// Setup the description of the depth stencil view.
+				desc.Flags = formatStencil ? D3D12_DSV_FLAG_READ_ONLY_DEPTH |
+					D3D12_DSV_FLAG_READ_ONLY_STENCIL : D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+
+				// Create a depth stencil view
+				readOnlyDsv = m_currentDsv;
+				m_device->CreateDepthStencilView(m_resource.get(), &desc, readOnlyDsv);
+				m_currentDsv.Offset(m_dsvStride);
+			}
+			else readOnlyDsv = dsv;
+		}
+	}
+
+	return true;
+}
+
+bool DepthStencil::CreateArray(const Device &device, uint32_t width, uint32_t height, uint32_t arraySize,
+	Format format, ResourceFlags resourceFlags, uint8_t numMips, uint8_t sampleCount, ResourceState state,
+	float clearDepth, uint8_t clearStencil, bool isCubeMap, const wchar_t *name)
+{
+	bool hasSRV;
+	Format formatStencil;
+	N_RETURN(create(device, width, height, arraySize, numMips, sampleCount, format, resourceFlags,
+		state, clearDepth, clearStencil, hasSRV, formatStencil, isCubeMap, name), false);
+
+	numMips = (max)(numMips, 1ui8);
+	N_RETURN(allocateDsvPool(hasSRV ? numMips * 2 : numMips), false);
+
+	// Setup the description of the depth stencil view.
+	D3D12_DEPTH_STENCIL_VIEW_DESC desc = {};
+	desc.Format = format;
+
+	m_dsvs.resize(1);
+	m_dsvs[0].resize(numMips);
+	m_readOnlyDsvs.resize(1);
+	m_readOnlyDsvs[0].resize(numMips);
+
+	for (auto i = 0ui8; i < numMips; ++i)
+	{
+		auto &dsv = m_dsvs[0][i];
+		auto &readOnlyDsv = m_readOnlyDsvs[0][i];
+
+		// Setup the description of the depth stencil view.
+		if (arraySize > 1)
+		{
+			if (sampleCount > 1)
+			{
+				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+				desc.Texture2DMSArray.ArraySize = arraySize;
+			}
+			else
+			{
+				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+				desc.Texture2DArray.ArraySize = arraySize;
+				desc.Texture2DArray.MipSlice = i;
+			}
+		}
+		else
+		{
+			if (sampleCount > 1)
+				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+			else
+			{
+				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+				desc.Texture2D.MipSlice = i;
+			}
+		}
+
+		// Create a depth stencil view
+		dsv = m_currentDsv;
+		m_device->CreateDepthStencilView(m_resource.get(), &desc, dsv);
+		m_currentDsv.Offset(m_dsvStride);
+
+		// Read-only depth stencil
+		if (hasSRV)
+		{
+			// Setup the description of the depth stencil view.
+			desc.Flags = formatStencil ? D3D12_DSV_FLAG_READ_ONLY_DEPTH |
+				D3D12_DSV_FLAG_READ_ONLY_STENCIL : D3D12_DSV_FLAG_READ_ONLY_DEPTH;
+
+			// Create a depth stencil view
+			readOnlyDsv = m_currentDsv;
+			m_device->CreateDepthStencilView(m_resource.get(), &desc, readOnlyDsv);
+			m_currentDsv.Offset(m_dsvStride);
+		}
+		else readOnlyDsv = dsv;
+	}
+
+	return true;
+}
+
+Descriptor DepthStencil::GetDSV(uint32_t slice, uint8_t mipLevel) const
+{
+	return m_dsvs.size() > slice && m_dsvs[slice].size() > mipLevel ?
+		m_dsvs[slice][mipLevel] : Descriptor(D3D12_DEFAULT);
+}
+
+Descriptor DepthStencil::GetReadOnlyDSV(uint32_t slice, uint8_t mipLevel) const
+{
+	return m_readOnlyDsvs.size() > slice && m_readOnlyDsvs[slice].size() > mipLevel ?
+		m_readOnlyDsvs[slice][mipLevel] : Descriptor(D3D12_DEFAULT);
+}
+
+const Descriptor &DepthStencil::GetStencilSRV() const
+{
+	return m_stencilSrv;
+}
+
+Format DepthStencil::GetDSVFormat() const
+{
+	return m_dsvFormat;
+}
+
+uint32_t DepthStencil::GetArraySize() const
+{
+	return static_cast<uint32_t>(m_dsvs.size());
+}
+
+uint8_t DepthStencil::GetNumMips() const
+{
+	return static_cast<uint8_t>(m_dsvs.size());
+}
+
+bool DepthStencil::create(const Device &device, uint32_t width, uint32_t height, uint32_t arraySize,
+	uint8_t numMips, uint8_t sampleCount, Format &format, ResourceFlags resourceFlags, ResourceState state,
+	float clearDepth, uint8_t clearStencil, bool &hasSRV, Format &formatStencil, bool isCubeMap,
+	const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
 
 	if (name) m_name = name;
-	
+
 	m_dsvStride = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
 
-	const auto hasSRV = !(resourceFlags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+	hasSRV = !(resourceFlags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 
 	// Map formats
 	auto formatResource = format;
 	auto formatDepth = DXGI_FORMAT_UNKNOWN;
-	auto formatStencil = DXGI_FORMAT_UNKNOWN;
+	formatStencil = DXGI_FORMAT_UNKNOWN;
 
 	if (hasSRV)
 	{
@@ -759,7 +968,7 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 
 	// Allocate descriptor pool
 	auto numDescriptors = hasSRV ? 1 + (numMips > 1 ? numMips : 0) : 0u;
-	numDescriptors += formatStencil ? 1 : 0;			// Stencil SRV
+	numDescriptors += formatStencil ? 1 : 0;					// Stencil SRV
 	numDescriptors += hasSRV ? (max)(numMips, 1ui8) - 1 : 0;	// Sub SRVs
 	N_RETURN(allocateDescriptorPool(numDescriptors), false);
 
@@ -767,7 +976,7 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 	{
 		// Create SRV
 		if (hasSRV)
-			CreateSRVs(arraySize, formatDepth, numMips, sampleCount);
+			CreateSRVs(arraySize, formatDepth, numMips, sampleCount, isCubeMap);
 
 		// Has stencil
 		if (formatStencil)
@@ -777,7 +986,22 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 			desc.Format = formatStencil;
 			desc.Shader4ComponentMapping = D3D12_ENCODE_SHADER_4_COMPONENT_MAPPING(1, 4, 4, 4);
 
-			if (arraySize > 1)
+			if (isCubeMap)
+			{
+				assert(arraySize % 6 == 0);
+				if (arraySize > 6)
+				{
+					desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBEARRAY;
+					desc.TextureCubeArray.MipLevels = numMips;
+					desc.TextureCubeArray.NumCubes = arraySize / 6;
+				}
+				else
+				{
+					desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+					desc.TextureCube.MipLevels = numMips;
+				}
+			}
+			else if (arraySize > 1)
 			{
 				if (sampleCount > 1)
 				{
@@ -809,90 +1033,7 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 		}
 	}
 
-	numMips = (max)(numMips, 1ui8);
-	N_RETURN(allocateDsvPool(hasSRV ? numMips * 2 : numMips), false);
-
-	// Setup the description of the depth stencil view.
-	D3D12_DEPTH_STENCIL_VIEW_DESC desc = {};
-	desc.Format = format;
-
-	m_dsvs.resize(numMips);
-	m_readOnlyDsvs.resize(numMips);
-
-	for (auto i = 0ui8; i < numMips; ++i)
-	{
-		// Setup the description of the depth stencil view.
-		if (arraySize > 1)
-		{
-			if (sampleCount > 1)
-			{
-				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
-				desc.Texture2DMSArray.ArraySize = arraySize;
-			}
-			else
-			{
-				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
-				desc.Texture2DArray.ArraySize = arraySize;
-				desc.Texture2DArray.MipSlice = i;
-			}
-		}
-		else
-		{
-			if (sampleCount > 1)
-				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
-			else
-			{
-				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-				desc.Texture2D.MipSlice = i;
-			}
-		}
-
-		// Create a depth stencil view
-		m_dsvs[i] = m_currentDsv;
-		m_device->CreateDepthStencilView(m_resource.get(), &desc, m_dsvs[i]);
-		m_currentDsv.Offset(m_dsvStride);
-
-		// Read-only depth stencil
-		if (hasSRV)
-		{
-			// Setup the description of the depth stencil view.
-			desc.Flags = formatStencil ? D3D12_DSV_FLAG_READ_ONLY_DEPTH |
-				D3D12_DSV_FLAG_READ_ONLY_STENCIL : D3D12_DSV_FLAG_READ_ONLY_DEPTH;
-
-			// Create a depth stencil view
-			m_readOnlyDsvs[i] = m_currentDsv;
-			m_device->CreateDepthStencilView(m_resource.get(), &desc, m_readOnlyDsvs[i]);
-			m_currentDsv.Offset(m_dsvStride);
-		}
-		else m_readOnlyDsvs[i] = m_dsvs[i];
-	}
-
 	return true;
-}
-
-Descriptor DepthStencil::GetDSV(uint8_t mipLevel) const
-{
-	return m_dsvs.size() > mipLevel ? m_dsvs[mipLevel] : Descriptor(D3D12_DEFAULT);
-}
-
-Descriptor DepthStencil::GetReadOnlyDSV(uint8_t mipLevel) const
-{
-	return m_readOnlyDsvs.size() > mipLevel ? m_readOnlyDsvs[mipLevel] : Descriptor(D3D12_DEFAULT);
-}
-
-const Descriptor &DepthStencil::GetStencilSRV() const
-{
-	return m_stencilSrv;
-}
-
-Format DepthStencil::GetDSVFormat() const
-{
-	return m_dsvFormat;
-}
-
-uint8_t DepthStencil::GetNumMips() const
-{
-	return static_cast<uint8_t>(m_dsvs.size());
 }
 
 bool DepthStencil::allocateDsvPool(uint32_t numDescriptors)
