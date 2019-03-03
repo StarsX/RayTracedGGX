@@ -4,10 +4,9 @@
 
 #pragma once
 
-#include "XUSGDescriptor.h"
 #include "XUSGCommand.h"
 
-#define	BIND_PACKED_UAV	ResourceFlags(0x4 | 0x8000)
+#define BIND_PACKED_UAV	ResourceFlags(0x4 | 0x8000)
 #define ALIGN(x, n)		(((x) + (n - 1)) & ~(n - 1))
 
 namespace XUSG
@@ -55,12 +54,14 @@ namespace XUSG
 		ResourceBase();
 		virtual ~ResourceBase();
 
-		void Barrier(const CommandList &commandList, ResourceState dstState);
+		void Barrier(const CommandList &commandList, ResourceState dstState,
+			uint32_t subresource = 0xffffffff);
 
 		const Resource	&GetResource() const;
 		Descriptor		GetSRV(uint32_t i = 0) const;
 
-		ResourceBarrier	Transition(ResourceState dstState);
+		ResourceBarrier	Transition(ResourceState dstState, uint32_t subresource = 0xffffffff);
+		ResourceState	GetResourceState(uint32_t i = 0) const;
 
 		//static void CreateReadBuffer(const Device &device,
 			//CPDXBuffer &pDstBuffer, const CPDXBuffer &pSrcBuffer);
@@ -75,7 +76,7 @@ namespace XUSG
 		std::vector<Descriptor> m_srvs;
 		Descriptor		m_currentSrvUav;
 
-		ResourceState	m_state;
+		std::vector<ResourceState> m_states;
 		uint32_t		m_srvUavStride;
 
 		std::wstring	m_name;
@@ -135,9 +136,11 @@ namespace XUSG
 			Format format, ResourceFlags resourceFlags = ResourceFlags(0), uint8_t numMips = 1,
 			uint8_t sampleCount = 1, ResourceState state = ResourceState(0),
 			const float *pClearColor = nullptr, bool isCubeMap = false, const wchar_t *name = nullptr);
+		bool CreateFromSwapChain(const Device &device, const SwapChain &swapChain, uint32_t bufferIdx);
 
-		//void Populate(const CPDXShaderResourceView &pSRVSrc, const spShader &pShader,
-			//const uint8_t uSRVSlot = 0, const uint8_t uSlice = 0, const uint8_t uMip = 0);
+		void Populate(const CommandList &commandList, const PipelineLayout &pipelineLayout,
+			const Pipeline &pipeline, const DescriptorTable &srcSrvTable, const DescriptorTable &samplerTable,
+			uint32_t srcSlot = 0, uint32_t samplerSlot = 1, uint8_t mipLevel = 0, int32_t slice = 0);
 
 		Descriptor	GetRTV(uint32_t slice = 0, uint8_t mipLevel = 0) const;
 		uint32_t	GetArraySize() const;

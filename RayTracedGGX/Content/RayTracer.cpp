@@ -668,7 +668,7 @@ void RayTracer::gbufferPass(uint32_t frameIndex)
 {
 	// Set render target
 	m_velocities[frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_commandList.OMSetRenderTargets(1, m_rtvTables[frameIndex], m_depth.GetDSV());
+	m_commandList.OMSetRenderTargets(1, m_rtvTables[frameIndex], &m_depth.GetDSV());
 
 	// Clear render target
 	const float clearColor[4] = {};

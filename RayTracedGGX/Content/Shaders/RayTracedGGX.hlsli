@@ -14,14 +14,14 @@ struct HitGroupConstants
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<HitGroupConstants> l_hitGroupCB : register(b1);
+ConstantBuffer<HitGroupConstants> l_cbHitGroup : register(b1);
 
 //--------------------------------------------------------------------------------------
 // Compute direction in local space
 //--------------------------------------------------------------------------------------
 float3 computeLocalDirectionGGX(float a, bool isCentroidSample)
 {
-	const float2 xi = isCentroidSample ? 0.0 : l_hitGroupCB.Hammersley;
+	const float2 xi = isCentroidSample ? 0.0 : l_cbHitGroup.Hammersley;
 	const float phi = 2.0 * PI * xi.x;
 
 	// Only near the specular direction according to the roughness for importance sampling

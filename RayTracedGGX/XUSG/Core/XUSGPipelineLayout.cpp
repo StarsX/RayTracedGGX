@@ -3,7 +3,7 @@
 //--------------------------------------------------------------------------------------
 
 #include "DXFrameworkHelper.h"
-#include "XUSGGraphicsState.h"
+#include "XUSGPipelineLayout.h"
 
 using namespace std;
 using namespace XUSG;

@@ -5,7 +5,7 @@
 #include "DXFrameworkHelper.h"
 #include "XUSGResource.h"
 
-#define	REMOVE_PACKED_UAV	ResourceFlags(~0x8000)
+#define REMOVE_PACKED_UAV	ResourceFlags(~0x8000)
 
 using namespace std;
 using namespace XUSG;
@@ -185,7 +185,7 @@ ResourceBase::ResourceBase() :
 	m_srvUavPool(nullptr),
 	m_srvs(0),
 	m_currentSrvUav(D3D12_DEFAULT),
-	m_state(ResourceState(0))
+	m_states()
 {
 }
 
@@ -193,10 +193,12 @@ ResourceBase::~ResourceBase()
 {
 }
 
-void ResourceBase::Barrier(const CommandList &commandList, ResourceState dstState)
+void ResourceBase::Barrier(const CommandList &commandList, ResourceState dstState,
+	uint32_t subresource)
 {
-	if (m_state != dstState || dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-		commandList.Barrier(1, &Transition(dstState));
+	const auto &state = m_states[subresource == 0xffffffff ? 0 : subresource];
+	if (state != dstState || dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
+		commandList.Barrier(1, &Transition(dstState, subresource));
 }
 
 const Resource &ResourceBase::GetResource() const
@@ -209,14 +211,20 @@ Descriptor ResourceBase::GetSRV(uint32_t i) const
 	return m_srvs.size() > i ? m_srvs[i] : Descriptor(D3D12_DEFAULT);
 }
 
-ResourceBarrier ResourceBase::Transition(ResourceState dstState)
+ResourceBarrier ResourceBase::Transition(ResourceState dstState, uint32_t subresource)
 {
-	const auto srcState = m_state;
-	m_state = dstState;
+	auto &state = m_states[subresource == 0xffffffff ? 0 : subresource];
+	const auto srcState = state;
+	state = dstState;
 
 	return srcState == dstState && dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS ?
 		ResourceBarrier::UAV(m_resource.get()) :
-		ResourceBarrier::Transition(m_resource.get(), srcState, dstState);
+		ResourceBarrier::Transition(m_resource.get(), srcState, dstState, subresource);
+}
+
+ResourceState ResourceBase::GetResourceState(uint32_t i) const
+{
+	return m_states[i];
 }
 
 void ResourceBase::setDevice(const Device & device)
@@ -280,16 +288,17 @@ bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Fo
 		numMips, sampleCount, 0, resourceFlags);
 
 	// Determine initial state
-	if (state) m_state = state;
-	else
+	m_states.resize(arraySize * numMips);
+	if (state) for (auto &initState : m_states) initState = state;
+	else for (auto &initState : m_states)
 	{
-		m_state = hasSRV ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+		initState = hasSRV ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_COMMON;
-		m_state = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : m_state;
+		initState = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : initState;
 	}
 
 	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(poolType),
-		D3D12_HEAP_FLAG_NONE, &desc, m_state, nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
+		D3D12_HEAP_FLAG_NONE, &desc, m_states[0], nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 
 	// Allocate descriptor pool
@@ -329,8 +338,9 @@ bool Texture2D::Upload(const CommandList &commandList, Resource &resourceUpload,
 
 	// Copy data to the intermediate upload heap and then schedule a copy 
 	// from the upload heap to the Texture2D.
-	dstState = dstState ? dstState : m_state;
-	if (m_state != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
+	const auto &curState = m_states[0];
+	dstState = dstState ? dstState : curState;
+	if (curState != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
 	M_RETURN(UpdateSubresources(const_cast<CommandList&>(commandList).GetCommandList().get(),
 		m_resource.get(), resourceUpload.get(), 0, 0, numSubresources, pSubresourceData) <= 0,
 		clog, "Failed to upload the resource.", false);
@@ -451,11 +461,13 @@ void Texture2D::CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format form
 			}
 			else if (arraySize > 1)
 			{
+				desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
 				desc.Texture2DArray.MostDetailedMip = mipLevel++;
 				desc.Texture2DArray.MipLevels = 1;
 			}
 			else
 			{
+				desc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
 				desc.Texture2D.MostDetailedMip = mipLevel++;
 				desc.Texture2D.MipLevels = 1;
 			}
@@ -627,6 +639,66 @@ bool RenderTarget::CreateArray(const Device &device, uint32_t width, uint32_t he
 	return true;
 }
 
+bool RenderTarget::CreateFromSwapChain(const Device &device, const SwapChain &swapChain, uint32_t bufferIdx)
+{
+	M_RETURN(!device, cerr, "The device is NULL.", false);
+	setDevice(device);
+
+	m_name = L"SwapChain[" + to_wstring(bufferIdx) + L"]";
+
+	m_rtvStride = m_device->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+
+	// Determine initial state
+	m_states.resize(1);
+	m_states[0] = D3D12_RESOURCE_STATE_PRESENT;
+
+	// Get resource
+	V_RETURN(swapChain->GetBuffer(bufferIdx, IID_PPV_ARGS(&m_resource)), cerr, false);
+
+	// Allocate descriptor pool
+	N_RETURN(allocateRtvPool(1), false);
+
+	// Create RTV
+	m_rtvs.resize(1);
+	m_rtvs[0].resize(1);
+	m_rtvs[0][0] = m_currentRtv;
+	m_device->CreateRenderTargetView(m_resource.get(), nullptr, m_rtvs[0][0]);
+	m_currentRtv.Offset(m_rtvStride);
+
+	return true;
+}
+
+void RenderTarget::Populate(const CommandList &commandList, const PipelineLayout &pipelineLayout,
+	const Pipeline &pipeline, const DescriptorTable &srcSrvTable, const DescriptorTable &samplerTable,
+	uint32_t srcSlot, uint32_t samplerSlot, uint8_t mipLevel, int32_t slice)
+{
+	// Set render target
+	const auto rtvTable = make_shared<Descriptor>(GetRTV(slice, mipLevel));
+	Barrier(commandList, D3D12_RESOURCE_STATE_RENDER_TARGET, slice * GetNumMips(slice) + mipLevel);
+	commandList.OMSetRenderTargets(1, rtvTable, nullptr);
+
+	// Set pipeline layout and descriptor tables
+	commandList.SetGraphicsPipelineLayout(pipelineLayout);
+	commandList.SetGraphicsDescriptorTable(srcSlot, srcSrvTable);
+	commandList.SetGraphicsDescriptorTable(samplerSlot, samplerTable);
+
+	// Set pipeline
+	commandList.SetPipelineState(pipeline);
+
+	// Set viewport
+	const auto desc = m_resource->GetDesc();
+	const auto width = static_cast<uint32_t>(desc.Width >> mipLevel);
+	const auto height = static_cast<uint32_t>(desc.Height >> mipLevel);
+	const Viewport viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
+	const RectRange rect(0, 0, width, height);
+	commandList.RSSetViewports(1, &viewport);
+	commandList.RSSetScissorRects(1, &rect);
+
+	// Draw quad
+	commandList.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+	commandList.Draw(3, 1, 0, 0);
+}
+
 Descriptor RenderTarget::GetRTV(uint32_t slice, uint8_t mipLevel) const
 {
 	return m_rtvs.size() > slice && m_rtvs[slice].size() > mipLevel ?
@@ -670,7 +742,8 @@ bool RenderTarget::create(const Device &device, uint32_t width, uint32_t height,
 		numMips, sampleCount, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | resourceFlags);
 
 	// Determine initial state
-	m_state = state ? state : D3D12_RESOURCE_STATE_RENDER_TARGET;
+	m_states.resize(arraySize * numMips);
+	for (auto &initState : m_states) initState = state ? state : D3D12_RESOURCE_STATE_RENDER_TARGET;
 
 	// Optimized clear value
 	D3D12_CLEAR_VALUE clearValue = { format };
@@ -678,17 +751,21 @@ bool RenderTarget::create(const Device &device, uint32_t width, uint32_t height,
 
 	// Create the render target texture.
 	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-		D3D12_HEAP_FLAG_NONE, &desc, m_state, &clearValue, IID_PPV_ARGS(&m_resource)), clog, false);
+		D3D12_HEAP_FLAG_NONE, &desc, m_states[0], &clearValue, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 	
 	// Allocate descriptor pool
 	auto numDescriptors = hasSRV ? 1 + (numMips > 1 ? numMips : 0) : 0u;
 	numDescriptors += hasUAV ? numMips : 0;
-	numDescriptors += hasSRV ? (max)(numMips, 1ui8) - 1 : 0;	// Sub SRVs
+	numDescriptors += hasSRV && numMips > 1 ? numMips : 0;	// Sub SRVs
 	N_RETURN(allocateDescriptorPool(numDescriptors), false);
 
 	// Create SRV
-	if (hasSRV) CreateSRVs(arraySize, format, numMips, sampleCount, isCubeMap);
+	if (hasSRV)
+	{
+		CreateSRVs(arraySize, format, numMips, sampleCount, isCubeMap);
+		CreateSRVLevels(arraySize, numMips, format, sampleCount, isCubeMap);
+	}
 
 	// Create UAV
 	if (hasUAV) CreateUAVs(arraySize, formatUAV, numMips);
@@ -759,12 +836,31 @@ bool DepthStencil::Create(const Device &device, uint32_t width, uint32_t height,
 			auto &readOnlyDsv = m_readOnlyDsvs[i][j];
 
 			// Setup the description of the depth stencil view.
-			if (sampleCount > 1)
-				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+			if (arraySize > 1)
+			{
+				if (sampleCount > 1)
+				{
+					desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY;
+					desc.Texture2DMSArray.FirstArraySlice = i;
+					desc.Texture2DMSArray.ArraySize = 1;
+				}
+				else
+				{
+					desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+					desc.Texture2DArray.FirstArraySlice = i;
+					desc.Texture2DArray.ArraySize = 1;
+					desc.Texture2DArray.MipSlice = j;
+				}
+			}
 			else
 			{
-				desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
-				desc.Texture2D.MipSlice = i;
+				if (sampleCount > 1)
+					desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DMS;
+				else
+				{
+					desc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+					desc.Texture2D.MipSlice = j;
+				}
 			}
 
 			// Create a depth stencil view
@@ -953,7 +1049,8 @@ bool DepthStencil::create(const Device &device, uint32_t width, uint32_t height,
 			numMips, sampleCount, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL | resourceFlags);
 
 		// Determine initial state
-		m_state = state ? state : D3D12_RESOURCE_STATE_DEPTH_WRITE;
+		m_states.resize(arraySize * numMips);
+		for (auto &initState : m_states) initState = state ? state : D3D12_RESOURCE_STATE_DEPTH_WRITE;
 
 		// Optimized clear value
 		D3D12_CLEAR_VALUE clearValue = { format };
@@ -962,21 +1059,20 @@ bool DepthStencil::create(const Device &device, uint32_t width, uint32_t height,
 
 		// Create the depth stencil texture.
 		V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
-			D3D12_HEAP_FLAG_NONE, &desc, m_state, &clearValue, IID_PPV_ARGS(&m_resource)), clog, false);
+			D3D12_HEAP_FLAG_NONE, &desc, m_states[0], &clearValue, IID_PPV_ARGS(&m_resource)), clog, false);
 		if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 	}
 
 	// Allocate descriptor pool
 	auto numDescriptors = hasSRV ? 1 + (numMips > 1 ? numMips : 0) : 0u;
-	numDescriptors += formatStencil ? 1 : 0;					// Stencil SRV
-	numDescriptors += hasSRV ? (max)(numMips, 1ui8) - 1 : 0;	// Sub SRVs
+	numDescriptors += formatStencil ? 1 : 0;				// Stencil SRV
+	numDescriptors += hasSRV && numMips > 1 ? numMips : 0;	// Sub SRVs
 	N_RETURN(allocateDescriptorPool(numDescriptors), false);
 
 	if (hasSRV)
 	{
 		// Create SRV
-		if (hasSRV)
-			CreateSRVs(arraySize, formatDepth, numMips, sampleCount, isCubeMap);
+		if (hasSRV) CreateSRVs(arraySize, formatDepth, numMips, sampleCount, isCubeMap);
 
 		// Has stencil
 		if (formatStencil)
@@ -1089,16 +1185,17 @@ bool Texture3D::Create(const Device &device, uint32_t width, uint32_t height,
 		numMips, resourceFlags);
 
 	// Determine initial state
-	if (state) m_state = state;
-	else
+	m_states.resize(numMips);
+	if (state) for (auto &initState : m_states) initState = state;
+	else for (auto &initState : m_states)
 	{
-		m_state = hasSRV ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+		initState = hasSRV ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_COMMON;
-		m_state = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : m_state;
+		initState = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : initState;
 	}
-
+	
 	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(poolType),
-		D3D12_HEAP_FLAG_NONE, &desc, m_state, nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
+		D3D12_HEAP_FLAG_NONE, &desc, m_states[0], nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 
 	// Allocate descriptor pool
@@ -1267,8 +1364,9 @@ bool RawBuffer::Upload(const CommandList &commandList, Resource &resourceUpload,
 	subresourceData.RowPitch = static_cast<uint32_t>(uploadBufferSize);
 	subresourceData.SlicePitch = subresourceData.RowPitch;
 
-	dstState = dstState ? dstState : m_state;
-	if (m_state != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
+	const auto &curState = m_states[0];
+	dstState = dstState ? dstState : curState;
+	if (curState != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
 	M_RETURN(UpdateSubresources(const_cast<CommandList&>(commandList).GetCommandList().get(),
 		m_resource.get(), resourceUpload.get(), 0, 0, 1, &subresourceData) <= 0, clog,
 		"Failed to upload the resource.", false);
@@ -1371,16 +1469,18 @@ bool RawBuffer::create(const Device &device, uint32_t byteWidth, ResourceFlags r
 	const auto desc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth, resourceFlags);
 
 	// Determine initial state
-	if (state) m_state = state;
+	m_states.resize(1);
+	auto &initState = m_states[0];
+	if (state) initState = state;
 	else
 	{
-		m_state = numSRVs > 0 ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+		initState = numSRVs > 0 ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
 			D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE : D3D12_RESOURCE_STATE_COMMON;
-		m_state = numUAVs > 0 ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : m_state;
+		initState = numUAVs > 0 ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : initState;
 	}
 
 	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(poolType),
-		D3D12_HEAP_FLAG_NONE, &desc, m_state, nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
+		D3D12_HEAP_FLAG_NONE, &desc, initState, nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 
 	// Allocate descriptor pool
@@ -1657,9 +1757,8 @@ bool IndexBuffer::Create(const Device &device, uint32_t byteWidth, Format format
 	const uint32_t stride = format == DXGI_FORMAT_R32_UINT ? sizeof(uint32_t) : sizeof(uint16_t);
 
 	// Determine initial state
-	if (state) m_state = state;
-	else m_state = hasSRV ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE :
-		D3D12_RESOURCE_STATE_INDEX_BUFFER;
+	state = state ? state : (hasSRV ? D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE :
+		D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
 	N_RETURN(TypedBuffer::Create(device, byteWidth / stride, stride, format, resourceFlags,
 		poolType, state, numSRVs, firstSRVElements, numUAVs, firstUAVElements, name), false);

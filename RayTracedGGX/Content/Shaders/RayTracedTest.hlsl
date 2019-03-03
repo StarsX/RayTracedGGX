@@ -181,7 +181,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	// Trace a reflection ray.
 	RayDesc ray;
 	const float a = ROUGHNESS * ROUGHNESS;
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_hitGroupCB.Normal) : input.Nrm);
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N, true);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);

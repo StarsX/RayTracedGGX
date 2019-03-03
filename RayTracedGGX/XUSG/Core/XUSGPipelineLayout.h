@@ -5,7 +5,6 @@
 #pragma once
 
 #include "XUSGShader.h"
-#include "XUSGDescriptor.h"
 
 namespace XUSG
 {

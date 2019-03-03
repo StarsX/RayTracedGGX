@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "XUSGPipelineLayout.h"
+#include "XUSGShader.h"
 #include "XUSGInputLayout.h"
 
 namespace XUSG

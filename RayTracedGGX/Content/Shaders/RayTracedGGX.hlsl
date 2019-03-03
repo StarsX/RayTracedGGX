@@ -37,7 +37,7 @@ struct RayGenConstants
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<RayGenConstants> l_rayGenCB : register(b0);
+ConstantBuffer<RayGenConstants> l_cbRayGen : register(b0);
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
@@ -95,17 +95,17 @@ void generateCameraRay(uint3 index, out float3 origin, out float3 direction)
 	uint2 dim = DispatchRaysDimensions().xy;
 	dim.y >>= 1;
 
-	const float2 xy = index.xy + (index.z ? 0.5 : l_rayGenCB.Jitter); // jitter from the middle of the pixel.
+	const float2 xy = index.xy + (index.z ? 0.5 : l_cbRayGen.Jitter); // jitter from the middle of the pixel.
 	float2 screenPos = xy / dim * 2.0 - 1.0;
 
 	// Invert Y for Y-up-style NDC.
 	screenPos.y = -screenPos.y;
 
 	// Unproject the pixel coordinate into a ray.
-	float4 world = mul(float4(screenPos, 0.0, 1.0), l_rayGenCB.ProjToWorld);
+	float4 world = mul(float4(screenPos, 0.0, 1.0), l_cbRayGen.ProjToWorld);
 	world.xyz /= world.w;
 
-	origin = l_rayGenCB.EyePt;
+	origin = l_cbRayGen.EyePt;
 	direction = normalize(world.xyz - origin);
 }
 
@@ -186,7 +186,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	RayDesc ray;
 	const bool isCentroidSample = DispatchRaysIndex().y & 1;
 	const float a = ROUGHNESS * ROUGHNESS;
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_hitGroupCB.Normal) : input.Nrm);
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N, isCentroidSample);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);

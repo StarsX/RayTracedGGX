@@ -26,10 +26,10 @@ static int2 g_texOffsets[] =
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<min16float4>	RenderTarget;
-Texture2DArray<min16float4>	g_currentImage;
-Texture2D<min16float4>		g_historyImage;
-Texture2D<min16float2>		g_velocity;
+RWTexture2D<float4>	RenderTarget;
+Texture2DArray		g_txCurrent;
+Texture2D			g_txHistory;
+Texture2D<float2>	g_velocity;
 
 //--------------------------------------------------------------------------------------
 // Samplers
@@ -41,13 +41,13 @@ SamplerState g_sampler;
 //--------------------------------------------------------------------------------------
 min16float4 VelocityMax(int2 tex)
 {
-	min16float4 velocity = g_velocity[tex].xyxy;
+	min16float4 velocity = min16float2(g_velocity[tex]).xyxy;
 	min16float speedSq = dot(velocity.xy, velocity.xy);
 
 	min16float2 velocities[NUM_NEIGHBORS_H];
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS_H; ++i)
-		velocities[i] = g_velocity[tex + g_texOffsets[i + NUM_NEIGHBORS_H]];
+		velocities[i] = min16float2(g_velocity[tex + g_texOffsets[i + NUM_NEIGHBORS_H]]);
 
 	//[unroll]
 	for (i = 0; i < NUM_NEIGHBORS_H; ++i)
@@ -78,7 +78,7 @@ min16float3 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighbor
 	min16float3 neighbors[NUM_NEIGHBORS];
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS; ++i)
-		neighbors[i] = g_currentImage[uint3(tex + g_texOffsets[i], 1)].xyz;
+		neighbors[i] = min16float3(g_txCurrent[uint3(tex + g_texOffsets[i], 1)].xyz);
 
 	min16float3 gaussian = mu;
 
@@ -144,14 +144,14 @@ min16float3 clipColor(min16float3 color, min16float3 minColor, min16float3 maxCo
 void main(uint2 DTid : SV_DispatchThreadID)
 {
 	float2 texSize;
-	g_historyImage.GetDimensions(texSize.x, texSize.y);
+	g_txHistory.GetDimensions(texSize.x, texSize.y);
 	const float2 tex = (DTid + 0.5) / texSize;
 
-	const min16float4 current = g_currentImage[uint3(DTid, 0)];
-	const min16float4 mu = g_currentImage[uint3(DTid, 1)];
+	const min16float4 current = min16float4(g_txCurrent[uint3(DTid, 0)]);
+	const min16float4 mu = min16float4(g_txCurrent[uint3(DTid, 1)]);
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
-	min16float4 history = g_historyImage.SampleLevel(g_sampler, texBack, 0);
+	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
 	history.xyz *= history.xyz;
 	
 	min16float4 neighborMin, neighborMax;

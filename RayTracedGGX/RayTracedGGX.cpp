@@ -422,10 +422,11 @@ void RayTracedGGX::MoveToNextFrame()
 	m_fenceValues[m_frameIndex] = currentFenceValue + 1;
 }
 
-double RayTracedGGX::CalculateFrameStats(float *fTimeStep)
+double RayTracedGGX::CalculateFrameStats(float *pTimeStep)
 {
 	static int frameCnt = 0;
 	static double elapsedTime = 0.0;
+	static double previousTime = 0.0;
 	const auto totalTime = m_timer.GetTotalSeconds();
 	++frameCnt;
 
@@ -444,7 +445,8 @@ double RayTracedGGX::CalculateFrameStats(float *fTimeStep)
 		SetCustomWindowText(windowText.str().c_str());
 	}
 
-	if (fTimeStep) *fTimeStep = timeStep;
+	if (pTimeStep) *pTimeStep = static_cast<float>(totalTime - previousTime);
+	previousTime = totalTime;
 
 	return totalTime;
 }

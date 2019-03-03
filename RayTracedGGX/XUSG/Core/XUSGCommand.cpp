@@ -199,10 +199,10 @@ void CommandList::IASetVertexBuffers(uint32_t startSlot, uint32_t numViews, cons
 }
 
 void CommandList::OMSetRenderTargets(uint32_t numRenderTargetDescriptors, const RenderTargetTable &renderTargetTable,
-	const Descriptor &depthStencilView, bool rtsSingleHandleToDescriptorRange) const
+	const Descriptor *pDepthStencilView, bool rtsSingleHandleToDescriptorRange) const
 {
 	m_commandList->OMSetRenderTargets(numRenderTargetDescriptors, renderTargetTable.get(),
-		rtsSingleHandleToDescriptorRange, &depthStencilView);
+		rtsSingleHandleToDescriptorRange, pDepthStencilView);
 }
 
 void CommandList::ClearDepthStencilView(const Descriptor &depthStencilView, ClearFlags clearFlags, float depth,

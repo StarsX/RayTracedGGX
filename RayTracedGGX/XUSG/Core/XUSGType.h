@@ -10,8 +10,9 @@
 #define M_RETURN(x, o, m, r)	if (x) { o << m << endl; return r; }
 #define F_RETURN(x, o, h, r)	M_RETURN(x, o, HrToString(h), r)
 
-#define C_RETURN(x, r)			if (x) return r;
+#define C_RETURN(x, r)			if (x) return r
 #define N_RETURN(x, r)			C_RETURN(!(x), r)
+#define X_RETURN(x, f, r)		{ x = f; N_RETURN(x, r); }
 
 namespace XUSG
 {
