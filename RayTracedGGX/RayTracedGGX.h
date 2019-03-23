@@ -58,17 +58,16 @@ private:
 	bool m_isDxrSupported;
 
 	XUSG::RayTracing::Device m_device;
-	XUSG::Resource m_renderTargets[FrameCount];
+	XUSG::RenderTarget m_renderTargets[FrameCount];
 	XUSG::RayTracing::CommandList m_commandList;
 	
 	// App resources.
 	std::unique_ptr<RayTracer> m_rayTracer;
-	XUSG::DescriptorPool	m_rtvPool;
 	XUSG::RenderTargetTable	m_rtvTables[FrameCount];
-	DirectX::XMFLOAT4X4		m_proj;
-	DirectX::XMFLOAT4X4		m_view;
-	DirectX::XMFLOAT3		m_focusPt;
-	DirectX::XMFLOAT3		m_eyePt;
+	XMFLOAT4X4		m_proj;
+	XMFLOAT4X4		m_view;
+	XMFLOAT3		m_focusPt;
+	XMFLOAT3		m_eyePt;
 
 	// Synchronization objects.
 	uint32_t	m_frameIndex;
@@ -84,7 +83,7 @@ private:
 
 	// User camera interactions
 	bool m_tracking;
-	DirectX::XMFLOAT2 m_mousePt;
+	XMFLOAT2 m_mousePt;
 
 	// User external settings
 	std::string m_meshFileName;

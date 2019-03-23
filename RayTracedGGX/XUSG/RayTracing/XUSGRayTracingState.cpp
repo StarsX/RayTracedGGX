@@ -79,14 +79,14 @@ void State::SetMaxRecursionDepth(uint32_t depth)
 	m_pKeyHeader->MaxRecursionDepth = depth;
 }
 
-RayTracing::Pipeline State::CreatePipeline(PipelineCache &pipelineCache)
+RayTracing::Pipeline State::CreatePipeline(PipelineCache &pipelineCache, const wchar_t *name)
 {
-	return pipelineCache.CreatePipeline(*this);
+	return pipelineCache.CreatePipeline(*this, name);
 }
 
-RayTracing::Pipeline State::GetPipeline(PipelineCache &pipelineCache)
+RayTracing::Pipeline State::GetPipeline(PipelineCache &pipelineCache, const wchar_t *name)
 {
-	return pipelineCache.GetPipeline(*this);
+	return pipelineCache.GetPipeline(*this, name);
 }
 
 const string &State::GetKey()
@@ -161,17 +161,17 @@ void PipelineCache::SetPipeline(const string &key, const RayTracing::Pipeline &p
 	m_pipelines[key] = pipeline;
 }
 
-RayTracing::Pipeline PipelineCache::CreatePipeline(State &state)
+RayTracing::Pipeline PipelineCache::CreatePipeline(State &state, const wchar_t *name)
 {
-	return createPipeline(state.GetKey());
+	return createPipeline(state.GetKey(), name);
 }
 
-RayTracing::Pipeline PipelineCache::GetPipeline(State &state)
+RayTracing::Pipeline PipelineCache::GetPipeline(State &state, const wchar_t *name)
 {
-	return getPipeline(state.GetKey());
+	return getPipeline(state.GetKey(), name);
 }
 
-RayTracing::Pipeline PipelineCache::createPipeline(const string &key)
+RayTracing::Pipeline PipelineCache::createPipeline(const string &key, const wchar_t *name)
 {
 	// Get header
 	const auto& keyHeader = reinterpret_cast<const State::KeyHeader&>(key[0]);
@@ -253,17 +253,23 @@ RayTracing::Pipeline PipelineCache::createPipeline(const string &key)
 		H_RETURN(m_device.Native->CreateStateObject(pDesc, IID_PPV_ARGS(&pipeline.Native)), cerr,
 			L"Couldn't create DirectX Raytracing state object.\n", pipeline);
 
+	if (name)
+	{
+		pipeline.Native->SetName(name);
+		pipeline.Fallback->GetStateObject()->SetName(name);
+	}
+
 	return pipeline;
 }
 
-RayTracing::Pipeline PipelineCache::getPipeline(const string &key)
+RayTracing::Pipeline PipelineCache::getPipeline(const string &key, const wchar_t *name)
 {
 	const auto pPipeline = m_pipelines.find(key);
 
 	// Create one, if it does not exist
 	if (pPipeline == m_pipelines.end())
 	{
-		const auto pipeline = createPipeline(key);
+		const auto pipeline = createPipeline(key, name);
 		m_pipelines[key] = pipeline;
 
 		return pipeline;

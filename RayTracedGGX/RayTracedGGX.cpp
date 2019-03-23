@@ -129,35 +129,17 @@ void RayTracedGGX::LoadPipeline()
 
 	m_descriptorTableCache.SetDevice(m_device.Common);
 
-	// Create descriptor heaps.
-	{
-		// Describe and create a render target view (RTV) descriptor heap.
-		D3D12_DESCRIPTOR_HEAP_DESC rtvHeapDesc = {};
-		rtvHeapDesc.NumDescriptors = FrameCount;
-		rtvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_RTV;
-		rtvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-		ThrowIfFailed(m_device.Common->CreateDescriptorHeap(&rtvHeapDesc, IID_PPV_ARGS(&m_rtvPool)));
-	}
-
 	// Create frame resources.
+	// Create a RTV and a command allocator for each frame.
+	for (auto n = 0u; n < FrameCount; ++n)
 	{
-		const auto strideRtv = m_device.Common->GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-		Descriptor rtv(m_rtvPool->GetCPUDescriptorHandleForHeapStart());
+		m_renderTargets[n].CreateFromSwapChain(m_device.Common, m_swapChain, n);
 
-		// Create a RTV and a command allocator for each frame.
-		for (auto n = 0u; n < FrameCount; n++)
-		{
-			ThrowIfFailed(m_swapChain->GetBuffer(n, IID_PPV_ARGS(&m_renderTargets[n])));
-			m_device.Common->CreateRenderTargetView(m_renderTargets[n].get(), nullptr, rtv);
+		Util::DescriptorTable rtvTable;
+		rtvTable.SetDescriptors(0, 1, &m_renderTargets[n].GetRTV());
+		m_rtvTables[n] = rtvTable.GetRtvTable(m_descriptorTableCache);
 
-			Util::DescriptorTable rtvTable;
-			rtvTable.SetDescriptors(0, 1, &rtv);
-			m_rtvTables[n] = rtvTable.GetRtvTable(m_descriptorTableCache);
-
-			rtv.Offset(strideRtv);
-
-			ThrowIfFailed(m_device.Common->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[n])));
-		}
+		ThrowIfFailed(m_device.Common->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[n])));
 	}
 }
 
@@ -524,9 +506,9 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 // Copy the raytracing output to the backbuffer.
 void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
 {
-	TextureCopyLocation dstCopyLoc(m_renderTargets[m_frameIndex].get(), 0);
+	TextureCopyLocation dstCopyLoc(m_renderTargets[m_frameIndex].GetResource().get(), 0);
 	TextureCopyLocation srcCopyLoc(m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().get(), 0);
-	m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_COPY_DEST));
+	m_renderTargets[m_frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_COPY_DEST);
 	m_commandList.CopyTextureRegion(dstCopyLoc, 0, 0, 0, srcCopyLoc);
-	m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(), D3D12_RESOURCE_STATE_COPY_DEST, D3D12_RESOURCE_STATE_PRESENT));
+	m_renderTargets[m_frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_PRESENT);
 }

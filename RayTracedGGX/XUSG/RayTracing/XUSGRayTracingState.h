@@ -61,8 +61,8 @@ namespace XUSG
 			void SetGlobalPipelineLayout(const XUSG::PipelineLayout &layout);
 			void SetMaxRecursionDepth(uint32_t depth);
 
-			Pipeline CreatePipeline(PipelineCache &pipelineCache);
-			Pipeline GetPipeline(PipelineCache &pipelineCache);
+			Pipeline CreatePipeline(PipelineCache &pipelineCache, const wchar_t *name = nullptr);
+			Pipeline GetPipeline(PipelineCache &pipelineCache, const wchar_t *name = nullptr);
 
 			const std::string &GetKey();
 
@@ -88,12 +88,12 @@ namespace XUSG
 			void SetDevice(const Device &device);
 			void SetPipeline(const std::string &key, const Pipeline &pipeline);
 
-			Pipeline CreatePipeline(State &state);
-			Pipeline GetPipeline(State &state);
+			Pipeline CreatePipeline(State &state, const wchar_t *name = nullptr);
+			Pipeline GetPipeline(State &state, const wchar_t *name = nullptr);
 
 		protected:
-			Pipeline createPipeline(const std::string &key);
-			Pipeline getPipeline(const std::string &key);
+			Pipeline createPipeline(const std::string &key, const wchar_t *name);
+			Pipeline getPipeline(const std::string &key, const wchar_t *name);
 
 			Device m_device;
 

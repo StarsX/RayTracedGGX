@@ -9,8 +9,6 @@
 
 namespace XUSG
 {
-	using Microsoft::WRL::ComPtr;
-
 	namespace RayTracing
 	{
 		enum class API

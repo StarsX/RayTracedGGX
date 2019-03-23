@@ -53,8 +53,8 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 	N_RETURN(createGroundMesh(vbUploads[GROUND], ibUploads[GROUND]), false);
 
 	// Create raytracing pipelines
-	createInputLayout();
-	createPipelineLayouts();
+	N_RETURN(createInputLayout(), false);
+	N_RETURN(createPipelineLayouts(), false);
 	N_RETURN(createPipelines(), false);
 
 	// Create output view and build acceleration structures
@@ -67,15 +67,7 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 		velocity.Create(m_device.Common, width, height, DXGI_FORMAT_R16G16_FLOAT);
 	m_depth.Create(m_device.Common, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 	N_RETURN(buildAccelerationStructures(geometries), false);
-	buildShaderTables();
-
-	// Create the sampler
-	{
-		Util::DescriptorTable samplerTable;
-		const auto samplerAnisoWrap = SamplerPreset::ANISOTROPIC_WRAP;
-		samplerTable.SetSamplers(0, 1, &samplerAnisoWrap, m_descriptorTableCache);
-		m_samplerTable = samplerTable.GetSamplerTable(m_descriptorTableCache);
-	}
+	N_RETURN(buildShaderTables(), false);
 
 	return true;
 }
@@ -333,7 +325,7 @@ bool RayTracer::createGroundMesh(Resource &vbUpload,Resource &ibUpload)
 	return true;
 }
 
-void RayTracer::createInputLayout()
+bool RayTracer::createInputLayout()
 {
 	const auto offset = D3D12_APPEND_ALIGNED_ELEMENT;
 
@@ -344,10 +336,12 @@ void RayTracer::createInputLayout()
 		{ "NORMAL",		0, DXGI_FORMAT_R32G32B32_FLOAT, 0, offset,	D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 }
 	};
 
-	m_inputLayout = m_graphicsPipelineCache.CreateInputLayout(inputElementDescs);
+	X_RETURN(m_inputLayout, m_graphicsPipelineCache.CreateInputLayout(inputElementDescs), false);
+
+	return true;
 }
 
-void RayTracer::createPipelineLayouts()
+bool RayTracer::createPipelineLayouts()
 {
 	// Global pipeline layout
 	// This is a pipeline layout that is shared across all raytracing shaders invoked during a DispatchRays() call.
@@ -358,8 +352,8 @@ void RayTracer::createPipelineLayouts()
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout.SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
-		m_pipelineLayouts[GLOBAL_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_NONE, NumUAVs, L"RayTracerGlobalPipelineLayout");
+		X_RETURN(m_pipelineLayouts[GLOBAL_LAYOUT], pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_NONE, NumUAVs, L"RayTracerGlobalPipelineLayout"), false);
 	}
 
 	// Local pipeline layout for RayGen shader
@@ -367,8 +361,8 @@ void RayTracer::createPipelineLayouts()
 	{
 		RayTracing::PipelineLayout pipelineLayout;
 		pipelineLayout.SetConstants(0, SizeOfInUint32(RayGenConstants), 0);
-		m_pipelineLayouts[RAY_GEN_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerRayGenPipelineLayout");
+		X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerRayGenPipelineLayout"), false);
 	}
 
 	// Local pipeline layout for Hit group
@@ -376,16 +370,16 @@ void RayTracer::createPipelineLayouts()
 	{
 		RayTracing::PipelineLayout pipelineLayout;
 		pipelineLayout.SetConstants(0, SizeOfInUint32(HitGroupConstants), 1);
-		m_pipelineLayouts[HIT_GROUP_LAYOUT] = pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerHitGroupPipelineLayout");
+		X_RETURN(m_pipelineLayouts[HIT_GROUP_LAYOUT], pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_LOCAL_ROOT_SIGNATURE, NumUAVs, L"RayTracerHitGroupPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for g-buffer pass
 	{
 		Util::PipelineLayout pipelineLayout;
 		pipelineLayout.SetConstants(0, SizeOfInUint32(BasePassConstants), 0, 0, Shader::Stage::VS);
-		m_pipelineLayouts[GBUFFER_PASS_LAYOUT] = pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout");
+		X_RETURN(m_pipelineLayouts[GBUFFER_PASS_LAYOUT], pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for temporal SS
@@ -397,9 +391,11 @@ void RayTracer::createPipelineLayouts()
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
-		m_pipelineLayouts[TEMPORAL_SS_LAYOUT] = pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
-			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"TemporalSSPipelineLayout");
+		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"TemporalSSPipelineLayout"), false);
 	}
+
+	return true;
 }
 
 bool RayTracer::createPipelines()
@@ -418,7 +414,9 @@ bool RayTracer::createPipelines()
 			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 		state.SetMaxRecursionDepth(3);
-		m_rayTracingPipelines[TEST] = state.GetPipeline(m_rayTracingPipelineCache);
+		m_rayTracingPipelines[TEST] = state.GetPipeline(m_rayTracingPipelineCache, L"RaytracingTest");
+
+		N_RETURN(m_rayTracingPipelines[TEST].Native || m_rayTracingPipelines[TEST].Fallback, false);
 	}
 
 	{
@@ -435,7 +433,9 @@ bool RayTracer::createPipelines()
 			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 		state.SetMaxRecursionDepth(3);
-		m_rayTracingPipelines[GGX] = state.GetPipeline(m_rayTracingPipelineCache);
+		m_rayTracingPipelines[GGX] = state.GetPipeline(m_rayTracingPipelineCache, L"RaytracingGGX");
+
+		N_RETURN(m_rayTracingPipelines[GGX].Native || m_rayTracingPipelines[GGX].Fallback, false);
 	}
 
 	{
@@ -451,7 +451,7 @@ bool RayTracer::createPipelines()
 		state.OMSetNumRenderTargets(1);
 		state.OMSetRTVFormat(0, DXGI_FORMAT_R16G16_FLOAT);
 		state.OMSetDSVFormat(DXGI_FORMAT_D24_UNORM_S8_UINT);
-		m_pipelines[GBUFFER_PASS] = state.GetPipeline(m_graphicsPipelineCache);
+		X_RETURN(m_pipelines[GBUFFER_PASS], state.GetPipeline(m_graphicsPipelineCache, L"GBufferPass"), false);
 	}
 
 	{
@@ -460,13 +460,13 @@ bool RayTracer::createPipelines()
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
 		state.SetShader(shader);
-		m_pipelines[TEMPORAL_SS] = state.GetPipeline(m_computePipelineCache);
+		X_RETURN(m_pipelines[TEMPORAL_SS], state.GetPipeline(m_computePipelineCache, L"TemporalSS"), false);
 	}
 
 	return true;
 }
 
-void RayTracer::createDescriptorTables()
+bool RayTracer::createDescriptorTables()
 {
 	//m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2);
 
@@ -477,7 +477,8 @@ void RayTracer::createDescriptorTables()
 		descriptors[NUM_MESH] = m_topLevelAS.GetResult().GetUAV();
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		const auto asTable = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		N_RETURN(asTable, false);
 	}
 
 	for (auto i = 0u; i < FrameCount; ++i)
@@ -486,14 +487,14 @@ void RayTracer::createDescriptorTables()
 		{
 			Util::DescriptorTable descriptorTable;
 			descriptorTable.SetDescriptors(0, 1, &m_outputViews[i][UAV_TABLE_OUTPUT].GetUAV());
-			m_uavTables[i][UAV_TABLE_OUTPUT] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+			X_RETURN(m_uavTables[i][UAV_TABLE_OUTPUT], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 		}
 
 		// Temporal SS output UAV
 		{
 			Util::DescriptorTable descriptorTable;
 			descriptorTable.SetDescriptors(0, 1, &m_outputViews[i][UAV_TABLE_TSAMP].GetUAV());
-			m_uavTables[i][UAV_TABLE_TSAMP] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+			X_RETURN(m_uavTables[i][UAV_TABLE_TSAMP], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 		}
 	}
 
@@ -503,7 +504,7 @@ void RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_indexBuffers[i].GetSRV();
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		m_srvTables[SRV_TABLE_IB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 	}
 
 	// Vertex buffer SRVs
@@ -512,7 +513,7 @@ void RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i].GetSRV();
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		m_srvTables[SRV_TABLE_VB] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 	}
 
 	// Temporal SS input SRVs
@@ -526,7 +527,7 @@ void RayTracer::createDescriptorTables()
 		};
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		m_srvTables[SRV_TABLE_TS + i] = descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache);
+		X_RETURN(m_srvTables[SRV_TABLE_TS + i], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 	}
 
 	// RTV tables
@@ -534,8 +535,18 @@ void RayTracer::createDescriptorTables()
 	{
 		Util::DescriptorTable rtvTable;
 		rtvTable.SetDescriptors(0, 1, &m_velocities[i].GetRTV());
-		m_rtvTables[i] = rtvTable.GetRtvTable(m_descriptorTableCache);
+		X_RETURN(m_rtvTables[i], rtvTable.GetRtvTable(m_descriptorTableCache), false);
 	}
+
+	// Create the sampler
+	{
+		Util::DescriptorTable samplerTable;
+		const auto samplerAnisoWrap = SamplerPreset::ANISOTROPIC_WRAP;
+		samplerTable.SetSamplers(0, 1, &samplerAnisoWrap, m_descriptorTableCache);
+		X_RETURN(m_samplerTable, samplerTable.GetSamplerTable(m_descriptorTableCache), false);
+	}
+
+	return true;
 }
 
 bool RayTracer::buildAccelerationStructures(Geometry *geometries)
@@ -572,7 +583,7 @@ bool RayTracer::buildAccelerationStructures(Geometry *geometries)
 	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device, m_scratch, scratchSize), false);
 
 	// Get descriptor pool and create descriptor tables
-	createDescriptorTables();
+	N_RETURN(createDescriptorTables(), false);
 	const auto &descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
@@ -598,7 +609,7 @@ bool RayTracer::buildAccelerationStructures(Geometry *geometries)
 	return true;
 }
 
-void RayTracer::buildShaderTables()
+bool RayTracer::buildShaderTables()
 {
 	// Get shader identifiers.
 	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
@@ -608,20 +619,22 @@ void RayTracer::buildShaderTables()
 		for (auto i = 0ui8; i < FrameCount; ++i)
 		{
 			// Ray gen shader table
-			m_rayGenShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
-				(L"RayGenShaderTable" + to_wstring(i)).c_str());
-			m_rayGenShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
-				RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants)));
+			N_RETURN(m_rayGenShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
+				(L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
+			N_RETURN(m_rayGenShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
+				RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants))), false);
 
 			// Hit group shader table
-			m_hitGroupShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(HitGroupConstants), L"HitGroupShaderTable");
-			m_hitGroupShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
-				HitGroupName, &HitGroupConstants(), sizeof(HitGroupConstants)));
+			N_RETURN(m_hitGroupShaderTables[i][k].Create(m_device, 1, shaderIDSize + sizeof(HitGroupConstants),
+				L"HitGroupShaderTable"), false);
+			N_RETURN(m_hitGroupShaderTables[i][k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
+				HitGroupName, &HitGroupConstants(), sizeof(HitGroupConstants))), false);
 		}
 
 		// Miss shader table
-		m_missShaderTables[k].Create(m_device, 1, shaderIDSize, L"MissShaderTable");
-		m_missShaderTables[k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k], MissShaderName));
+		N_RETURN(m_missShaderTables[k].Create(m_device, 1, shaderIDSize, L"MissShaderTable"), false);
+		N_RETURN(m_missShaderTables[k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
+			MissShaderName)), false);
 	}
 }
 

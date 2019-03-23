@@ -110,14 +110,13 @@ protected:
 	bool createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
 	bool createIB(uint32_t numIndices, const uint32_t *pData, XUSG::Resource &ibUpload);
 	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
-
-	void createInputLayout();
-	void createPipelineLayouts();
+	bool createInputLayout();
+	bool createPipelineLayouts();
 	bool createPipelines();
-	void createDescriptorTables();
-
+	bool createDescriptorTables();
 	bool buildAccelerationStructures(XUSG::RayTracing::Geometry *geometries);
-	void buildShaderTables();
+	bool buildShaderTables();
+
 	void updateAccelerationStructures(uint32_t frameIndex);
 	void rayTrace(uint32_t frameIndex);
 	void gbufferPass(uint32_t frameIndex);
