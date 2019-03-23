@@ -21,25 +21,25 @@ namespace XUSG
 		public Microsoft::WRL::ComPtr<T>
 	{
 	public:
-		using element_type = InterfaceType;
+		using element_type = T;
 
-		com_ptr() : ComPtr() {}
-		com_ptr(decltype(__nullptr) null) : ComPtr(null) {}
-
-		template<class U>
-		com_ptr(U *other) : ComPtr(other) {}
-		com_ptr(const ComPtr &other) : ComPtr(other) {}
+		com_ptr() : Microsoft::WRL::ComPtr<T>::ComPtr() {}
+		com_ptr(decltype(__nullptr) null) : Microsoft::WRL::ComPtr<T>::ComPtr(null) {}
 
 		template<class U>
-		com_ptr(const ComPtr<U> &other, typename Microsoft::WRL::Details::EnableIf<__is_convertible_to(U*, T*), void *>::type *t = 0) :
-			ComPtr(other, t) {}
-		com_ptr(ComPtr &&other) : ComPtr(other) {}
+		com_ptr(U *other) : Microsoft::WRL::ComPtr<T>::ComPtr(other) {}
+		com_ptr(const Microsoft::WRL::ComPtr<T> &other) : Microsoft::WRL::ComPtr<T>::ComPtr(other) {}
 
 		template<class U>
-		com_ptr(ComPtr<U>&& other, typename Microsoft::WRL::Details::EnableIf<__is_convertible_to(U*, T*), void *>::type *t = 0) :
-			ComPtr(other, t) {}
+		com_ptr(const Microsoft::WRL::ComPtr<U> &other, typename Microsoft::WRL::Details::EnableIf<__is_convertible_to(U*, T*), void *>::type *t = 0) :
+			Microsoft::WRL::ComPtr<T>::ComPtr(other, t) {}
+		com_ptr(Microsoft::WRL::ComPtr<T> &&other) : Microsoft::WRL::ComPtr<T>::ComPtr(other) {}
 
-		T *get() const { return Get(); }
+		template<class U>
+		com_ptr(Microsoft::WRL::ComPtr<U>&& other, typename Microsoft::WRL::Details::EnableIf<__is_convertible_to(U*, T*), void *>::type *t = 0) :
+			Microsoft::WRL::ComPtr<T>::ComPtr(other, t) {}
+
+		T *get() const { return Microsoft::WRL::ComPtr<T>::Get(); }
 	};
 
 	// Device and blobs

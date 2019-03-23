@@ -53,6 +53,7 @@
       <PrecompiledHeader>Use</PrecompiledHeader>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
       <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;$(SolutionDir)Packages\WinPixEventRuntime.1.0.180612001\bin\WinPixEventRuntime.lib;$(SolutionDir)Build_VS15\$(Platform)\$(Configuration)\Output\FallbackLayer\FallbackLayer.lib</AdditionalDependencies>
@@ -76,6 +77,7 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
       <PrecompiledHeader>Use</PrecompiledHeader>
       <EnableEnhancedInstructionSet>AdvancedVectorExtensions2</EnableEnhancedInstructionSet>
       <FloatingPointModel>Fast</FloatingPointModel>
+      <ConformanceMode>true</ConformanceMode>
     </ClCompile>
     <Link>
       <EnableCOMDATFolding>true</EnableCOMDATFolding>
