@@ -636,6 +636,8 @@ bool RayTracer::buildShaderTables()
 		N_RETURN(m_missShaderTables[k].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[k],
 			MissShaderName)), false);
 	}
+
+	return true;
 }
 
 void RayTracer::updateAccelerationStructures(uint32_t frameIndex)

@@ -255,8 +255,8 @@ RayTracing::Pipeline PipelineCache::createPipeline(const string &key, const wcha
 
 	if (name)
 	{
-		pipeline.Native->SetName(name);
-		pipeline.Fallback->GetStateObject()->SetName(name);
+		if (pipeline.Native) pipeline.Native->SetName(name);
+		if (pipeline.Fallback) pipeline.Fallback->GetStateObject()->SetName(name);
 	}
 
 	return pipeline;
