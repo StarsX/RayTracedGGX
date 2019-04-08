@@ -31,15 +31,13 @@ namespace XUSG
 		Descriptor		GetCBV(uint32_t i = 0) const;
 
 	protected:
-		bool allocateDescriptorPool(uint32_t numDescriptors, const wchar_t *name);
+		Descriptor allocateCbvPool(const wchar_t *name);
 
 		Device			m_device;
 
 		Resource		m_resource;
-		DescriptorPool	m_cbvPool;
-		std::vector<Descriptor> m_cbvs;
-		Descriptor		m_currentCbv;
-		
+		std::vector<DescriptorPool>	m_cbvPools;
+		std::vector<Descriptor>	m_cbvs;
 		std::vector<uint32_t> m_cbvOffsets;
 
 		void			*m_pDataBegin;
@@ -67,17 +65,14 @@ namespace XUSG
 			//CPDXBuffer &pDstBuffer, const CPDXBuffer &pSrcBuffer);
 	protected:
 		void setDevice(const Device &device);
-		bool allocateDescriptorPool(uint32_t numDescriptors);
+		Descriptor allocateSrvUavPool();
 
 		Device			m_device;
 
 		Resource		m_resource;
-		DescriptorPool	m_srvUavPool;
+		std::vector<DescriptorPool>	m_srvUavPools;
 		std::vector<Descriptor> m_srvs;
-		Descriptor		m_currentSrvUav;
-
 		std::vector<ResourceState> m_states;
-		uint32_t		m_srvUavStride;
 
 		std::wstring	m_name;
 	};
@@ -102,12 +97,11 @@ namespace XUSG
 			ResourceState dstState = ResourceState(0));
 		bool Upload(const CommandList &commandList, Resource &resourceUpload, const uint8_t *pData,
 			uint8_t stride = sizeof(float), ResourceState dstState = ResourceState(0));
-
-		void CreateSRVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1,
+		bool CreateSRVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1,
 			uint8_t sampleCount = 1, bool isCubeMap = false);
-		void CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format format = Format(0),
+		bool CreateSRVLevels(uint32_t arraySize, uint8_t numMips, Format format = Format(0),
 			uint8_t sampleCount = 1, bool isCubeMap = false);
-		void CreateUAVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1);
+		bool CreateUAVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1);
 
 		Descriptor GetUAV(uint8_t i = 0) const;
 		Descriptor GetSRVLevel(uint8_t i) const;
@@ -151,13 +145,10 @@ namespace XUSG
 			uint32_t arraySize, Format format, uint8_t numMips, uint8_t sampleCount,
 			ResourceFlags resourceFlags, ResourceState state, const float *pClearColor,
 			bool isCubeMap, const wchar_t *name);
-		bool allocateRtvPool(uint32_t numDescriptors);
+		Descriptor allocateRtvPool();
 
-		DescriptorPool	m_rtvPool;
+		std::vector<DescriptorPool>	m_rtvPools;
 		std::vector<std::vector<Descriptor>> m_rtvs;
-		Descriptor		m_currentRtv;
-
-		uint32_t		m_rtvStride;
 	};
 
 	//--------------------------------------------------------------------------------------
@@ -194,15 +185,12 @@ namespace XUSG
 			uint8_t numMips, uint8_t sampleCount, Format &format, ResourceFlags resourceFlags,
 			ResourceState state, float clearDepth, uint8_t clearStencil, bool &hasSRV,
 			Format &formatStencil, bool isCubeMap, const wchar_t *name);
-		bool allocateDsvPool(uint32_t numDescriptors);
+		Descriptor allocateDsvPool();
 
-		DescriptorPool m_dsvPool;
+		std::vector<DescriptorPool> m_dsvPools;
 		std::vector<std::vector<Descriptor>> m_dsvs;
 		std::vector<std::vector<Descriptor>> m_readOnlyDsvs;
 		Descriptor	m_stencilSrv;
-		Descriptor	m_currentDsv;
-
-		uint32_t	m_dsvStride;
 		Format		m_dsvFormat;
 	};
 
@@ -220,10 +208,9 @@ namespace XUSG
 			Format format, ResourceFlags resourceFlags = ResourceFlags(0), uint8_t numMips = 1,
 			PoolType poolType = PoolType(1), ResourceState state = ResourceState(0),
 			const wchar_t *name = nullptr);
-
-		void CreateSRVs(Format format = Format(0), uint8_t numMips = 1);
-		void CreateSRVLevels(uint8_t numMips, Format format = Format(0));
-		void CreateUAVs(Format format = Format(0), uint8_t numMips = 1);
+		bool CreateSRVs(Format format = Format(0), uint8_t numMips = 1);
+		bool CreateSRVLevels(uint8_t numMips, Format format = Format(0));
+		bool CreateUAVs(Format format = Format(0), uint8_t numMips = 1);
 		
 		Descriptor GetUAV(uint8_t i = 0) const;
 		Descriptor GetSRVLevel(uint8_t i) const;
@@ -251,10 +238,9 @@ namespace XUSG
 			const wchar_t *name = nullptr);
 		bool Upload(const CommandList &commandList, Resource &resourceUpload,
 			const void *pData, ResourceState dstState = ResourceState(0));
-
-		void CreateSRVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,
+		bool CreateSRVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,
 			uint32_t numDescriptors = 1);
-		void CreateUAVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,
+		bool CreateUAVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,
 			uint32_t numDescriptors = 1);
 
 		Descriptor GetUAV(uint32_t i = 0) const;
@@ -291,9 +277,9 @@ namespace XUSG
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
 			const wchar_t *name = nullptr);
 		
-		void CreateSRVs(uint32_t numElements, uint32_t stride,
+		bool CreateSRVs(uint32_t numElements, uint32_t stride,
 			const uint32_t *firstElements = nullptr, uint32_t numDescriptors = 1);
-		void CreateUAVs(uint32_t numElements, uint32_t stride,
+		bool CreateUAVs(uint32_t numElements, uint32_t stride,
 			const uint32_t *firstElements = nullptr, uint32_t numDescriptors = 1);
 	};
 
@@ -314,9 +300,9 @@ namespace XUSG
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
 			const wchar_t *name = nullptr);
 		
-		void CreateSRVs(uint32_t numElements, Format format, uint32_t stride,
+		bool CreateSRVs(uint32_t numElements, Format format, uint32_t stride,
 			const uint32_t *firstElements = nullptr, uint32_t numDescriptors = 1);
-		void CreateUAVs(uint32_t numElements, Format format, uint32_t stride,
+		bool CreateUAVs(uint32_t numElements, Format format, uint32_t stride,
 			const uint32_t *firstElements = nullptr, uint32_t numDescriptors = 1);
 	};
 

@@ -58,7 +58,7 @@ namespace XUSG
 		virtual void SetCompute32BitConstants(uint32_t index, uint32_t num32BitValuesToSet,
 			const void *pSrcData, uint32_t destOffsetIn32BitValues = 0) const;
 		virtual void SetGraphics32BitConstants(uint32_t index, uint32_t num32BitValuesToSet,
-			const void *pSrcData, uint32_t destOffsetIn32BitValues = 0) const;;
+			const void *pSrcData, uint32_t destOffsetIn32BitValues = 0) const;
 		virtual void SetComputeRootConstantBufferView(uint32_t index, const Resource &resource, int offset = 0) const;
 		virtual void SetGraphicsRootConstantBufferView(uint32_t index, const Resource &resource, int offset = 0) const;
 		virtual void SetComputeRootShaderResourceView(uint32_t index, const Resource &resource, int offset = 0) const;
