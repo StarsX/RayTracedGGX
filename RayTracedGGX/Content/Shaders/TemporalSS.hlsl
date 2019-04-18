@@ -66,8 +66,8 @@ min16float4 VelocityMax(int2 tex)
 //--------------------------------------------------------------------------------------
 // Minimum and maxinum of the neighbor samples, returning Gaussian blurred color
 //--------------------------------------------------------------------------------------
-min16float3 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighborMax,
-	min16float3 mu, min16float3 current, int2 tex, min16float gamma = 1.0)
+min16float4 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighborMax,
+	min16float4 center, min16float3 current, int2 tex, min16float gamma = 1.0)
 {
 	static min16float weights[] =
 	{
@@ -75,15 +75,16 @@ min16float3 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighbor
 		0.25, 0.25, 0.25, 0.25
 	};
 
-	min16float3 neighbors[NUM_NEIGHBORS];
+	min16float4 neighbors[NUM_NEIGHBORS];
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS; ++i)
-		neighbors[i] = min16float3(g_txCurrent[uint3(tex + g_texOffsets[i], 1)].xyz);
+		neighbors[i] = min16float4(g_txCurrent[uint3(tex + g_texOffsets[i], 1)]);
 
-	min16float3 gaussian = mu;
+	min16float4 gaussian = center;
 
 #if	_VARIANCE_AABB_
 #define	m1	mu
+	min16float3 mu = center.xyz;
 	min16float3 m2 = m1 * m1 + current * current;
 	m1 = mu + current;
 #else
@@ -98,8 +99,8 @@ min16float3 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighbor
 		gaussian += neighbors[i] * weights[i];
 
 #if	_VARIANCE_AABB_
-		m1 += neighbors[i];
-		m2 += neighbors[i] * neighbors[i];
+		m1 += neighbors[i].xyz;
+		m2 += neighbors[i].xyz * neighbors[i].xyz;
 #else
 		neighborMin.xyz = min(neighbors[i], neighborMin.xyz);
 		neighborMax.xyz = max(neighbors[i], neighborMax.xyz);
@@ -148,24 +149,27 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const float2 tex = (DTid + 0.5) / texSize;
 
 	const min16float4 current = min16float4(g_txCurrent[uint3(DTid, 0)]);
-	const min16float4 mu = min16float4(g_txCurrent[uint3(DTid, 1)]);
+	const min16float4 curCent = min16float4(g_txCurrent[uint3(DTid, 1)]);	// Centroid sample for color clipping
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
 	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
 	history.xyz *= history.xyz;
-	
-	min16float4 neighborMin, neighborMax;
-	min16float3 filtered = NeighborMinMax(neighborMin, neighborMax, mu.xyz, current.xyz, DTid);
 
 	const min16float speed = abs(velocity.x) + abs(velocity.y);
-	history.w = speed > 0.0 ? 0.25 : history.w;
 
-	if (speed > 0.0 || current.w <= 0.0 || mu.w <= 0.0)
+	min16float4 neighborMin, neighborMax;
+	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, curCent, current.xyz, DTid);
+	//filtered.xyz = lerp(current.xyz, filtered.xyz, saturate(speed * 32.0));
+
+	if (speed > 0.0)
 		history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
 
+	history.w = speed > 0.0 ? 0.125 : history.w;
 	const min16float alpha = history.w + 1.0 / 255.0;
-	const min16float blend = history.w / alpha;
-	min16float3 result = history.w < 1.0 ? lerp(current.xyz, history.xyz, blend) : history.xyz;
+	min16float blend = history.w < 1.0 ? history.w / alpha : 1.0;
+	blend = filtered.w > 0.0 ? blend : 0.0;
+
+	const min16float3 result = lerp(current.xyz, history.xyz, blend);
 
 	RenderTarget[DTid] = min16float4(sqrt(result), alpha);
 	//RenderTarget[DTid] = min16float4(result, alpha) * current.w;
