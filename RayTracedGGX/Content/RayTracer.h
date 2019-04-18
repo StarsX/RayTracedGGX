@@ -67,6 +67,7 @@ protected:
 	{
 		GBUFFER_PASS,
 		TEMPORAL_SS,
+		TEMPORAL_AA,
 
 		NUM_PIPELINE
 	};

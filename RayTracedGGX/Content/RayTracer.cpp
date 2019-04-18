@@ -193,12 +193,9 @@ void RayTracer::Render(uint32_t frameIndex)
 	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	updateAccelerationStructures(frameIndex);
 	rayTrace(frameIndex);
-
-	if (m_pipeIndex == GGX)
-	{
-		gbufferPass(frameIndex);
-		temporalSS(frameIndex);
-	}
+	
+	gbufferPass(frameIndex);
+	temporalSS(frameIndex);
 }
 
 void RayTracer::ClearHistory()
@@ -214,10 +211,9 @@ void RayTracer::ClearHistory()
 
 const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, ResourceState dstState)
 {
-	const auto uavOut = m_pipeIndex == GGX ? UAV_TABLE_TSAMP : UAV_TABLE_OUTPUT;
-	if (dstState) m_outputViews[frameIndex][uavOut].Barrier(m_commandList, dstState);
+	if (dstState) m_outputViews[frameIndex][UAV_TABLE_TSAMP].Barrier(m_commandList, dstState);
 
-	return m_outputViews[frameIndex][uavOut];
+	return m_outputViews[frameIndex][UAV_TABLE_TSAMP];
 }
 
 bool RayTracer::createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, Resource &vbUpload)
@@ -463,6 +459,15 @@ bool RayTracer::createPipelines()
 		X_RETURN(m_pipelines[TEMPORAL_SS], state.GetPipeline(m_computePipelineCache, L"TemporalSS"), false);
 	}
 
+	{
+		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 0, L"TemporalAA.cso");
+
+		Compute::State state;
+		state.SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
+		state.SetShader(shader);
+		X_RETURN(m_pipelines[TEMPORAL_AA], state.GetPipeline(m_computePipelineCache, L"TemporalAA"), false);
+	}
+
 	return true;
 }
 
@@ -674,8 +679,8 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
 
 	// Fallback layer has no depth
-	m_commandList.DispatchRays(m_rayTracingPipelines[m_pipeIndex], m_viewport.x, m_pipeIndex == GGX ? (m_viewport.y << 1) :
-		m_viewport.y, 1, m_hitGroupShaderTables[frameIndex][m_pipeIndex], m_missShaderTables[m_pipeIndex],
+	m_commandList.DispatchRays(m_rayTracingPipelines[m_pipeIndex], m_viewport.x, m_viewport.y << 1,
+		1, m_hitGroupShaderTables[frameIndex][m_pipeIndex], m_missShaderTables[m_pipeIndex],
 		m_rayGenShaderTables[frameIndex][m_pipeIndex]);
 }
 
@@ -736,6 +741,6 @@ void RayTracer::temporalSS(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TS + frameIndex]);
 	m_commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
-	m_commandList.SetPipelineState(m_pipelines[TEMPORAL_SS]);
+	m_commandList.SetPipelineState(m_pipelines[m_pipeIndex == GGX ? TEMPORAL_SS : TEMPORAL_AA]);
 	m_commandList.Dispatch((m_viewport.x - 1) / 8 + 1, (m_viewport.y - 1) / 8 + 1, 1);
 }
