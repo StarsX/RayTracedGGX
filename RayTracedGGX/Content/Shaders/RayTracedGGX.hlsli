@@ -136,12 +136,8 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 // Generate a ray in world space for a camera pixel corresponding to an index
 // from the dispatched 2D grid.
 //--------------------------------------------------------------------------------------
-void generateCameraRay(uint3 index, out float3 origin, out float3 direction)
+void generateCameraRay(uint3 index, uint2 dim, out float3 origin, out float3 direction)
 {
-	// Fallback layer has no depth
-	uint2 dim = DispatchRaysDimensions().xy;
-	dim.y >>= 1;
-
 	const float2 xy = index.xy + (index.z ? 0.5 : l_cbRayGen.Jitter); // jitter from the middle of the pixel.
 	float2 screenPos = xy / dim * 2.0 - 1.0;
 
@@ -154,29 +150,6 @@ void generateCameraRay(uint3 index, out float3 origin, out float3 direction)
 
 	origin = l_cbRayGen.EyePt;
 	direction = normalize(world.xyz - origin);
-}
-
-//--------------------------------------------------------------------------------------
-// Ray generation
-//--------------------------------------------------------------------------------------
-[shader("raygeneration")]
-void raygenMain()
-{
-	// Trace the ray.
-	RayDesc ray;
-
-	// Fallback layer has no depth
-	uint3 index = DispatchRaysIndex();
-	index.yz = uint2(index.y >> 1, index.y & 1);
-
-	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
-	generateCameraRay(index, ray.Origin, ray.Direction);
-
-	RayPayload payload = traceRadianceRay(ray, 0);
-
-	// Write the raytraced color to the output texture.
-	const float a = payload.RecursionDepth > 0 ? 1.0 : 0.0;
-	RenderTarget[index] = float4(payload.Color, a);
 }
 
 //--------------------------------------------------------------------------------------

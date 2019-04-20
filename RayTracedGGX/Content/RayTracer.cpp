@@ -679,9 +679,9 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 	m_commandList.SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
 
 	// Fallback layer has no depth
-	m_commandList.DispatchRays(m_rayTracingPipelines[m_pipeIndex], m_viewport.x, m_viewport.y << 1,
-		1, m_hitGroupShaderTables[frameIndex][m_pipeIndex], m_missShaderTables[m_pipeIndex],
-		m_rayGenShaderTables[frameIndex][m_pipeIndex]);
+	m_commandList.DispatchRays(m_rayTracingPipelines[m_pipeIndex], m_viewport.x, m_pipeIndex == GGX ?
+		m_viewport.y << 1 : m_viewport.y, 1, m_hitGroupShaderTables[frameIndex][m_pipeIndex],
+		m_missShaderTables[m_pipeIndex], m_rayGenShaderTables[frameIndex][m_pipeIndex]);
 }
 
 void RayTracer::gbufferPass(uint32_t frameIndex)
@@ -731,7 +731,16 @@ void RayTracer::temporalSS(uint32_t frameIndex)
 	};
 	m_commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
+	static bool firstFrame = true;
 	const auto prevFrame = (frameIndex + FrameCount - 1) % FrameCount;
+	/*if (firstFrame)
+	{
+		const float clearColor[4] = {};
+		m_commandList.ClearUnorderedAccessViewFloat(*m_uavTables[prevFrame][UAV_TABLE_TSAMP],
+			m_outputViews[prevFrame][UAV_TABLE_TSAMP].GetUAV(),
+			m_outputViews[prevFrame][UAV_TABLE_TSAMP].GetResource(), clearColor);
+		firstFrame = false;
+	}*/
 	m_outputViews[frameIndex][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 	m_outputViews[prevFrame][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);

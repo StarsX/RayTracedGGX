@@ -16,6 +16,8 @@
 //--------------------------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------------------------
+static const min16float g_historyMax = min16float(1 << 8) - 1.0;
+
 static const min16float3 g_lumBase = { 0.25, 0.5, 0.25 };
 static int2 g_texOffsets[] =
 {
@@ -27,7 +29,7 @@ static int2 g_texOffsets[] =
 // Texture and buffers
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	RenderTarget;
-Texture2DArray		g_txCurrent;
+Texture2D			g_txCurrent;
 Texture2D			g_txHistory;
 Texture2D<float2>	g_velocity;
 
@@ -35,6 +37,22 @@ Texture2D<float2>	g_velocity;
 // Samplers
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler;
+
+// --------------------------------------------------------------------------------------
+// A fast invertible tone map that preserves color (Reinhard)
+// --------------------------------------------------------------------------------------
+min16float3 TM(min16float3 rgb)
+{
+	return rgb / (1.0 + dot(rgb, g_lumBase));
+}
+
+// --------------------------------------------------------------------------------------
+// Inverse of preceding function
+// --------------------------------------------------------------------------------------
+min16float3 ITM(min16float3 rgb)
+{
+	return rgb / (1.0 - dot(rgb, g_lumBase));
+}
 
 //--------------------------------------------------------------------------------------
 // Maxinum velocity of 3x3
@@ -78,7 +96,7 @@ min16float4 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighbor
 	min16float4 neighbors[NUM_NEIGHBORS];
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS; ++i)
-		neighbors[i] = min16float4(g_txCurrent[uint3(tex + g_texOffsets[i], 1)]);
+		neighbors[i] = min16float4(g_txCurrent[tex + g_texOffsets[i]]);
 
 	min16float4 gaussian = center;
 
@@ -147,31 +165,45 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	g_txHistory.GetDimensions(texSize.x, texSize.y);
 	const float2 tex = (DTid + 0.5) / texSize;
 
-	const min16float4 current = min16float4(g_txCurrent[uint3(DTid, 0)]);
-	const min16float4 curCent = min16float4(g_txCurrent[uint3(DTid, 1)]);	// Centroid sample for color clipping
+	// Load G-buffers
+	const min16float4 current = min16float4(g_txCurrent[DTid]);
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
 	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
 	history.xyz *= history.xyz;
 
-	const min16float speed = abs(velocity.x) + abs(velocity.y);
+	// Speed to history blur
+	const float2 historyBlurAmp = 4.0 * texSize;
+	const min16float2 historyBlurs = min16float2(abs(velocity.xy) * historyBlurAmp);
+	const min16float historyBlur = saturate(historyBlurs.x + historyBlurs.y);
+	
+	const min16float historyDiv = max(1.0 - history.w, historyBlur);
+	history.w = history.w * g_historyMax + 1.0;
 
 	min16float4 neighborMin, neighborMax;
-	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, curCent, DTid);
-	//filtered.xyz = lerp(current.xyz, filtered.xyz, saturate(speed * 32.0));
-
+	const min16float gamma = historyDiv > 0.0 || current.w <= 0.0 ? 1.0 : 16.0;
+	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, current, DTid, gamma);
+	
+	const min16float lumHist = GET_LUMA(history.xyz);
 	history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
 
-	/*min16float currentWeight = 1.0 - history.w;
-	currentWeight /= currentWeight + 1.0;
-	//currentWeight = saturate(currentWeight + speed * 32.0);
-	history.w = 1.0 - currentWeight;*/
-	history.w = speed > 0.0 ? 0.125 : history.w;
-	const min16float alpha = history.w + 1.0 / 255.0;
-	min16float blend = history.w < 1.0 ? history.w / alpha : 1.0;
-	blend = filtered.w > 0.0 ? blend : 0.0;
-	
-	const min16float3 result = lerp(current.xyz, history.xyz, blend);
+	const min16float contrast = neighborMax.w - neighborMin.w;
 
-	RenderTarget[DTid] = min16float4(sqrt(result), alpha);
+	// Add aliasing
+	static const min16float lumContrastFactor = 32.0;
+	min16float addAlias = historyBlur * 0.5 + 0.25;
+	addAlias = saturate(addAlias + 1.0 / (1.0 + contrast * lumContrastFactor));
+	filtered.xyz = lerp(filtered.xyz, current.xyz, addAlias);
+
+	// Calculate Blend factor
+	const min16float distToClamp = min(abs(neighborMin.w - lumHist), abs(neighborMax.w - lumHist));
+	const min16float historyAmt = 1.0 / history.w + historyBlur / 8.0;
+	const min16float historyFactor = distToClamp * historyAmt * (1.0 + historyBlur * historyAmt * 8.0);
+	min16float blend = clamp(historyFactor / (distToClamp + contrast), 0.03125, 0.25);
+	//blend = filtered.w > 0.0 ? blend : 0.0;
+
+	const min16float3 result = ITM(lerp(TM(history.xyz), TM(filtered.xyz), blend));
+	history.w = min(history.w / g_historyMax, 1.0 - historyBlur);
+
+	RenderTarget[DTid] = float4(sqrt(result), history.w);
 }

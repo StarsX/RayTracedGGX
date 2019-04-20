@@ -8,6 +8,32 @@
 #define ROUGHNESS	0.25
 
 //--------------------------------------------------------------------------------------
+// Ray generation
+//--------------------------------------------------------------------------------------
+[shader("raygeneration")]
+void raygenMain()
+{
+	// Trace the ray.
+	RayDesc ray;
+
+	// Fallback layer has no depth
+	uint2 dim = DispatchRaysDimensions().xy;
+	dim.y >>= 1;
+
+	uint3 index = DispatchRaysIndex();
+	index.yz = uint2(index.y >> 1, index.y & 1);
+
+	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
+	generateCameraRay(index, dim, ray.Origin, ray.Direction);
+
+	RayPayload payload = traceRadianceRay(ray, 0);
+
+	// Write the raytraced color to the output texture.
+	const float a = payload.RecursionDepth > 0 ? 1.0 : 0.0;
+	RenderTarget[index] = float4(payload.Color, a);
+}
+
+//--------------------------------------------------------------------------------------
 // Ray closest hit
 //--------------------------------------------------------------------------------------
 [shader("closesthit")]
