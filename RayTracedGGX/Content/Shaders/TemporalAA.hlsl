@@ -29,9 +29,9 @@ static int2 g_texOffsets[] =
 // Texture and buffers
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	RenderTarget;
-Texture2D			g_txCurrent;
-Texture2D			g_txHistory;
-Texture2D<float2>	g_velocity;
+Texture2D			g_txCurrent	: register (t0);
+Texture2D			g_txHistory	: register (t1);
+Texture2D<float2>	g_velocity	: register (t2);
 
 //--------------------------------------------------------------------------------------
 // Samplers
@@ -199,7 +199,8 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const min16float distToClamp = min(abs(neighborMin.w - lumHist), abs(neighborMax.w - lumHist));
 	const min16float historyAmt = 1.0 / history.w + historyBlur / 8.0;
 	const min16float historyFactor = distToClamp * historyAmt * (1.0 + historyBlur * historyAmt * 8.0);
-	min16float blend = clamp(historyFactor / (distToClamp + contrast), 0.03125, 0.25);
+	min16float blend = clamp(historyFactor / (distToClamp + contrast), 0.125, 0.25);
+	//min16float blend = clamp(1.0 / history.w, 0.125, 0.25);
 	//blend = filtered.w > 0.0 ? blend : 0.0;
 
 	const min16float3 result = ITM(lerp(TM(history.xyz), TM(filtered.xyz), blend));
