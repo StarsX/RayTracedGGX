@@ -17,7 +17,7 @@ using namespace std;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
 
-#define	PIDIV4		0.785398163f
+#define	PIDIV4	0.785398163f
 
 static const float g_FOVAngleY = PIDIV4;
 static const float g_zNear = 1.0f;
