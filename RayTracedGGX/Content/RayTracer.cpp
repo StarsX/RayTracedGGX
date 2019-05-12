@@ -409,7 +409,7 @@ bool RayTracer::createPipelines()
 		state.SetLocalPipelineLayout(1, m_pipelineLayouts[HIT_GROUP_LAYOUT],
 			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
-		state.SetMaxRecursionDepth(3);
+		state.SetMaxRecursionDepth(2);
 		m_rayTracingPipelines[TEST] = state.GetPipeline(m_rayTracingPipelineCache, L"RaytracingTest");
 
 		N_RETURN(m_rayTracingPipelines[TEST].Native || m_rayTracingPipelines[TEST].Fallback, false);
@@ -428,7 +428,7 @@ bool RayTracer::createPipelines()
 		state.SetLocalPipelineLayout(1, m_pipelineLayouts[HIT_GROUP_LAYOUT],
 			1, reinterpret_cast<const void**>(&HitGroupName));
 		state.SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
-		state.SetMaxRecursionDepth(3);
+		state.SetMaxRecursionDepth(2);
 		m_rayTracingPipelines[GGX] = state.GetPipeline(m_rayTracingPipelineCache, L"RaytracingGGX");
 
 		N_RETURN(m_rayTracingPipelines[GGX].Native || m_rayTracingPipelines[GGX].Fallback, false);
