@@ -54,8 +54,8 @@ SamplerState g_sampler;
 //--------------------------------------------------------------------------------------
 struct HitGroupConstants
 {
-	matrix Normal;
-	float2 Hammersley;
+	matrix	Normal;
+	uint	FrameIndex;
 };
 
 //--------------------------------------------------------------------------------------
@@ -66,9 +66,8 @@ ConstantBuffer<HitGroupConstants> l_cbHitGroup : register(b1);
 //--------------------------------------------------------------------------------------
 // Compute direction in local space
 //--------------------------------------------------------------------------------------
-float3 computeLocalDirectionGGX(float a, bool isCentroidSample)
+float3 computeLocalDirectionGGX(float a, float2 xi)
 {
-	const float2 xi = isCentroidSample ? 0.0 : l_cbHitGroup.Hammersley;
 	const float phi = 2.0 * PI * xi.x;
 
 	// Only near the specular direction according to the roughness for importance sampling
@@ -93,9 +92,9 @@ float3x3 computeLocalToWorld(float3 normal)
 }
 
 // Compute local direction first and transform it to world space
-float3 computeDirectionGGX(float a, float3 normal, bool isCentroidSample = false)
+float3 computeDirectionGGX(float a, float3 normal, float2 xi)
 {
-	const float3 localDir = computeLocalDirectionGGX(a, isCentroidSample);
+	const float3 localDir = computeLocalDirectionGGX(a, xi);
 	const float3x3 tanSpace = computeLocalToWorld(normal);
 
 	return tanSpace[0] * localDir.x + tanSpace[1] * localDir.y + tanSpace[2] * localDir.z;

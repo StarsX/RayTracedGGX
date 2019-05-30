@@ -33,6 +33,47 @@ void raygenMain()
 	RenderTarget[index] = float4(payload.Color, a);
 }
 
+// Quasirandom low-discrepancy sequences
+float2 Hammersley(uint i, uint num)
+{
+	uint bits = i;
+	bits = (bits << 16) | (bits >> 16);
+	bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1);
+	bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
+	bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
+	bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
+
+	// Using 2.3283064365386963e-10 multiplication will cause different results between debug and release shaders
+	// This issue occurs on both AMD and NVIDIA GPUs
+	return float2(i / float(num), bits / float(0xffffffff));
+	//return float2(i / float(num), bits * 2.3283064365386963e-10);   // / 0x100000000
+}
+
+// Morton order generator
+uint MortonCode(uint x)
+{
+	x = (x ^ (x << 2)) & 0x33333333;
+	x = (x ^ (x << 1)) & 0x55555555;
+
+	return x;
+}
+
+uint MortonIndex(uint2 pos)
+{
+	// Interleaved combination
+	return MortonCode(pos.x) | (MortonCode(pos.y) << 1);
+}
+
+float2 GetHammersley(uint2 index)
+{
+	const uint n = 64;
+	uint i = MortonIndex(index.xy % 8) % n;
+	//uint i = (index.y % 8) * 8 + (index.x % 8);
+	i = (i + l_cbHitGroup.FrameIndex) % n;
+
+	return Hammersley(i, n);
+}
+
 //--------------------------------------------------------------------------------------
 // Ray closest hit
 //--------------------------------------------------------------------------------------
@@ -41,12 +82,16 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 {
 	Vertex input = getInput(attr.barycentrics);
 
+	uint3 index = DispatchRaysIndex();
+	index.yz = uint2(index.y >> 1, index.y & 1);
+
 	// Trace a reflection ray.
 	RayDesc ray;
-	const bool isCentroidSample = DispatchRaysIndex().y & 1;
+	const bool isCentroidSample = index.z;
+	const float2 xi = isCentroidSample ? 0.0 : GetHammersley(index.xy);
 	const float a = ROUGHNESS * ROUGHNESS;
 	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
-	const float3 H = computeDirectionGGX(a, N, isCentroidSample);
+	const float3 H = computeDirectionGGX(a, N, xi);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);
 	float3 radiance = traceRadianceRay(ray, ++payload.RecursionDepth).Color;

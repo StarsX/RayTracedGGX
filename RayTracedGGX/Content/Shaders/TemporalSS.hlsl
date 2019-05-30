@@ -161,15 +161,22 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, curCent, current.xyz, DTid);
 	//filtered.xyz = lerp(current.xyz, filtered.xyz, saturate(speed * 32.0));
 
-	if (speed > 0.0)
-		history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
+	//if (speed > 0.0)
+		//history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
 
-	history.w = speed > 0.0 ? 0.125 : history.w;
-	const min16float alpha = history.w + 1.0 / 255.0;
-	min16float blend = history.w < 1.0 ? history.w / alpha : 1.0;
-	blend = filtered.w > 0.0 ? blend : 0.0;
+	uint accFrames = speed > 0.0 ? 0 : history.w * 255.0;
+	min16float3 result = min16float(accFrames) * history.xyz + (accFrames >= 64 ? 0.0 : current.xyz);
+	accFrames = min(accFrames + 1, 64);
+	const min16float alpha = min16float(accFrames / 255.0);
+	result /= min16float(accFrames);
+	result = filtered.w > 0.0 ? result : current.xyz;
 
-	const min16float3 result = lerp(current.xyz, history.xyz, blend);
+	//history.w = speed > 0.0 ? 0.0 : history.w;
+	//const min16float alpha = history.w + 1.0 / 255.0;
+	//min16float blend = history.w < 1.0 ? history.w / alpha : 1.0;
+	//blend = filtered.w > 0.0 ? blend : 0.0;
+
+	//const min16float3 result = lerp(current.xyz, history.xyz, blend);
 
 	RenderTarget[DTid] = min16float4(sqrt(result), alpha);
 	//RenderTarget[DTid] = min16float4(result, alpha) * current.w;

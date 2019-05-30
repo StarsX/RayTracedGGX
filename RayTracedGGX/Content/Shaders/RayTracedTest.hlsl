@@ -42,7 +42,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	RayDesc ray;
 	const float a = ROUGHNESS * ROUGHNESS;
 	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
-	const float3 H = computeDirectionGGX(a, N, true);
+	const float3 H = computeDirectionGGX(a, N, 0.0);
 	ray.Origin = hitWorldPosition();
 	ray.Direction = reflect(WorldRayDirection(), H);
 	float3 radiance = traceRadianceRay(ray, ++payload.RecursionDepth).Color;

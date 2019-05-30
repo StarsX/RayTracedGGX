@@ -52,13 +52,15 @@ namespace XUSG
 		ResourceBase();
 		virtual ~ResourceBase();
 
-		void Barrier(const CommandList &commandList, ResourceState dstState,
-			uint32_t subresource = 0xffffffff);
+		uint32_t SetBarrier(ResourceBarrier *pBarriers, ResourceState dstState,
+			uint32_t numBarriers = 0, uint32_t subresource = 0xffffffff,
+			BarrierFlags flags = BarrierFlags(0));
 
 		const Resource	&GetResource() const;
 		Descriptor		GetSRV(uint32_t i = 0) const;
 
-		ResourceBarrier	Transition(ResourceState dstState, uint32_t subresource = 0xffffffff);
+		ResourceBarrier	Transition(ResourceState dstState, uint32_t subresource = 0xffffffff,
+			BarrierFlags flags = BarrierFlags(0));
 		ResourceState	GetResourceState(uint32_t i = 0) const;
 
 		//static void CreateReadBuffer(const Device &device,
@@ -132,9 +134,10 @@ namespace XUSG
 			const float *pClearColor = nullptr, bool isCubeMap = false, const wchar_t *name = nullptr);
 		bool CreateFromSwapChain(const Device &device, const SwapChain &swapChain, uint32_t bufferIdx);
 
-		void Populate(const CommandList &commandList, const PipelineLayout &pipelineLayout,
-			const Pipeline &pipeline, const DescriptorTable &srcSrvTable, const DescriptorTable &samplerTable,
-			uint32_t srcSlot = 0, uint32_t samplerSlot = 1, uint8_t mipLevel = 0, int32_t slice = 0);
+		void Populate(const CommandList &commandList, const DescriptorTable &srcSrvTable,
+			const DescriptorTable &samplerTable, uint32_t srcSlot = 0, uint32_t samplerSlot = 1,
+			uint8_t mipLevel = 0, int32_t slice = 0, const PipelineLayout &pipelineLayout = nullptr,
+			const Pipeline &pipeline = nullptr);
 
 		Descriptor	GetRTV(uint32_t slice = 0, uint8_t mipLevel = 0) const;
 		uint32_t	GetArraySize() const;

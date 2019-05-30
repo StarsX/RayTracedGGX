@@ -29,9 +29,9 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
-	m_testing(true),
-	m_pipeChanged(false),
-	m_pausing(false),
+	m_isTesting(true),
+	m_isPipeChanged(false),
+	m_isPaused(false),
 	m_tracking(false),
 	m_meshFileName("Media/bunny.obj"),
 	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f)
@@ -205,14 +205,14 @@ void RayTracedGGX::OnUpdate()
 
 	m_timer.Tick();
 	const auto totalTime = CalculateFrameStats();
-	pauseTime = m_pausing ? totalTime - time : pauseTime;
+	pauseTime = m_isPaused ? totalTime - time : pauseTime;
 	time = totalTime - pauseTime;
 
 	// View
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMLoadFloat4x4(&m_view);
 	const auto proj = XMLoadFloat4x4(&m_proj);
-	m_rayTracer->UpdateFrame(m_frameIndex, eyePt, view * proj);
+	m_rayTracer->UpdateFrame(m_frameIndex, eyePt, view * proj, m_isPaused);
 }
 
 // Render the scene.
@@ -246,12 +246,12 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	switch (key)
 	{
 	case 0x20:	// case VK_SPACE:
-		m_pausing = !m_pausing;
+		m_isPaused = !m_isPaused;
 		break;
 	case 'T':
-		m_testing = !m_testing;
-		m_pipeChanged = true;
-		m_rayTracer->SetPipeline(m_testing ? RayTracer::TEST : RayTracer::GGX);
+		m_isTesting = !m_isTesting;
+		m_isPipeChanged = true;
+		m_rayTracer->SetPipeline(m_isTesting ? RayTracer::TEST : RayTracer::GGX);
 		break;
 	}
 }
@@ -353,15 +353,11 @@ void RayTracedGGX::PopulateCommandList()
 	// re-recording.
 	ThrowIfFailed(m_commandList.Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
 
-	if (m_pipeChanged)
+	if (m_isPipeChanged)
 	{
 		m_rayTracer->ClearHistory();
-		m_pipeChanged = false;
+		m_isPipeChanged = false;
 	}
-
-	// Indicate that the back buffer will be used as a render target.
-	//m_commandList.Barrier(1, &ResourceBarrier::Transition(m_renderTargets[m_frameIndex].get(),
-		//D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET));
 
 	// Record commands.
 	m_rayTracer->Render(m_frameIndex);
@@ -506,9 +502,16 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 // Copy the raytracing output to the backbuffer.
 void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
 {
+	ResourceBarrier barriers[2];
+	auto numBarriers = 0u;
+
 	TextureCopyLocation dstCopyLoc(m_renderTargets[m_frameIndex].GetResource().get(), 0);
-	TextureCopyLocation srcCopyLoc(m_rayTracer->GetOutputView(m_frameIndex, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().get(), 0);
-	m_renderTargets[m_frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_COPY_DEST);
+	TextureCopyLocation srcCopyLoc(m_rayTracer->GetOutputView(m_frameIndex,
+		numBarriers, barriers, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().get(), 0);
+	// Indicate that the back buffer will be used as a copy destination.
+	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_COPY_DEST, numBarriers);
+	m_commandList.Barrier(numBarriers, barriers);
 	m_commandList.CopyTextureRegion(dstCopyLoc, 0, 0, 0, srcCopyLoc);
-	m_renderTargets[m_frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_PRESENT);
+	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);
+	m_commandList.Barrier(numBarriers, barriers);
 }

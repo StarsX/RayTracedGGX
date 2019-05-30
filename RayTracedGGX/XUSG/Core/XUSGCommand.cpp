@@ -104,7 +104,7 @@ void CommandList::SetPipelineState(const Pipeline &pipelineState) const
 
 void CommandList::Barrier(uint32_t numBarriers, const ResourceBarrier *pBarriers) const
 {
-	m_commandList->ResourceBarrier(numBarriers, pBarriers);
+	if (numBarriers > 0) m_commandList->ResourceBarrier(numBarriers, pBarriers);
 }
 
 void CommandList::SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool *pDescriptorPools) const

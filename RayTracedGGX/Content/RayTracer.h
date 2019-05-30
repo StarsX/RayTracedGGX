@@ -33,11 +33,12 @@ public:
 		XUSG::RayTracing::Geometry *geometries, const char *fileName, const DirectX::XMFLOAT4 &posScale
 		= DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void SetPipeline(RayTracingPipeline pipeline);
-	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj);
+	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
 	void Render(uint32_t frameIndex);
 	void ClearHistory();
 
-	const XUSG::Texture2D &GetOutputView(uint32_t frameIndex, XUSG::ResourceState dstState = XUSG::ResourceState(0));
+	const XUSG::Texture2D &GetOutputView(uint32_t frameIndex, uint32_t &numBarriers,
+		XUSG::ResourceBarrier *pBarriers, XUSG::ResourceState dstState = XUSG::ResourceState(0));
 
 	static const uint32_t FrameCount = 3;
 
@@ -99,7 +100,7 @@ protected:
 	struct HitGroupConstants
 	{
 		DirectX::XMMATRIX	Normal;
-		DirectX::XMFLOAT2	Hammersley;
+		uint32_t			FrameIndex;
 	};
 
 	struct BasePassConstants

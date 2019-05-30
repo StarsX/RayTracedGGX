@@ -186,12 +186,14 @@ ResourceBase::~ResourceBase()
 {
 }
 
-void ResourceBase::Barrier(const CommandList &commandList, ResourceState dstState,
-	uint32_t subresource)
+uint32_t ResourceBase::SetBarrier(ResourceBarrier *pBarriers, ResourceState dstState,
+	uint32_t numBarriers, uint32_t subresource, BarrierFlags flags)
 {
 	const auto &state = m_states[subresource == 0xffffffff ? 0 : subresource];
 	if (state != dstState || dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS)
-		commandList.Barrier(1, &Transition(dstState, subresource));
+		pBarriers[numBarriers++] = Transition(dstState, subresource, flags);
+
+	return numBarriers;
 }
 
 const Resource &ResourceBase::GetResource() const
@@ -204,15 +206,16 @@ Descriptor ResourceBase::GetSRV(uint32_t i) const
 	return m_srvs.size() > i ? m_srvs[i] : Descriptor(D3D12_DEFAULT);
 }
 
-ResourceBarrier ResourceBase::Transition(ResourceState dstState, uint32_t subresource)
+ResourceBarrier ResourceBase::Transition(ResourceState dstState,
+	uint32_t subresource, BarrierFlags flags)
 {
 	auto &state = m_states[subresource == 0xffffffff ? 0 : subresource];
 	const auto srcState = state;
-	state = dstState;
+	state = flags == D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY ? state : dstState;
 
 	return srcState == dstState && dstState == D3D12_RESOURCE_STATE_UNORDERED_ACCESS ?
 		ResourceBarrier::UAV(m_resource.get()) :
-		ResourceBarrier::Transition(m_resource.get(), srcState, dstState, subresource);
+		ResourceBarrier::Transition(m_resource.get(), srcState, dstState, subresource, flags);
 }
 
 ResourceState ResourceBase::GetResourceState(uint32_t i) const
@@ -321,13 +324,15 @@ bool Texture2D::Upload(const CommandList &commandList, Resource &resourceUpload,
 
 	// Copy data to the intermediate upload heap and then schedule a copy 
 	// from the upload heap to the Texture2D.
-	const auto &curState = m_states[0];
-	dstState = dstState ? dstState : curState;
-	if (curState != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
+	ResourceBarrier barrier;
+	dstState = dstState ? dstState : m_states[0];
+	auto numBarriers = SetBarrier(&barrier, D3D12_RESOURCE_STATE_COPY_DEST);
+	commandList.Barrier(numBarriers, &barrier);
 	M_RETURN(UpdateSubresources(const_cast<CommandList&>(commandList).GetCommandList().get(),
 		m_resource.get(), resourceUpload.get(), 0, 0, numSubresources, pSubresourceData) <= 0,
 		clog, "Failed to upload the resource.", false);
-	Barrier(commandList, dstState);
+	numBarriers = SetBarrier(&barrier, dstState);
+	commandList.Barrier(numBarriers, &barrier);
 
 	return true;
 }
@@ -647,22 +652,22 @@ bool RenderTarget::CreateFromSwapChain(const Device &device, const SwapChain &sw
 	return true;
 }
 
-void RenderTarget::Populate(const CommandList &commandList, const PipelineLayout &pipelineLayout,
-	const Pipeline &pipeline, const DescriptorTable &srcSrvTable, const DescriptorTable &samplerTable,
-	uint32_t srcSlot, uint32_t samplerSlot, uint8_t mipLevel, int32_t slice)
+void RenderTarget::Populate(const CommandList &commandList, const DescriptorTable &srcSrvTable,
+	const DescriptorTable &samplerTable, uint32_t srcSlot, uint32_t samplerSlot, uint8_t mipLevel,
+	int32_t slice, const PipelineLayout &pipelineLayout, const Pipeline &pipeline)
 {
 	// Set render target
 	const auto rtvTable = make_shared<Descriptor>(GetRTV(slice, mipLevel));
-	Barrier(commandList, D3D12_RESOURCE_STATE_RENDER_TARGET, slice * GetNumMips(slice) + mipLevel);
+	//Barrier(commandList, D3D12_RESOURCE_STATE_RENDER_TARGET, slice * GetNumMips(slice) + mipLevel);
 	commandList.OMSetRenderTargets(1, rtvTable, nullptr);
 
 	// Set pipeline layout and descriptor tables
-	commandList.SetGraphicsPipelineLayout(pipelineLayout);
+	if (pipelineLayout) commandList.SetGraphicsPipelineLayout(pipelineLayout);
 	commandList.SetGraphicsDescriptorTable(srcSlot, srcSrvTable);
 	commandList.SetGraphicsDescriptorTable(samplerSlot, samplerTable);
 
 	// Set pipeline
-	commandList.SetPipelineState(pipeline);
+	if (pipeline) commandList.SetPipelineState(pipeline);
 
 	// Set viewport
 	const auto desc = m_resource->GetDesc();
@@ -1321,13 +1326,15 @@ bool RawBuffer::Upload(const CommandList &commandList, Resource &resourceUpload,
 	subresourceData.RowPitch = static_cast<uint32_t>(uploadBufferSize);
 	subresourceData.SlicePitch = subresourceData.RowPitch;
 
-	const auto &curState = m_states[0];
-	dstState = dstState ? dstState : curState;
-	if (curState != D3D12_RESOURCE_STATE_COPY_DEST) Barrier(commandList, D3D12_RESOURCE_STATE_COPY_DEST);
+	ResourceBarrier barrier;
+	dstState = dstState ? dstState : m_states[0];
+	auto numBarriers = SetBarrier(&barrier, D3D12_RESOURCE_STATE_COPY_DEST);
+	commandList.Barrier(numBarriers, &barrier);
 	M_RETURN(UpdateSubresources(const_cast<CommandList&>(commandList).GetCommandList().get(),
 		m_resource.get(), resourceUpload.get(), 0, 0, 1, &subresourceData) <= 0, clog,
 		"Failed to upload the resource.", false);
-	Barrier(commandList, dstState);
+	numBarriers = SetBarrier(&barrier, dstState);
+	commandList.Barrier(numBarriers, &barrier);
 
 	return true;
 }

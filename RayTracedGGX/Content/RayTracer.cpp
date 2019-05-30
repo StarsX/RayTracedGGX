@@ -134,20 +134,7 @@ static const XMFLOAT2 &IncrementalHalton()
 	return halton;
 }
 
-// Quasirandom low-discrepancy sequences
-XMFLOAT2 Hammersley(uint32_t i, uint32_t num)
-{
-	auto bits = i;
-	bits = (bits << 16) | (bits >> 16);
-	bits = ((bits & 0x55555555) << 1) | ((bits & 0xAAAAAAAA) >> 1);
-	bits = ((bits & 0x33333333) << 2) | ((bits & 0xCCCCCCCC) >> 2);
-	bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
-	bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
-
-	return XMFLOAT2(i / static_cast<float>(num), static_cast<float>(bits) * 2.3283064365386963e-10f); // / 0x100000000
-}
-
-void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj)
+void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj, bool isPaused)
 {
 	{
 		const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
@@ -160,12 +147,12 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 
 	{
 		static auto angle = 0.0f;
-		angle += m_pipeIndex == TEST ? 0.1f * XM_PI / 180.0f : 0.0f;
+		angle += !isPaused && m_pipeIndex == TEST ? 0.1f * XM_PI / 180.0f : 0.0f;
 		const auto rot = XMMatrixRotationY(angle);
 		
-		const auto n = 255u;
+		const auto n = 64u;
 		static auto i = 0u;
-		HitGroupConstants cbHitGroup = { XMMatrixTranspose(rot), Hammersley(i, n) };
+		HitGroupConstants cbHitGroup = { XMMatrixTranspose(rot), i };
 		i = (i + 1) % n;
 
 		m_hitGroupShaderTables[frameIndex][m_pipeIndex].Reset();
@@ -190,8 +177,12 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 
 void RayTracer::Render(uint32_t frameIndex)
 {
-	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	updateAccelerationStructures(frameIndex);
+
+	ResourceBarrier barriers[2];
+	auto numBarriers = m_outputViews[frameIndex][UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET, numBarriers);
+	m_commandList.Barrier(numBarriers, barriers);
 	rayTrace(frameIndex);
 	
 	gbufferPass(frameIndex);
@@ -200,18 +191,24 @@ void RayTracer::Render(uint32_t frameIndex)
 
 void RayTracer::ClearHistory()
 {
+	ResourceBarrier barriers[FrameCount];
+	auto numBarriers = 0u;
+	for (auto i = 0ui8; i < FrameCount; ++i)
+		numBarriers = m_outputViews[i][UAV_TABLE_TSAMP].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, numBarriers);
+	m_commandList.Barrier(numBarriers, barriers);
+
 	const float clearColor[4] = {};
 	for (auto i = 0ui8; i < FrameCount; ++i)
 	{
-		m_outputViews[i][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 		m_commandList.ClearUnorderedAccessViewFloat(*m_uavTables[i][UAV_TABLE_TSAMP], m_outputViews[i][UAV_TABLE_TSAMP].GetUAV(),
 			m_outputViews[i][UAV_TABLE_TSAMP].GetResource(), clearColor);
 	}
 }
 
-const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, ResourceState dstState)
+const Texture2D &RayTracer::GetOutputView(uint32_t frameIndex, uint32_t &numBarriers,
+	ResourceBarrier *pBarriers, ResourceState dstState)
 {
-	if (dstState) m_outputViews[frameIndex][UAV_TABLE_TSAMP].Barrier(m_commandList, dstState);
+	numBarriers = m_outputViews[frameIndex][UAV_TABLE_TSAMP].SetBarrier(pBarriers, dstState, numBarriers);
 
 	return m_outputViews[frameIndex][UAV_TABLE_TSAMP];
 }
@@ -687,7 +684,6 @@ void RayTracer::rayTrace(uint32_t frameIndex)
 void RayTracer::gbufferPass(uint32_t frameIndex)
 {
 	// Set render target
-	m_velocities[frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_RENDER_TARGET);
 	m_commandList.OMSetRenderTargets(1, m_rtvTables[frameIndex], &m_depth.GetDSV());
 
 	// Clear render target
@@ -731,12 +727,13 @@ void RayTracer::temporalSS(uint32_t frameIndex)
 	};
 	m_commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
-	static bool firstFrame = true;
+	ResourceBarrier barriers[4];
 	const auto prevFrame = (frameIndex + FrameCount - 1) % FrameCount;
-	m_outputViews[frameIndex][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	m_outputViews[frameIndex][UAV_TABLE_OUTPUT].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	m_outputViews[prevFrame][UAV_TABLE_TSAMP].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	m_velocities[frameIndex].Barrier(m_commandList, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	auto numBarriers = m_outputViews[frameIndex][UAV_TABLE_TSAMP].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	numBarriers = m_outputViews[frameIndex][UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_outputViews[prevFrame][UAV_TABLE_TSAMP].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	m_commandList.Barrier(numBarriers, barriers);
 
 	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[frameIndex][UAV_TABLE_TSAMP]);
 	m_commandList.SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TS + frameIndex]);

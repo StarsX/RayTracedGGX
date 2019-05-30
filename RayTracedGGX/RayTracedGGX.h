@@ -76,9 +76,9 @@ private:
 	uint64_t	m_fenceValues[FrameCount];
 
 	// Application state
-	bool		m_testing;
-	bool		m_pipeChanged;
-	bool		m_pausing;
+	bool		m_isTesting;
+	bool		m_isPipeChanged;
+	bool		m_isPaused;
 	StepTimer	m_timer;
 
 	// User camera interactions

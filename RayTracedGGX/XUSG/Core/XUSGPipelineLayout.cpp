@@ -10,7 +10,7 @@ using namespace XUSG;
 
 Util::PipelineLayout::PipelineLayout() :
 	m_descriptorTableLayoutKeys(0),
-	m_tableLayoutsCompleted(false)
+	m_isTableLayoutsCompleted(false)
 {
 	m_pipelineLayoutKey.resize(1);
 }
@@ -99,7 +99,7 @@ const vector<string> &Util::PipelineLayout::GetDescriptorTableLayoutKeys() const
 
 string &Util::PipelineLayout::GetPipelineLayoutKey(PipelineLayoutCache *pPipelineLayoutCache)
 {
-	if (!m_tableLayoutsCompleted && pPipelineLayoutCache)
+	if (!m_isTableLayoutsCompleted && pPipelineLayoutCache)
 	{
 		m_pipelineLayoutKey.resize(sizeof(void*) * m_descriptorTableLayoutKeys.size() + 1);
 
@@ -108,7 +108,7 @@ string &Util::PipelineLayout::GetPipelineLayoutKey(PipelineLayoutCache *pPipelin
 		for (auto i = 0u; i < m_descriptorTableLayoutKeys.size(); ++i)
 			descriptorTableLayouts[i] = GetDescriptorTableLayout(i, *pPipelineLayoutCache).get();
 
-		m_tableLayoutsCompleted = true;
+		m_isTableLayoutsCompleted = true;
 	}
 
 	return m_pipelineLayoutKey;
@@ -116,7 +116,7 @@ string &Util::PipelineLayout::GetPipelineLayoutKey(PipelineLayoutCache *pPipelin
 
 string &Util::PipelineLayout::checkKeySpace(uint32_t index)
 {
-	m_tableLayoutsCompleted = false;
+	m_isTableLayoutsCompleted = false;
 
 	if (index >= m_descriptorTableLayoutKeys.size())
 		m_descriptorTableLayoutKeys.resize(index + 1);
@@ -167,12 +167,12 @@ PipelineLayout PipelineLayoutCache::CreatePipelineLayout(Util::PipelineLayout &u
 }
 
 PipelineLayout PipelineLayoutCache::GetPipelineLayout(Util::PipelineLayout &util, uint8_t flags,
-	const wchar_t *name, bool needCreate)
+	const wchar_t *name, bool create)
 {
 	auto &pipelineLayoutKey = util.GetPipelineLayoutKey(this);
 	pipelineLayoutKey[0] = flags;
 
-	return getPipelineLayout(pipelineLayoutKey, name, needCreate);
+	return getPipelineLayout(pipelineLayoutKey, name, create);
 }
 
 DescriptorTableLayout PipelineLayoutCache::CreateDescriptorTableLayout(uint32_t index, const Util::PipelineLayout &util)
@@ -222,14 +222,14 @@ PipelineLayout PipelineLayoutCache::createPipelineLayout(const string &key, cons
 	return layout;
 }
 
-PipelineLayout PipelineLayoutCache::getPipelineLayout(const string &key, const wchar_t *name, bool needCreate)
+PipelineLayout PipelineLayoutCache::getPipelineLayout(const string &key, const wchar_t *name, bool create)
 {
 	const auto layoutIter = m_pipelineLayouts.find(key);
 
 	// Create one, if it does not exist
 	if (layoutIter == m_pipelineLayouts.end())
 	{
-		if (needCreate)
+		if (create)
 		{
 			const auto layout = createPipelineLayout(key, name);
 			m_pipelineLayouts[key] = layout;

@@ -70,7 +70,7 @@ namespace XUSG
 			std::vector<std::string> m_descriptorTableLayoutKeys;
 			std::string m_pipelineLayoutKey;
 
-			bool m_tableLayoutsCompleted;
+			bool m_isTableLayoutsCompleted;
 		};
 	}
 
@@ -87,14 +87,14 @@ namespace XUSG
 		PipelineLayout CreatePipelineLayout(Util::PipelineLayout &util, uint8_t flags,
 			const wchar_t *name = nullptr);
 		PipelineLayout GetPipelineLayout(Util::PipelineLayout &util, uint8_t flags,
-			const wchar_t *name = nullptr, bool needCreate = true);
+			const wchar_t *name = nullptr, bool create = true);
 
 		DescriptorTableLayout CreateDescriptorTableLayout(uint32_t index, const Util::PipelineLayout &util);
 		DescriptorTableLayout GetDescriptorTableLayout(uint32_t index, const Util::PipelineLayout &util);
 
 	protected:
 		PipelineLayout createPipelineLayout(const std::string &key, const wchar_t *name) const;
-		PipelineLayout getPipelineLayout(const std::string &key, const wchar_t *name, bool needCreate);
+		PipelineLayout getPipelineLayout(const std::string &key, const wchar_t *name, bool create);
 
 		DescriptorTableLayout createDescriptorTableLayout(const std::string &key);
 		DescriptorTableLayout getDescriptorTableLayout(const std::string &key);

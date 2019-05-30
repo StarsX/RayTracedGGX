@@ -62,6 +62,7 @@ namespace XUSG
 
 	using ResourceState = D3D12_RESOURCE_STATES;
 	using ResourceBarrier = CD3DX12_RESOURCE_BARRIER;
+	using BarrierFlags = D3D12_RESOURCE_BARRIER_FLAGS;
 
 	// Descriptors related
 	using DescriptorPool = com_ptr<ID3D12DescriptorHeap>;
