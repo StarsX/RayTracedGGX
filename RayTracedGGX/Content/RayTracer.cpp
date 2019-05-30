@@ -180,12 +180,15 @@ void RayTracer::Render(uint32_t frameIndex)
 	updateAccelerationStructures(frameIndex);
 
 	ResourceBarrier barriers[2];
-	auto numBarriers = m_outputViews[frameIndex][UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET, numBarriers);
+	auto numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_commandList.Barrier(numBarriers, barriers);
+	gbufferPass(frameIndex);
+
+	numBarriers = m_outputViews[frameIndex][UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		numBarriers, 0xffffffff, D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY);
 	m_commandList.Barrier(numBarriers, barriers);
 	rayTrace(frameIndex);
-	
-	gbufferPass(frameIndex);
 	temporalSS(frameIndex);
 }
 
@@ -731,8 +734,10 @@ void RayTracer::temporalSS(uint32_t frameIndex)
 	const auto prevFrame = (frameIndex + FrameCount - 1) % FrameCount;
 	auto numBarriers = m_outputViews[frameIndex][UAV_TABLE_TSAMP].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	numBarriers = m_outputViews[frameIndex][UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_outputViews[prevFrame][UAV_TABLE_TSAMP].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_outputViews[prevFrame][UAV_TABLE_TSAMP].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
+		D3D12_RESOURCE_STATE_COPY_SOURCE, numBarriers);
+	numBarriers = m_velocities[frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+		numBarriers, 0xffffffff, D3D12_RESOURCE_BARRIER_FLAG_END_ONLY);
 	m_commandList.Barrier(numBarriers, barriers);
 
 	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[frameIndex][UAV_TABLE_TSAMP]);

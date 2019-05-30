@@ -507,7 +507,7 @@ void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
 
 	TextureCopyLocation dstCopyLoc(m_renderTargets[m_frameIndex].GetResource().get(), 0);
 	TextureCopyLocation srcCopyLoc(m_rayTracer->GetOutputView(m_frameIndex,
-		numBarriers, barriers, D3D12_RESOURCE_STATE_COPY_SOURCE).GetResource().get(), 0);
+		numBarriers, barriers, D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE).GetResource().get(), 0);
 	// Indicate that the back buffer will be used as a copy destination.
 	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_COPY_DEST, numBarriers);
 	m_commandList.Barrier(numBarriers, barriers);
