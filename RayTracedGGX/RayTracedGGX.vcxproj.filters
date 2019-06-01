@@ -208,6 +208,12 @@
     <FxCompile Include="Content\Shaders\TemporalAA.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
+    <FxCompile Include="Content\Shaders\PSToneMap.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\VSScreenQuad.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="XUSG\Core\XUSGBlend.inl">

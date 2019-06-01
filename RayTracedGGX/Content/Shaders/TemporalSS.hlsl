@@ -153,8 +153,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
 	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
-	history.xyz *= history.xyz;
-
+	
 	const min16float speed = abs(velocity.x) + abs(velocity.y);
 
 	min16float4 neighborMin, neighborMax;
@@ -164,11 +163,11 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	//if (speed > 0.0)
 		//history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
 
-	uint accFrames = speed > 0.0 ? 0 : history.w * 255.0;
-	min16float3 result = min16float(accFrames) * history.xyz + (accFrames >= 64 ? 0.0 : current.xyz);
-	accFrames = min(accFrames + 1, 64);
-	const min16float alpha = min16float(accFrames / 255.0);
-	result /= min16float(accFrames);
+	const min16float maxSamples = 256.0;
+	history.w = speed > 0.0 ? 0 : history.w;
+	min16float3 result = history.w * history.xyz + (history.w >= maxSamples ? 0.0 : current.xyz);
+	history.w = min(history.w + 1.0, maxSamples);
+	result /= history.w;
 	result = filtered.w > 0.0 ? result : current.xyz;
 
 	//history.w = speed > 0.0 ? 0.0 : history.w;
@@ -178,7 +177,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
 	//const min16float3 result = lerp(current.xyz, history.xyz, blend);
 
-	RenderTarget[DTid] = min16float4(sqrt(result), alpha);
+	RenderTarget[DTid] = min16float4(result, history.w);
 	//RenderTarget[DTid] = min16float4(result, alpha) * current.w;
 	//RenderTarget[DTid] = g_currentImage[uint3(DTid, 1)];
 	//RenderTarget[DTid] = float4(abs(velocity.x) > 1e-5 ? 1.0 : 0.0, abs(velocity.y) > 1e-5 ? 1.0 : 0.0, 0.0, alpha);

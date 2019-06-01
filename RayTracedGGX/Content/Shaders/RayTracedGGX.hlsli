@@ -106,8 +106,9 @@ float3 computeDirectionGGX(float a, float3 normal, float2 xi)
 float3 environment(float3 dir)
 {
 	const float a = dot(dir, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5;
+	const float3 color = lerp(float3(0.0, 0.16, 0.64), 1.0, a);
 
-	return lerp(float3(0.0, 0.16, 0.64), 1.0, a);
+	return color * 5.0;
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.

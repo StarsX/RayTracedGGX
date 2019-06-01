@@ -43,10 +43,7 @@ float2 Hammersley(uint i, uint num)
 	bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
 	bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
 
-	// Using 2.3283064365386963e-10 multiplication will cause different results between debug and release shaders
-	// This issue occurs on both AMD and NVIDIA GPUs
 	return float2(i / float(num), bits / float(0xffffffff));
-	//return float2(i / float(num), bits * 2.3283064365386963e-10);   // / 0x100000000
 }
 
 // Morton order generator
@@ -66,9 +63,9 @@ uint MortonIndex(uint2 pos)
 
 float2 GetHammersley(uint2 index)
 {
-	const uint n = 64;
-	uint i = MortonIndex(index.xy % 8) % n;
-	//uint i = (index.y % 8) * 8 + (index.x % 8);
+	const uint n = 256;
+	uint i = MortonIndex(index.xy % 16);
+	//uint i = (index.y % 16) * 16 + (index.x % 16);
 	i = (i + l_cbHitGroup.FrameIndex) % n;
 
 	return Hammersley(i, n);

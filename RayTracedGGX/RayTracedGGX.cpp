@@ -158,7 +158,8 @@ void RayTracedGGX::LoadAssets()
 
 	Resource vbUploads[RayTracer::NUM_MESH], ibUploads[RayTracer::NUM_MESH];
 	Geometry geometries[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, geometries, m_meshFileName.c_str(), m_meshPosScale))
+	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, geometries, m_meshFileName.c_str(),
+		DXGI_FORMAT_R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -362,8 +363,13 @@ void RayTracedGGX::PopulateCommandList()
 	// Record commands.
 	m_rayTracer->Render(m_frameIndex);
 
+	ResourceBarrier barriers[2];
+	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	m_rayTracer->ToneMap(m_frameIndex, m_rtvTables[m_frameIndex], numBarriers, barriers);
+
 	// Indicate that the back buffer will now be used to present.
-	CopyRaytracingOutputToBackbuffer();
+	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);
+	m_commandList.Barrier(numBarriers, barriers);
 
 	ThrowIfFailed(m_commandList.Close());
 }
@@ -497,21 +503,4 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 	}
 
 	m_commandList.CreateRaytracingInterfaces(m_device);
-}
-
-// Copy the raytracing output to the backbuffer.
-void RayTracedGGX::CopyRaytracingOutputToBackbuffer()
-{
-	ResourceBarrier barriers[2];
-	auto numBarriers = 0u;
-
-	TextureCopyLocation dstCopyLoc(m_renderTargets[m_frameIndex].GetResource().get(), 0);
-	TextureCopyLocation srcCopyLoc(m_rayTracer->GetOutputView(m_frameIndex,
-		numBarriers, barriers, D3D12_RESOURCE_STATE_COPY_SOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE).GetResource().get(), 0);
-	// Indicate that the back buffer will be used as a copy destination.
-	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_COPY_DEST, numBarriers);
-	m_commandList.Barrier(numBarriers, barriers);
-	m_commandList.CopyTextureRegion(dstCopyLoc, 0, 0, 0, srcCopyLoc);
-	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);
-	m_commandList.Barrier(numBarriers, barriers);
 }

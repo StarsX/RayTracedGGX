@@ -99,5 +99,4 @@ private:
 	// Ray tracing
 	void EnableDirectXRaytracing(IDXGIAdapter1 *adapter);
 	void CreateRaytracingInterfaces();
-	void CopyRaytracingOutputToBackbuffer();
 };

@@ -38,22 +38,6 @@ Texture2D<float2>	g_velocity	: register (t2);
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler;
 
-// --------------------------------------------------------------------------------------
-// A fast invertible tone map that preserves color (Reinhard)
-// --------------------------------------------------------------------------------------
-min16float3 TM(min16float3 rgb)
-{
-	return rgb / (1.0 + dot(rgb, g_lumBase));
-}
-
-// --------------------------------------------------------------------------------------
-// Inverse of preceding function
-// --------------------------------------------------------------------------------------
-min16float3 ITM(min16float3 rgb)
-{
-	return rgb / (1.0 - dot(rgb, g_lumBase));
-}
-
 //--------------------------------------------------------------------------------------
 // Maxinum velocity of 3x3
 //--------------------------------------------------------------------------------------
@@ -170,7 +154,6 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
 	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
-	history.xyz *= history.xyz;
 
 	// Speed to history blur
 	const float2 historyBlurAmp = 4.0 * texSize;
@@ -203,8 +186,8 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	//min16float blend = clamp(1.0 / history.w, 0.125, 0.25);
 	//blend = filtered.w > 0.0 ? blend : 0.0;
 
-	const min16float3 result = ITM(lerp(TM(history.xyz), TM(filtered.xyz), blend));
+	const min16float3 result = lerp(history.xyz, filtered.xyz, blend);
 	history.w = min(history.w / g_historyMax, 1.0 - historyBlur);
 
-	RenderTarget[DTid] = float4(sqrt(result), history.w);
+	RenderTarget[DTid] = float4(result, history.w);
 }

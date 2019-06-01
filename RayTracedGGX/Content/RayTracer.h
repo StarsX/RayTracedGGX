@@ -30,15 +30,14 @@ public:
 	virtual ~RayTracer();
 
 	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
-		XUSG::RayTracing::Geometry *geometries, const char *fileName, const DirectX::XMFLOAT4 &posScale
-		= DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
+		XUSG::RayTracing::Geometry *geometries, const char *fileName, XUSG::Format rtFormat,
+		const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
 	void Render(uint32_t frameIndex);
+	void ToneMap(uint32_t frameIndex, const XUSG::RenderTargetTable &rtvTable,
+		uint32_t numBarriers, XUSG::ResourceBarrier *pBarriers);
 	void ClearHistory();
-
-	const XUSG::Texture2D &GetOutputView(uint32_t frameIndex, uint32_t &numBarriers,
-		XUSG::ResourceBarrier *pBarriers, XUSG::ResourceState dstState = XUSG::ResourceState(0));
 
 	static const uint32_t FrameCount = 3;
 
@@ -50,6 +49,7 @@ protected:
 		HIT_GROUP_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
+		TONE_MAP_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
 	};
@@ -69,6 +69,7 @@ protected:
 		GBUFFER_PASS,
 		TEMPORAL_SS,
 		TEMPORAL_AA,
+		TONE_MAP,
 
 		NUM_PIPELINE
 	};
@@ -78,8 +79,9 @@ protected:
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
 		SRV_TABLE_TS,
+		SRV_TABLE_TM = SRV_TABLE_TS + FrameCount,
 
-		NUM_SRV_TABLE = SRV_TABLE_TS + FrameCount
+		NUM_SRV_TABLE = SRV_TABLE_TM + FrameCount
 	};
 
 	enum UAVTable : uint8_t
@@ -114,7 +116,7 @@ protected:
 	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
 	bool createInputLayout();
 	bool createPipelineLayouts();
-	bool createPipelines();
+	bool createPipelines(XUSG::Format rtFormat);
 	bool createDescriptorTables();
 	bool buildAccelerationStructures(XUSG::RayTracing::Geometry *geometries);
 	bool buildShaderTables();
