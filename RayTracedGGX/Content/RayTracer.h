@@ -35,8 +35,7 @@ public:
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
 	void Render(uint32_t frameIndex);
-	void ToneMap(uint32_t frameIndex, const XUSG::RenderTargetTable &rtvTable,
-		uint32_t numBarriers, XUSG::ResourceBarrier *pBarriers);
+	void ToneMap(const XUSG::RenderTargetTable &rtvTable, uint32_t numBarriers, XUSG::ResourceBarrier *pBarriers);
 	void ClearHistory();
 
 	static const uint32_t FrameCount = 3;
@@ -79,9 +78,9 @@ protected:
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
 		SRV_TABLE_TS,
-		SRV_TABLE_TM = SRV_TABLE_TS + FrameCount,
+		SRV_TABLE_TM = SRV_TABLE_TS + 2,
 
-		NUM_SRV_TABLE = SRV_TABLE_TM + FrameCount
+		NUM_SRV_TABLE = SRV_TABLE_TM + 2
 	};
 
 	enum UAVTable : uint8_t
@@ -89,7 +88,7 @@ protected:
 		UAV_TABLE_OUTPUT,
 		UAV_TABLE_TSAMP,
 
-		NUM_UAV_TABLE
+		NUM_UAV_TABLE = UAV_TABLE_TSAMP + 2
 	};
 
 	struct RayGenConstants
@@ -123,20 +122,21 @@ protected:
 
 	void updateAccelerationStructures(uint32_t frameIndex);
 	void rayTrace(uint32_t frameIndex);
-	void gbufferPass(uint32_t frameIndex);
-	void temporalSS(uint32_t frameIndex);
+	void gbufferPass();
+	void temporalSS();
 
 	XUSG::RayTracing::Device m_device;
 	XUSG::RayTracing::CommandList m_commandList;
 
-	uint32_t m_numIndices[NUM_MESH];
+	uint32_t	m_numIndices[NUM_MESH];
+	uint8_t		m_frameParity;
 
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
 	DirectX::XMFLOAT4X4 m_worlds[NUM_MESH];
 	BasePassConstants	m_cbBasePass[NUM_MESH];
 
-	static const uint32_t NumUAVs = NUM_MESH + 1 + FrameCount * NUM_UAV_TABLE;
+	static const uint32_t NumUAVs = NUM_MESH + 1 + NUM_UAV_TABLE;
 	XUSG::RayTracing::BottomLevelAS m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 
@@ -146,15 +146,15 @@ protected:
 	XUSG::Pipeline				m_pipelines[NUM_PIPELINE];
 
 	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
-	XUSG::DescriptorTable	m_uavTables[FrameCount][NUM_UAV_TABLE];
+	XUSG::DescriptorTable	m_uavTables[NUM_UAV_TABLE];
 	XUSG::DescriptorTable	m_samplerTable;
-	XUSG::RenderTargetTable	m_rtvTables[FrameCount];
+	XUSG::RenderTargetTable	m_rtvTable;
 
 	XUSG::VertexBuffer		m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D			m_outputViews[FrameCount][NUM_UAV_TABLE];
-	XUSG::RenderTarget		m_velocities[FrameCount];
+	XUSG::Texture2D			m_outputViews[NUM_UAV_TABLE];
+	XUSG::RenderTarget		m_velocity;
 	XUSG::DepthStencil		m_depth;
 
 	XUSG::Resource			m_scratch;

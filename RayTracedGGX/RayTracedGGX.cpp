@@ -365,7 +365,7 @@ void RayTracedGGX::PopulateCommandList()
 
 	ResourceBarrier barriers[2];
 	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_rayTracer->ToneMap(m_frameIndex, m_rtvTables[m_frameIndex], numBarriers, barriers);
+	m_rayTracer->ToneMap(m_rtvTables[m_frameIndex], numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
 	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);
