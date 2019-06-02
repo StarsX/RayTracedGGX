@@ -61,8 +61,11 @@ bool RayTracer::Init(uint32_t width, uint32_t height, Resource *vbUploads, Resou
 
 	// Create output view and build acceleration structures
 	m_outputViews[UAV_TABLE_OUTPUT].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, SAMPLE_COUNT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	m_outputViews[UAV_TABLE_SPATIAL].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
+		1, 1, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+	m_outputViews[UAV_TABLE_SPATIAL1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 	m_outputViews[UAV_TABLE_TSAMP].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	m_outputViews[UAV_TABLE_TSAMP + 1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+	m_outputViews[UAV_TABLE_TSAMP1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 	m_velocity.Create(m_device.Common, width, height, DXGI_FORMAT_R16G16_FLOAT);
 	m_depth.Create(m_device.Common, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
 	N_RETURN(buildAccelerationStructures(geometries), false);
@@ -188,6 +191,14 @@ void RayTracer::Render(uint32_t frameIndex)
 		numBarriers, 0xffffffff, D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY);
 	m_commandList.Barrier(numBarriers, barriers);
 	rayTrace(frameIndex);
+
+	if (m_pipeIndex == GGX)
+	{
+		spatialPass(UAV_TABLE_SPATIAL1, UAV_TABLE_OUTPUT, SRV_TABLE_TS);
+		spatialPass(UAV_TABLE_SPATIAL, UAV_TABLE_SPATIAL1, SRV_TABLE_SPATIAL1);
+		spatialPass(UAV_TABLE_SPATIAL1, UAV_TABLE_SPATIAL, SRV_TABLE_SPATIAL);
+		spatialPass(UAV_TABLE_SPATIAL, UAV_TABLE_SPATIAL1, SRV_TABLE_SPATIAL1);
+	}
 	temporalSS();
 
 	m_frameParity = !m_frameParity;
@@ -399,12 +410,25 @@ bool RayTracer::createPipelineLayouts()
 			D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout"), false);
 	}
 
+	// This is a pipeline layout for resampling
+	{
+		Util::PipelineLayout pipelineLayout;
+		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
+		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
+		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
+		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
+		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
+		X_RETURN(m_pipelineLayouts[RESAMPLE_LAYOUT], pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
+			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"ResamplingPipelineLayout"), false);
+	}
+
 	// This is a pipeline layout for temporal SS
 	{
 		Util::PipelineLayout pipelineLayout;
 		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
 		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0);
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
@@ -490,6 +514,15 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
+		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 0, L"SpatialPass.cso");
+
+		Compute::State state;
+		state.SetPipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
+		state.SetShader(shader);
+		X_RETURN(m_pipelines[SPATIAL_PASS], state.GetPipeline(m_computePipelineCache, L"SpatialPass"), false);
+	}
+
+	{
 		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 0, L"TemporalAA.cso");
 
 		Compute::State state;
@@ -538,7 +571,15 @@ bool RayTracer::createDescriptorTables()
 		X_RETURN(m_uavTables[UAV_TABLE_OUTPUT], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 	}
 
-	// Temporal SS output UAV
+	// Spatially resolved UAVs
+	for (auto i = 0u; i < 2; ++i)
+	{
+		Util::DescriptorTable descriptorTable;
+		descriptorTable.SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_SPATIAL + i].GetUAV());
+		X_RETURN(m_uavTables[UAV_TABLE_SPATIAL + i], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
+	}
+
+	// Temporal SS output UAVs
 	for (auto i = 0u; i < 2; ++i)
 	{
 		Util::DescriptorTable descriptorTable;
@@ -564,6 +605,14 @@ bool RayTracer::createDescriptorTables()
 		X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 	}
 
+	// Spatially resolving input SRVs
+	for (auto i = 0u; i < 2; ++i)
+	{
+		Util::DescriptorTable descriptorTable;
+		descriptorTable.SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_SPATIAL + i].GetSRV());
+		X_RETURN(m_srvTables[SRV_TABLE_SPATIAL + i], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
+	}
+
 	// Temporal SS input SRVs
 	for (auto i = 0u; i < 2; ++i)
 	{
@@ -571,7 +620,8 @@ bool RayTracer::createDescriptorTables()
 		{
 			m_outputViews[UAV_TABLE_OUTPUT].GetSRV(),
 			m_outputViews[UAV_TABLE_TSAMP + !i].GetSRV(),
-			m_velocity.GetSRV()
+			m_velocity.GetSRV(),
+			m_outputViews[UAV_TABLE_SPATIAL].GetSRV()
 		};
 		Util::DescriptorTable descriptorTable;
 		descriptorTable.SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
@@ -768,6 +818,31 @@ void RayTracer::gbufferPass()
 	}
 }
 
+void RayTracer::spatialPass(uint8_t dst, uint8_t src, uint8_t srcSRV)
+{
+	m_commandList.SetComputePipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
+
+	// Bind the heaps, acceleration structure and dispatch rays.
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache.GetDescriptorPool(SAMPLER_POOL)
+	};
+	m_commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
+
+	ResourceBarrier barriers[2];
+	auto numBarriers = m_outputViews[dst].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	numBarriers = m_outputViews[src].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	m_commandList.Barrier(numBarriers, barriers);
+
+	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[dst]);
+	m_commandList.SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[srcSRV]);
+	m_commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
+
+	m_commandList.SetPipelineState(m_pipelines[SPATIAL_PASS]);
+	m_commandList.Dispatch(ALIGNED_GROUP(m_viewport.x, 8), ALIGNED_GROUP(m_viewport.y, 8), 1);
+}
+
 void RayTracer::temporalSS()
 {
 	m_commandList.SetComputePipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
@@ -780,13 +855,15 @@ void RayTracer::temporalSS()
 	};
 	m_commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
-	ResourceBarrier barriers[4];
+	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputViews[UAV_TABLE_TSAMP + m_frameParity].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	numBarriers = m_outputViews[UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_outputViews[UAV_TABLE_TSAMP + !m_frameParity].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_velocity.SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, 0xffffffff, D3D12_RESOURCE_BARRIER_FLAG_END_ONLY);
+	if (m_pipeIndex == GGX)
+		numBarriers = m_outputViews[UAV_TABLE_SPATIAL].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	m_commandList.Barrier(numBarriers, barriers);
 
 	m_commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSAMP + m_frameParity]);

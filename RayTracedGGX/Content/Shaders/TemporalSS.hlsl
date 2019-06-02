@@ -27,9 +27,10 @@ static int2 g_texOffsets[] =
 // Texture and buffers
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	RenderTarget;
-Texture2DArray		g_txCurrent;
-Texture2D			g_txHistory;
-Texture2D<float2>	g_velocity;
+Texture2DArray		g_txCurrent	: register (t0);
+Texture2D			g_txHistory	: register (t1);
+Texture2D<float2>	g_velocity	: register (t2);
+Texture2D			g_txSpatial	: register (t3);
 
 //--------------------------------------------------------------------------------------
 // Samplers
@@ -150,6 +151,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
 	const min16float4 current = min16float4(g_txCurrent[uint3(DTid, 0)]);
 	const min16float4 curCent = min16float4(g_txCurrent[uint3(DTid, 1)]);	// Centroid sample for color clipping
+	const min16float4 spatial = min16float4(g_txSpatial[DTid]);
 	const min16float4 velocity = VelocityMax(DTid);
 	const float2 texBack = tex - velocity.xy;
 	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
@@ -160,11 +162,11 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, curCent, current.xyz, DTid);
 	//filtered.xyz = lerp(current.xyz, filtered.xyz, saturate(speed * 32.0));
 
-	//if (speed > 0.0)
-		//history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
+	if (speed > 0.0)
+		history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
 
 	const min16float maxSamples = 256.0;
-	history.w = speed > 0.0 ? 0 : history.w;
+	history.w = speed > 0.0 ? 0.0 : history.w;
 	min16float3 result = history.w * history.xyz + (history.w >= maxSamples ? 0.0 : current.xyz);
 	history.w = min(history.w + 1.0, maxSamples);
 	result /= history.w;
@@ -178,6 +180,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	//const min16float3 result = lerp(current.xyz, history.xyz, blend);
 
 	RenderTarget[DTid] = min16float4(result, history.w);
+	//RenderTarget[DTid] = min16float4(spatial.xyz, history.w);
 	//RenderTarget[DTid] = min16float4(result, alpha) * current.w;
 	//RenderTarget[DTid] = g_currentImage[uint3(DTid, 1)];
 	//RenderTarget[DTid] = float4(abs(velocity.x) > 1e-5 ? 1.0 : 0.0, abs(velocity.y) > 1e-5 ? 1.0 : 0.0, 0.0, alpha);

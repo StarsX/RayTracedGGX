@@ -258,7 +258,7 @@ Texture2D::~Texture2D()
 
 bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Format format,
 	uint32_t arraySize, ResourceFlags resourceFlags, uint8_t numMips, uint8_t sampleCount,
-	PoolType poolType, ResourceState state, bool isCubeMap, const wchar_t *name)
+	MemoryType memoryType, ResourceState state, bool isCubeMap, const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
@@ -289,7 +289,7 @@ bool Texture2D::Create(const Device &device, uint32_t width, uint32_t height, Fo
 		initState = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : initState;
 	}
 
-	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(poolType),
+	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(memoryType),
 		D3D12_HEAP_FLAG_NONE, &desc, m_states[0], nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 
@@ -1125,7 +1125,7 @@ Texture3D::~Texture3D()
 
 bool Texture3D::Create(const Device &device, uint32_t width, uint32_t height,
 	uint32_t depth, Format format, ResourceFlags resourceFlags, uint8_t numMips,
-	PoolType poolType, ResourceState state, const wchar_t *name)
+	MemoryType memoryType, ResourceState state, const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
 	setDevice(device);
@@ -1156,7 +1156,7 @@ bool Texture3D::Create(const Device &device, uint32_t width, uint32_t height,
 		initState = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : initState;
 	}
 	
-	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(poolType),
+	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(memoryType),
 		D3D12_HEAP_FLAG_NONE, &desc, m_states[0], nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 
@@ -1282,7 +1282,7 @@ RawBuffer::~RawBuffer()
 }
 
 bool RawBuffer::Create(const Device &device, uint32_t byteWidth, ResourceFlags resourceFlags,
-	PoolType poolType, ResourceState state, uint32_t numSRVs, const uint32_t *firstSRVElements,
+	MemoryType memoryType, ResourceState state, uint32_t numSRVs, const uint32_t *firstSRVElements,
 	uint32_t numUAVs, const uint32_t *firstUAVElements, const wchar_t *name)
 {
 	const auto hasSRV = !(resourceFlags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
@@ -1292,7 +1292,7 @@ bool RawBuffer::Create(const Device &device, uint32_t byteWidth, ResourceFlags r
 	numUAVs = hasUAV ? numUAVs : 0;
 
 	// Create buffer
-	N_RETURN(create(device, byteWidth, resourceFlags, poolType, state, numSRVs, numUAVs, name), false);
+	N_RETURN(create(device, byteWidth, resourceFlags, memoryType, state, numSRVs, numUAVs, name), false);
 
 	// Create SRV
 	if (numSRVs > 0) N_RETURN(CreateSRVs(byteWidth, firstSRVElements, numSRVs), false);
@@ -1425,7 +1425,7 @@ void RawBuffer::Unmap()
 }
 
 bool RawBuffer::create(const Device &device, uint32_t byteWidth, ResourceFlags resourceFlags,
-	PoolType poolType, ResourceState state, uint32_t numSRVs, uint32_t numUAVs,
+	MemoryType memoryType, ResourceState state, uint32_t numSRVs, uint32_t numUAVs,
 	const wchar_t *name)
 {
 	M_RETURN(!device, cerr, "The device is NULL.", false);
@@ -1447,7 +1447,7 @@ bool RawBuffer::create(const Device &device, uint32_t byteWidth, ResourceFlags r
 		initState = numUAVs > 0 ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : initState;
 	}
 
-	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(poolType),
+	V_RETURN(m_device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(memoryType),
 		D3D12_HEAP_FLAG_NONE, &desc, initState, nullptr, IID_PPV_ARGS(&m_resource)), clog, false);
 	if (!m_name.empty()) m_resource->SetName((m_name + L".Resource").c_str());
 
@@ -1468,7 +1468,7 @@ StructuredBuffer::~StructuredBuffer()
 }
 
 bool StructuredBuffer::Create(const Device &device, uint32_t numElements, uint32_t stride,
-	ResourceFlags resourceFlags, PoolType poolType, ResourceState state, uint32_t numSRVs,
+	ResourceFlags resourceFlags, MemoryType memoryType, ResourceState state, uint32_t numSRVs,
 	const uint32_t *firstSRVElements, uint32_t numUAVs, const uint32_t *firstUAVElements,
 	const wchar_t *name)
 {
@@ -1480,7 +1480,7 @@ bool StructuredBuffer::Create(const Device &device, uint32_t numElements, uint32
 
 	// Create buffer
 	N_RETURN(create(device, stride * numElements, resourceFlags,
-		poolType, state, numSRVs, numUAVs, name), false);
+		memoryType, state, numSRVs, numUAVs, name), false);
 
 	// Create SRV
 	if (numSRVs > 0) N_RETURN(CreateSRVs(numElements, stride, firstSRVElements, numSRVs), false);
@@ -1559,7 +1559,7 @@ TypedBuffer::~TypedBuffer()
 }
 
 bool TypedBuffer::Create(const Device &device, uint32_t numElements, uint32_t stride,
-	Format format, ResourceFlags resourceFlags, PoolType poolType, ResourceState state,
+	Format format, ResourceFlags resourceFlags, MemoryType memoryType, ResourceState state,
 	uint32_t numSRVs, const uint32_t *firstSRVElements,
 	uint32_t numUAVs, const uint32_t *firstUAVElements,
 	const wchar_t *name)
@@ -1582,7 +1582,7 @@ bool TypedBuffer::Create(const Device &device, uint32_t numElements, uint32_t st
 
 	// Create buffer
 	N_RETURN(create(device, stride * numElements, resourceFlags,
-		poolType, state, numSRVs, numUAVs, name), false);
+		memoryType, state, numSRVs, numUAVs, name), false);
 
 	// Create SRV
 	if (numSRVs > 0) N_RETURN(CreateSRVs(numElements, format, stride, firstSRVElements, numSRVs), false);
@@ -1660,7 +1660,7 @@ VertexBuffer::~VertexBuffer()
 }
 
 bool VertexBuffer::Create(const Device &device, uint32_t numVertices, uint32_t stride,
-	ResourceFlags resourceFlags, PoolType poolType, ResourceState state,
+	ResourceFlags resourceFlags, MemoryType memoryType, ResourceState state,
 	uint32_t numVBVs, const uint32_t *firstVertices,
 	uint32_t numSRVs, const uint32_t *firstSRVElements,
 	uint32_t numUAVs, const uint32_t *firstUAVElements,
@@ -1677,7 +1677,7 @@ bool VertexBuffer::Create(const Device &device, uint32_t numVertices, uint32_t s
 		state = hasUAV ? D3D12_RESOURCE_STATE_UNORDERED_ACCESS : state;
 	}
 
-	N_RETURN(StructuredBuffer::Create(device, numVertices, stride, resourceFlags, poolType,
+	N_RETURN(StructuredBuffer::Create(device, numVertices, stride, resourceFlags, memoryType,
 		state, numSRVs, firstSRVElements, numUAVs, firstUAVElements, name), false);
 
 	// Create vertex buffer view
@@ -1714,7 +1714,7 @@ IndexBuffer::~IndexBuffer()
 }
 
 bool IndexBuffer::Create(const Device &device, uint32_t byteWidth, Format format,
-	ResourceFlags resourceFlags, PoolType poolType, ResourceState state,
+	ResourceFlags resourceFlags, MemoryType memoryType, ResourceState state,
 	uint32_t numIBVs, const uint32_t *offsets,
 	uint32_t numSRVs, const uint32_t *firstSRVElements,
 	uint32_t numUAVs, const uint32_t *firstUAVElements,
@@ -1733,7 +1733,7 @@ bool IndexBuffer::Create(const Device &device, uint32_t byteWidth, Format format
 		D3D12_RESOURCE_STATE_INDEX_BUFFER);
 
 	N_RETURN(TypedBuffer::Create(device, byteWidth / stride, stride, format, resourceFlags,
-		poolType, state, numSRVs, firstSRVElements, numUAVs, firstUAVElements, name), false);
+		memoryType, state, numSRVs, firstSRVElements, numUAVs, firstUAVElements, name), false);
 
 	// Create index buffer view
 	m_ibvs.resize(numIBVs);

@@ -47,6 +47,7 @@ protected:
 		RAY_GEN_LAYOUT,
 		HIT_GROUP_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
+		RESAMPLE_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
 		TONE_MAP_LAYOUT,
 
@@ -66,6 +67,7 @@ protected:
 	enum PipelineIndex : uint8_t
 	{
 		GBUFFER_PASS,
+		SPATIAL_PASS,
 		TEMPORAL_SS,
 		TEMPORAL_AA,
 		TONE_MAP,
@@ -77,18 +79,25 @@ protected:
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
+		SRV_TABLE_SPATIAL,
+		SRV_TABLE_SPATIAL1,
 		SRV_TABLE_TS,
-		SRV_TABLE_TM = SRV_TABLE_TS + 2,
+		SRV_TABLE_TS1,
+		SRV_TABLE_TM,
+		SRV_TABLE_TM1,
 
-		NUM_SRV_TABLE = SRV_TABLE_TM + 2
+		NUM_SRV_TABLE
 	};
 
 	enum UAVTable : uint8_t
 	{
 		UAV_TABLE_OUTPUT,
+		UAV_TABLE_SPATIAL,
+		UAV_TABLE_SPATIAL1,
 		UAV_TABLE_TSAMP,
+		UAV_TABLE_TSAMP1,
 
-		NUM_UAV_TABLE = UAV_TABLE_TSAMP + 2
+		NUM_UAV_TABLE
 	};
 
 	struct RayGenConstants
@@ -123,6 +132,7 @@ protected:
 	void updateAccelerationStructures(uint32_t frameIndex);
 	void rayTrace(uint32_t frameIndex);
 	void gbufferPass();
+	void spatialPass(uint8_t dst, uint8_t src, uint8_t srcSRV);
 	void temporalSS();
 
 	XUSG::RayTracing::Device m_device;

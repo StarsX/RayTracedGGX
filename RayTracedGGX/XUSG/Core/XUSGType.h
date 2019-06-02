@@ -89,7 +89,7 @@ namespace XUSG
 	
 	// Format and resources related
 	using Format = DXGI_FORMAT;
-	using PoolType = D3D12_HEAP_TYPE;
+	using MemoryType = D3D12_HEAP_TYPE;
 	using ResourceFlags = D3D12_RESOURCE_FLAGS;
 	using SubresourceData = D3D12_SUBRESOURCE_DATA;
 	using ClearFlags = D3D12_CLEAR_FLAGS;

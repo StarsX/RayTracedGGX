@@ -91,7 +91,7 @@ namespace XUSG
 
 		bool Create(const Device &device, uint32_t width, uint32_t height, Format format,
 			uint32_t arraySize = 1, ResourceFlags resourceFlags = ResourceFlags(0),
-			uint8_t numMips = 1, uint8_t sampleCount = 1, PoolType poolType = PoolType(1),
+			uint8_t numMips = 1, uint8_t sampleCount = 1, MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0), bool isCubeMap = false,
 			const wchar_t *name = nullptr);
 		bool Upload(const CommandList &commandList, Resource &resourceUpload,
@@ -209,7 +209,7 @@ namespace XUSG
 
 		bool Create(const Device &device, uint32_t width, uint32_t height, uint32_t depth,
 			Format format, ResourceFlags resourceFlags = ResourceFlags(0), uint8_t numMips = 1,
-			PoolType poolType = PoolType(1), ResourceState state = ResourceState(0),
+			MemoryType memoryType = MemoryType(1), ResourceState state = ResourceState(0),
 			const wchar_t *name = nullptr);
 		bool CreateSRVs(Format format = Format(0), uint8_t numMips = 1);
 		bool CreateSRVLevels(uint8_t numMips, Format format = Format(0));
@@ -235,7 +235,7 @@ namespace XUSG
 		virtual ~RawBuffer();
 
 		bool Create(const Device &device, uint32_t byteWidth, ResourceFlags resourceFlags = ResourceFlags(0),
-			PoolType poolType = PoolType(1), ResourceState state = ResourceState(0),
+			MemoryType memoryType = MemoryType(1), ResourceState state = ResourceState(0),
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
 			const wchar_t *name = nullptr);
@@ -253,7 +253,7 @@ namespace XUSG
 
 	protected:
 		bool create(const Device &device, uint32_t byteWidth, ResourceFlags resourceFlags,
-			PoolType poolType, ResourceState state, uint32_t numSRVs, uint32_t numUAVs,
+			MemoryType memoryType, ResourceState state, uint32_t numSRVs, uint32_t numUAVs,
 			const wchar_t *name);
 
 		std::vector<Descriptor>	m_uavs;
@@ -274,7 +274,7 @@ namespace XUSG
 		virtual ~StructuredBuffer();
 
 		bool Create(const Device &device, uint32_t numElements, uint32_t stride,
-			ResourceFlags resourceFlags = ResourceFlags(0), PoolType poolType = PoolType(1),
+			ResourceFlags resourceFlags = ResourceFlags(0), MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0),
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
@@ -297,7 +297,7 @@ namespace XUSG
 		virtual ~TypedBuffer();
 
 		bool Create(const Device &device, uint32_t numElements, uint32_t stride, Format format,
-			ResourceFlags resourceFlags = ResourceFlags(0), PoolType poolType = PoolType(1),
+			ResourceFlags resourceFlags = ResourceFlags(0), MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0),
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
@@ -320,7 +320,7 @@ namespace XUSG
 		virtual ~VertexBuffer();
 
 		bool Create(const Device &device, uint32_t numVertices, uint32_t stride,
-			ResourceFlags resourceFlags = ResourceFlags(0), PoolType poolType = PoolType(1),
+			ResourceFlags resourceFlags = ResourceFlags(0), MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0),
 			uint32_t numVBVs = 1, const uint32_t *firstVertices = nullptr,
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
@@ -344,7 +344,7 @@ namespace XUSG
 		virtual ~IndexBuffer();
 
 		bool Create(const Device &device, uint32_t byteWidth, Format format = Format(42),
-			ResourceFlags resourceFlags = ResourceFlags(0x8), PoolType poolType = PoolType(1),
+			ResourceFlags resourceFlags = ResourceFlags(0x8), MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0),
 			uint32_t numIBVs = 1, const uint32_t *offsets = nullptr,
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
