@@ -80,6 +80,7 @@ min16float4 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighbor
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS; ++i)
 		neighbors[i] = min16float4(g_txCurrent[uint3(tex + g_texOffsets[i], 1)]);
+		//neighbors[i] = min16float4(g_txSpatial[tex + g_texOffsets[i]]);
 
 	min16float4 gaussian = center;
 
@@ -159,6 +160,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const min16float speed = abs(velocity.x) + abs(velocity.y);
 
 	min16float4 neighborMin, neighborMax;
+	//min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, spatial, current.xyz, DTid);
 	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, curCent, current.xyz, DTid);
 	//filtered.xyz = lerp(current.xyz, filtered.xyz, saturate(speed * 32.0));
 
