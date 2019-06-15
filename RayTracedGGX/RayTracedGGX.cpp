@@ -153,13 +153,13 @@ void RayTracedGGX::LoadAssets()
 	// Create ray tracing interfaces
 	CreateRaytracingInterfaces();
 
-	m_rayTracer = make_unique<RayTracer>(m_device, m_commandList);
+	m_rayTracer = make_unique<RayTracer>(m_device);
 	if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
 	Resource vbUploads[RayTracer::NUM_MESH], ibUploads[RayTracer::NUM_MESH];
 	Geometry geometries[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(m_width, m_height, vbUploads, ibUploads, geometries, m_meshFileName.c_str(),
-		DXGI_FORMAT_R8G8B8A8_UNORM, m_meshPosScale))
+	if (!m_rayTracer->Init(m_commandList, m_width, m_height, vbUploads, ibUploads, geometries,
+		m_meshFileName.c_str(), DXGI_FORMAT_R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -356,16 +356,16 @@ void RayTracedGGX::PopulateCommandList()
 
 	if (m_isPipeChanged)
 	{
-		m_rayTracer->ClearHistory();
+		m_rayTracer->ClearHistory(m_commandList);
 		m_isPipeChanged = false;
 	}
 
 	// Record commands.
-	m_rayTracer->Render(m_frameIndex);
+	m_rayTracer->Render(m_commandList, m_frameIndex);
 
 	ResourceBarrier barriers[2];
 	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_rayTracer->ToneMap(m_rtvTables[m_frameIndex], numBarriers, barriers);
+	m_rayTracer->ToneMap(m_commandList, m_rtvTables[m_frameIndex], numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
 	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);

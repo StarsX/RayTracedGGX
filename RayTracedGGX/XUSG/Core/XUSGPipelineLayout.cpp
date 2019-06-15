@@ -25,7 +25,7 @@ void Util::PipelineLayout::SetShaderStage(uint32_t index, Shader::Stage stage)
 }
 
 void Util::PipelineLayout::SetRange(uint32_t index, DescriptorType type, uint32_t num, uint32_t baseBinding,
-	uint32_t space, uint8_t flags)
+	uint32_t space, uint32_t flags)
 {
 	auto &key = checkKeySpace(index);
 

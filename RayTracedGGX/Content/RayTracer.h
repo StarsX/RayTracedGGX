@@ -26,17 +26,19 @@ public:
 		NUM_RAYTRACE_PIPELINE
 	};
 
-	RayTracer(const XUSG::RayTracing::Device &device, const XUSG::RayTracing::CommandList &commandList);
+	RayTracer(const XUSG::RayTracing::Device &device);
 	virtual ~RayTracer();
 
-	bool Init(uint32_t width, uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
+	bool Init(const XUSG::RayTracing::CommandList &commandList, uint32_t width,
+		uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
 		XUSG::RayTracing::Geometry *geometries, const char *fileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
-	void Render(uint32_t frameIndex);
-	void ToneMap(const XUSG::RenderTargetTable &rtvTable, uint32_t numBarriers, XUSG::ResourceBarrier *pBarriers);
-	void ClearHistory();
+	void Render(const XUSG::RayTracing::CommandList &commandList, uint32_t frameIndex);
+	void ToneMap(const XUSG::RayTracing::CommandList &commandList, const XUSG::RenderTargetTable &rtvTable,
+		uint32_t numBarriers, XUSG::ResourceBarrier *pBarriers);
+	void ClearHistory(const XUSG::RayTracing::CommandList &commandList);
 
 	static const uint32_t FrameCount = 3;
 
@@ -119,24 +121,27 @@ protected:
 		DirectX::XMFLOAT4X4	WorldViewProjPrev;
 	};
 
-	bool createVB(uint32_t numVert, uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
-	bool createIB(uint32_t numIndices, const uint32_t *pData, XUSG::Resource &ibUpload);
-	bool createGroundMesh(XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
+	bool createVB(const XUSG::RayTracing::CommandList &commandList, uint32_t numVert,
+		uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
+	bool createIB(const XUSG::RayTracing::CommandList &commandList, uint32_t numIndices,
+		const uint32_t *pData, XUSG::Resource &ibUpload);
+	bool createGroundMesh(const XUSG::RayTracing::CommandList &commandList,
+		XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
 	bool createInputLayout();
 	bool createPipelineLayouts();
 	bool createPipelines(XUSG::Format rtFormat);
 	bool createDescriptorTables();
-	bool buildAccelerationStructures(XUSG::RayTracing::Geometry *geometries);
+	bool buildAccelerationStructures(const XUSG::RayTracing::CommandList &commandList,
+		XUSG::RayTracing::Geometry *geometries);
 	bool buildShaderTables();
 
-	void updateAccelerationStructures(uint32_t frameIndex);
-	void rayTrace(uint32_t frameIndex);
-	void gbufferPass();
-	void spatialPass(uint8_t dst, uint8_t src, uint8_t srcSRV);
-	void temporalSS();
+	void updateAccelerationStructures(const XUSG::RayTracing::CommandList &commandList, uint32_t frameIndex);
+	void rayTrace(const XUSG::RayTracing::CommandList &commandList, uint32_t frameIndex);
+	void gbufferPass(const XUSG::RayTracing::CommandList &commandList);
+	void spatialPass(const XUSG::RayTracing::CommandList &commandList, uint8_t dst, uint8_t src, uint8_t srcSRV);
+	void temporalSS(const XUSG::RayTracing::CommandList &commandList);
 
 	XUSG::RayTracing::Device m_device;
-	XUSG::RayTracing::CommandList m_commandList;
 
 	uint32_t	m_numIndices[NUM_MESH];
 	uint8_t		m_frameParity;

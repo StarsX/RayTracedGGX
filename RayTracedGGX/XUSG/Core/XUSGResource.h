@@ -7,7 +7,6 @@
 #include "XUSGCommand.h"
 
 #define BIND_PACKED_UAV	ResourceFlags(0x4 | 0x8000)
-#define ALIGN(x, n)		(((x) + (n - 1)) & ~(n - 1))
 
 namespace XUSG
 {
@@ -20,9 +19,11 @@ namespace XUSG
 		ConstantBuffer();
 		virtual ~ConstantBuffer();
 
-		bool Create(const Device &device, uint32_t byteWidth,
-			uint32_t numCBVs = 1, const uint32_t *offsets = nullptr,
+		bool Create(const Device &device, uint32_t byteWidth, uint32_t numCBVs = 1,
+			const uint32_t *offsets = nullptr, MemoryType memoryType = MemoryType(2),
 			const wchar_t *name = nullptr);
+		bool Upload(const CommandList &commandList, Resource &uploader, const void *pData,
+			size_t size, uint32_t i = 0);
 
 		void *Map(uint32_t i = 0);
 		void Unmap();
@@ -94,10 +95,10 @@ namespace XUSG
 			uint8_t numMips = 1, uint8_t sampleCount = 1, MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0), bool isCubeMap = false,
 			const wchar_t *name = nullptr);
-		bool Upload(const CommandList &commandList, Resource &resourceUpload,
+		bool Upload(const CommandList &commandList, Resource &uploader,
 			SubresourceData *pSubresourceData, uint32_t numSubresources = 1,
-			ResourceState dstState = ResourceState(0));
-		bool Upload(const CommandList &commandList, Resource &resourceUpload, const uint8_t *pData,
+			ResourceState dstState = ResourceState(0), uint32_t i = 0);
+		bool Upload(const CommandList &commandList, Resource &uploader, const void *pData,
 			uint8_t stride = sizeof(float), ResourceState dstState = ResourceState(0));
 		bool CreateSRVs(uint32_t arraySize, Format format = Format(0), uint8_t numMips = 1,
 			uint8_t sampleCount = 1, bool isCubeMap = false);
@@ -239,8 +240,8 @@ namespace XUSG
 			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
 			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
 			const wchar_t *name = nullptr);
-		bool Upload(const CommandList &commandList, Resource &resourceUpload,
-			const void *pData, ResourceState dstState = ResourceState(0));
+		bool Upload(const CommandList &commandList, Resource &uploader, const void *pData,
+			size_t size, ResourceState dstState = ResourceState(0), uint32_t i = 0);
 		bool CreateSRVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,
 			uint32_t numDescriptors = 1);
 		bool CreateUAVs(uint32_t byteWidth, const uint32_t *firstElements = nullptr,
@@ -320,6 +321,13 @@ namespace XUSG
 		virtual ~VertexBuffer();
 
 		bool Create(const Device &device, uint32_t numVertices, uint32_t stride,
+			ResourceFlags resourceFlags = ResourceFlags(0), MemoryType memoryType = MemoryType(1),
+			ResourceState state = ResourceState(0),
+			uint32_t numVBVs = 1, const uint32_t *firstVertices = nullptr,
+			uint32_t numSRVs = 1, const uint32_t *firstSRVElements = nullptr,
+			uint32_t numUAVs = 1, const uint32_t *firstUAVElements = nullptr,
+			const wchar_t *name = nullptr);
+		bool CreateAsRaw(const Device &device, uint32_t numVertices, uint32_t stride,
 			ResourceFlags resourceFlags = ResourceFlags(0), MemoryType memoryType = MemoryType(1),
 			ResourceState state = ResourceState(0),
 			uint32_t numVBVs = 1, const uint32_t *firstVertices = nullptr,

@@ -5,6 +5,8 @@
 #include "DXFrameworkHelper.h"
 #include "XUSGShaderTable.h"
 
+#define ALIGN(x, n)			(((x) + (n - 1)) & ~(n - 1))
+
 using namespace std;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
