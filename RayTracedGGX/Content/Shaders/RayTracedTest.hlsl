@@ -47,30 +47,36 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	ray.Direction = reflect(WorldRayDirection(), H);
 	float3 radiance = traceRadianceRay(ray, ++payload.RecursionDepth).Color;
 
-	// Calculate fresnel
-	const float3 specColors[] =
-	{
-		float3(0.95, 0.93, 0.88),	// Silver
-		float3(1.00, 0.71, 0.29)	// Gold
-	};
-	const float3 V = -WorldRayDirection();
-	const float VoH = saturate(dot(V, H));
-	const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
-
-	// Visibility factor
-	const float NoV = saturate(dot(N, V));
 	const float NoL = saturate(dot(N, ray.Direction));
-	const float vis = Vis_Schlick(ROUGHNESS, NoV, NoL);
 
-	// BRDF
-	// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-	const float NoH = saturate(dot(N, H));
-	// pdf = D * NoH / (4 * VoH)
-	//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
-	// pdf = D * NoH
-	radiance *= F * min(NoL * vis / NoH, 1.0);
+	if (NoL > 0.0)
+	{
+		// Calculate fresnel
+		const float3 specColors[] =
+		{
+			float3(0.95, 0.93, 0.88),	// Silver
+			float3(1.00, 0.71, 0.29)	// Gold
+		};
+		const float3 V = -WorldRayDirection();
+		const float VoH = saturate(dot(V, H));
+		const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
 
-	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
+		// Visibility factor
+		const float NoV = saturate(dot(N, V));
+		const float vis = Vis_Schlick(ROUGHNESS, NoV, NoL);
+
+		// BRDF
+		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
+		const float NoH = saturate(dot(N, H));
+		// pdf = D * NoH / (4 * VoH)
+		//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
+		// pdf = D * NoH
+		radiance *= saturate(F * NoL * vis / NoH);
+		//radiance *= EnvBRDFApprox(specColors[InstanceIndex()], ROUGHNESS, NoV);
+
+		//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
+	}
+	else radiance = 0.0;
 
 	payload.Color = radiance;
 }

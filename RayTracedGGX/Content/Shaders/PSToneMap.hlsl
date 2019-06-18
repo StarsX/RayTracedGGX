@@ -16,5 +16,5 @@ min16float4 main(float4 Pos : SV_POSITION) : SV_TARGET
 	min16float4 result = min16float4(g_txSource[loc]);
 	result.xyz /= result.xyz + 1.0;
 
-	return min16float4(result.xyz, result.w);
+	return min16float4(result.xyz * 1.25, result.w);
 }
