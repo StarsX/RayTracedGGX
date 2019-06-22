@@ -418,9 +418,11 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for resampling
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
+		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0,
+			0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
@@ -431,9 +433,11 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for temporal SS
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
+		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0,
+			0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
+			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
@@ -444,7 +448,7 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for tone mapping
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetRange(0, DescriptorType::SRV, 1, 0);
+		pipelineLayout.SetRange(0, DescriptorType::SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 		pipelineLayout.SetShaderStage(0, Shader::Stage::PS);
 		X_RETURN(m_pipelineLayouts[TONE_MAP_LAYOUT], pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
 			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"ToneMappingPipelineLayout"), false);

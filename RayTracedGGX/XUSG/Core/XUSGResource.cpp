@@ -711,8 +711,8 @@ void RenderTarget::Populate(const CommandList &commandList, const DescriptorTabl
 
 	// Set viewport
 	const auto desc = m_resource->GetDesc();
-	const auto width = static_cast<uint32_t>(desc.Width >> mipLevel);
-	const auto height = static_cast<uint32_t>(desc.Height >> mipLevel);
+	const auto width = (max)(static_cast<uint32_t>(desc.Width >> mipLevel), 1u);
+	const auto height = (max)(desc.Height >> mipLevel, 1u);
 	const Viewport viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height));
 	const RectRange rect(0, 0, width, height);
 	commandList.RSSetViewports(1, &viewport);
