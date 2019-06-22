@@ -156,9 +156,9 @@ void RayTracedGGX::LoadAssets()
 	m_rayTracer = make_unique<RayTracer>(m_device);
 	if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
-	Resource vbUploads[RayTracer::NUM_MESH], ibUploads[RayTracer::NUM_MESH];
+	vector<Resource> uploaders(0);
 	Geometry geometries[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(m_commandList, m_width, m_height, vbUploads, ibUploads, geometries,
+	if (!m_rayTracer->Init(m_commandList, m_width, m_height, uploaders, geometries,
 		m_meshFileName.c_str(), DXGI_FORMAT_R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 

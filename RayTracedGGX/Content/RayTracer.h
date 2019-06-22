@@ -29,9 +29,9 @@ public:
 	RayTracer(const XUSG::RayTracing::Device &device);
 	virtual ~RayTracer();
 
-	bool Init(const XUSG::RayTracing::CommandList &commandList, uint32_t width,
-		uint32_t height, XUSG::Resource *vbUploads, XUSG::Resource *ibUploads,
-		XUSG::RayTracing::Geometry *geometries, const char *fileName, XUSG::Format rtFormat,
+	bool Init(const XUSG::RayTracing::CommandList &commandList, uint32_t width, uint32_t height,
+		std::vector<XUSG::Resource> &uploaders, XUSG::RayTracing::Geometry *geometries,
+		const char *fileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4 &posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
@@ -122,11 +122,11 @@ protected:
 	};
 
 	bool createVB(const XUSG::RayTracing::CommandList &commandList, uint32_t numVert,
-		uint32_t stride, const uint8_t *pData, XUSG::Resource &vbUpload);
+		uint32_t stride, const uint8_t *pData, std::vector<XUSG::Resource> &uploaders);
 	bool createIB(const XUSG::RayTracing::CommandList &commandList, uint32_t numIndices,
-		const uint32_t *pData, XUSG::Resource &ibUpload);
+		const uint32_t *pData, std::vector<XUSG::Resource> &uploaders);
 	bool createGroundMesh(const XUSG::RayTracing::CommandList &commandList,
-		XUSG::Resource &vbUpload, XUSG::Resource &ibUpload);
+		std::vector<XUSG::Resource> &uploaders);
 	bool createInputLayout();
 	bool createPipelineLayouts();
 	bool createPipelines(XUSG::Format rtFormat);

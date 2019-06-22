@@ -40,7 +40,7 @@ RayTracer::~RayTracer()
 }
 
 bool RayTracer::Init(const RayTracing::CommandList &commandList, uint32_t width, uint32_t height,
-	Resource *vbUploads, Resource *ibUploads, Geometry *geometries, const char *fileName,
+	vector<Resource> &uploaders, Geometry *geometries, const char *fileName,
 	Format rtFormat, const XMFLOAT4 &posScale)
 {
 	m_viewport = XMUINT2(width, height);
@@ -49,10 +49,10 @@ bool RayTracer::Init(const RayTracing::CommandList &commandList, uint32_t width,
 	// Load inputs
 	ObjLoader objLoader;
 	if (!objLoader.Import(fileName, true, true)) return false;
-	N_RETURN(createVB(commandList, objLoader.GetNumVertices(), objLoader.GetVertexStride(), objLoader.GetVertices(), vbUploads[MODEL_OBJ]), false);
-	N_RETURN(createIB(commandList, objLoader.GetNumIndices(), objLoader.GetIndices(), ibUploads[MODEL_OBJ]), false);
+	N_RETURN(createVB(commandList, objLoader.GetNumVertices(), objLoader.GetVertexStride(), objLoader.GetVertices(), uploaders), false);
+	N_RETURN(createIB(commandList, objLoader.GetNumIndices(), objLoader.GetIndices(), uploaders), false);
 
-	N_RETURN(createGroundMesh(commandList, vbUploads[GROUND], ibUploads[GROUND]), false);
+	N_RETURN(createGroundMesh(commandList, uploaders), false);
 
 	// Create raytracing pipelines
 	N_RETURN(createInputLayout(), false);
@@ -250,18 +250,19 @@ void RayTracer::ClearHistory(const RayTracing::CommandList &commandList)
 }
 
 bool RayTracer::createVB(const RayTracing::CommandList &commandList, uint32_t numVert,
-	uint32_t stride, const uint8_t *pData, Resource &vbUpload)
+	uint32_t stride, const uint8_t *pData, vector<Resource> &uploaders)
 {
 	auto &vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride, D3D12_RESOURCE_FLAG_NONE,
 		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+	uploaders.push_back(nullptr);
 
-	return vertexBuffer.Upload(commandList, vbUpload, pData, stride * numVert,
+	return vertexBuffer.Upload(commandList, uploaders.back(), pData, stride * numVert,
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool RayTracer::createIB(const RayTracing::CommandList &commandList, uint32_t numIndices,
-	const uint32_t *pData, Resource &ibUpload)
+	const uint32_t *pData, vector<Resource> &uploaders)
 {
 	m_numIndices[MODEL_OBJ] = numIndices;
 
@@ -269,13 +270,13 @@ bool RayTracer::createIB(const RayTracing::CommandList &commandList, uint32_t nu
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	N_RETURN(indexBuffers.Create(m_device.Common, byteWidth, DXGI_FORMAT_R32_UINT,
 		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+	uploaders.push_back(nullptr);
 
-	return indexBuffers.Upload(commandList, ibUpload, pData,
+	return indexBuffers.Upload(commandList, uploaders.back(), pData,
 		byteWidth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
-bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList,
-	Resource &vbUpload, Resource &ibUpload)
+bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList, vector<Resource> &uploaders)
 {
 	// Vertex buffer
 	{
@@ -316,8 +317,9 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList,
 		auto &vertexBuffer = m_vertexBuffers[GROUND];
 		N_RETURN(vertexBuffer.Create(m_device.Common, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+		uploaders.push_back(nullptr);
 
-		N_RETURN(vertexBuffer.Upload(commandList, vbUpload, vertices, sizeof(vertices),
+		N_RETURN(vertexBuffer.Upload(commandList, uploaders.back(), vertices, sizeof(vertices),
 			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -350,8 +352,9 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList,
 		auto &indexBuffers = m_indexBuffers[GROUND];
 		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), DXGI_FORMAT_R32_UINT,
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+		uploaders.push_back(nullptr);
 
-		N_RETURN(indexBuffers.Upload(commandList, ibUpload, indices, sizeof(indices),
+		N_RETURN(indexBuffers.Upload(commandList, uploaders.back(), indices, sizeof(indices),
 			D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
