@@ -60,14 +60,25 @@ bool RayTracer::Init(const RayTracing::CommandList &commandList, uint32_t width,
 	N_RETURN(createPipelines(rtFormat), false);
 
 	// Create output view and build acceleration structures
-	m_outputViews[UAV_TABLE_OUTPUT].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, SAMPLE_COUNT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	m_outputViews[UAV_TABLE_SPATIAL].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-		1, 1, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-	m_outputViews[UAV_TABLE_SPATIAL1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	m_outputViews[UAV_TABLE_TSAMP].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	m_outputViews[UAV_TABLE_TSAMP1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT, 1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
-	m_velocity.Create(m_device.Common, width, height, DXGI_FORMAT_R16G16_FLOAT);
-	m_depth.Create(m_device.Common, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE);
+	m_outputViews[UAV_TABLE_OUTPUT].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+		SAMPLE_COUNT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1, 1, D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_COMMON, false, L"RayTracingOut");
+	m_outputViews[UAV_TABLE_SPATIAL].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+		1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1, 1, D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, false, L"SpatialOut0");
+	m_outputViews[UAV_TABLE_SPATIAL1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+		1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1, 1, D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_COMMON, false, L"SpatialOut1");
+	m_outputViews[UAV_TABLE_TSAMP].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+		1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1, 1, D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_COMMON, false, L"TemporalSSOut0");
+	m_outputViews[UAV_TABLE_TSAMP1].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+		1, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1, 1, D3D12_HEAP_TYPE_DEFAULT,
+		D3D12_RESOURCE_STATE_COMMON, false, L"TemporalSSOut1");
+	m_velocity.Create(m_device.Common, width, height, DXGI_FORMAT_R16G16_FLOAT, 1, D3D12_RESOURCE_FLAG_NONE,
+		1, 1, D3D12_RESOURCE_STATE_COMMON, nullptr, false, L"Velocity");
+	m_depth.Create(m_device.Common, width, height, DXGI_FORMAT_D24_UNORM_S8_UINT, D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE,
+		1, 1, 1, D3D12_RESOURCE_STATE_COMMON, 1.0f, 0, false, L"Depth");
 	N_RETURN(buildAccelerationStructures(commandList, geometries), false);
 	N_RETURN(buildShaderTables(), false);
 
@@ -254,7 +265,8 @@ bool RayTracer::createVB(const RayTracing::CommandList &commandList, uint32_t nu
 {
 	auto &vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride, D3D12_RESOURCE_FLAG_NONE,
-		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, 1, nullptr, 1, nullptr,
+		1, nullptr, L"MeshVB"), false);
 	uploaders.push_back(nullptr);
 
 	return vertexBuffer.Upload(commandList, uploaders.back(), pData, stride * numVert,
@@ -269,7 +281,8 @@ bool RayTracer::createIB(const RayTracing::CommandList &commandList, uint32_t nu
 	auto &indexBuffers = m_indexBuffers[MODEL_OBJ];
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	N_RETURN(indexBuffers.Create(m_device.Common, byteWidth, DXGI_FORMAT_R32_UINT,
-		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
+		1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
 	uploaders.push_back(nullptr);
 
 	return indexBuffers.Upload(commandList, uploaders.back(), pData,
@@ -316,7 +329,8 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList, vec
 
 		auto &vertexBuffer = m_vertexBuffers[GROUND];
 		N_RETURN(vertexBuffer.Create(m_device.Common, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
-			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, 1, nullptr,
+			1, nullptr, 1, nullptr, L"GroundVB"), false);
 		uploaders.push_back(nullptr);
 
 		N_RETURN(vertexBuffer.Upload(commandList, uploaders.back(), vertices, sizeof(vertices),
@@ -351,7 +365,8 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList, vec
 
 		auto &indexBuffers = m_indexBuffers[GROUND];
 		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), DXGI_FORMAT_R32_UINT,
-			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST), false);
+			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
+			1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
 		uploaders.push_back(nullptr);
 
 		N_RETURN(indexBuffers.Upload(commandList, uploaders.back(), indices, sizeof(indices),
@@ -421,11 +436,10 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for resampling
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0,
-			0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
+		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
@@ -436,11 +450,10 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for temporal SS
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0,
-			0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE |
+		pipelineLayout.SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
 			D3D12_DESCRIPTOR_RANGE_FLAG_DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout.SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+		pipelineLayout.SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0);
 		pipelineLayout.SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetShaderStage(SAMPLER, Shader::Stage::CS);
@@ -451,7 +464,7 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for tone mapping
 	{
 		Util::PipelineLayout pipelineLayout;
-		pipelineLayout.SetRange(0, DescriptorType::SRV, 1, 0, 0, D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+		pipelineLayout.SetRange(0, DescriptorType::SRV, 1, 0);
 		pipelineLayout.SetShaderStage(0, Shader::Stage::PS);
 		X_RETURN(m_pipelineLayouts[TONE_MAP_LAYOUT], pipelineLayout.GetPipelineLayout(m_pipelineLayoutCache,
 			D3D12_ROOT_SIGNATURE_FLAG_NONE, L"ToneMappingPipelineLayout"), false);
@@ -851,7 +864,8 @@ void RayTracer::spatialPass(const RayTracing::CommandList &commandList, uint8_t 
 	commandList.SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[srcSRV]);
 	commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
-	commandList.SetPipelineState(m_pipelines[SPATIAL_PASS]);
+	if (srcSRV != SRV_TABLE_SPATIAL && srcSRV != SRV_TABLE_SPATIAL1)
+		commandList.SetPipelineState(m_pipelines[SPATIAL_PASS]);
 	commandList.Dispatch(ALIGNED_DIV(m_viewport.x, 8), ALIGNED_DIV(m_viewport.y, 8), 1);
 }
 
