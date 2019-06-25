@@ -19,7 +19,7 @@
 static const min16float g_historyMax = min16float(1 << 8) - 1.0;
 
 static const min16float3 g_lumBase = { 0.25, 0.5, 0.25 };
-static int2 g_texOffsets[] =
+static const int2 g_texOffsets[] =
 {
 	int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1),
 	int2(-1, -1), int2(1, -1), int2(1, 1), int2(-1, 1)

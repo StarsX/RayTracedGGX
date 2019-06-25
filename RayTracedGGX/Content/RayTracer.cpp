@@ -539,7 +539,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
-		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 0, L"SpatialPass.cso");
+		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 1, L"SpatialPass.cso");
 
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
@@ -548,7 +548,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
-		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 0, L"TemporalAA.cso");
+		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 2, L"TemporalAA.cso");
 
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);

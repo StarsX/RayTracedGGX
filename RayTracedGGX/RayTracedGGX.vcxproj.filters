@@ -111,6 +111,9 @@
     <ClCompile Include="XUSG\Core\XUSGCommand.cpp">
       <Filter>XUSG\Core\Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="XUSG\Core\XUSGReflector.cpp">
+      <Filter>XUSG\Core\Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -187,6 +190,12 @@
     </ClInclude>
     <ClInclude Include="XUSG\Core\XUSGCommand.h">
       <Filter>XUSG\Core\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="XUSG\Core\XUSGReflector.h">
+      <Filter>XUSG\Core\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\dxcapi.h">
+      <Filter>Common\Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

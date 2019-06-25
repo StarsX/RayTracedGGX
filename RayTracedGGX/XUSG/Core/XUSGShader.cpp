@@ -24,13 +24,13 @@ void ShaderPool::SetShader(Shader::Stage stage, uint32_t index, const Blob &shad
 	checkShaderStorage(stage, index) = shader;
 }
 
-void ShaderPool::SetShader(Shader::Stage stage, uint32_t index, const Blob &shader, const Reflector &reflector)
+void ShaderPool::SetShader(Shader::Stage stage, uint32_t index, const Blob &shader, const ReflectorPtr &reflector)
 {
 	SetShader(stage, index, shader);
 	SetReflector(stage, index, reflector);
 }
 
-void ShaderPool::SetReflector(Shader::Stage stage, uint32_t index, const Reflector &reflector)
+void ShaderPool::SetReflector(Shader::Stage stage, uint32_t index, const ReflectorPtr &reflector)
 {
 	checkReflectorStorage(stage, index) = reflector;
 }
@@ -41,8 +41,8 @@ Blob ShaderPool::CreateShader(Shader::Stage stage, uint32_t index, const wstring
 	V_RETURN(D3DReadFileToBlob(fileName.c_str(), &shader), cerr, nullptr);
 
 	auto &reflector = checkReflectorStorage(stage, index);
-	V_RETURN(D3DReflect(shader->GetBufferPointer(), shader->GetBufferSize(),
-		IID_ID3D12ShaderReflection, &reflector), cerr, nullptr);
+	reflector = make_shared<Reflector>();
+	N_RETURN(reflector->SetShader(shader), nullptr);
 
 	return shader;
 }
@@ -52,7 +52,7 @@ Blob ShaderPool::GetShader(Shader::Stage stage, uint32_t index) const
 	return index < m_shaders[stage].size() ? m_shaders[stage][index] : nullptr;
 }
 
-Reflector ShaderPool::GetReflector(Shader::Stage stage, uint32_t index) const
+ReflectorPtr ShaderPool::GetReflector(Shader::Stage stage, uint32_t index) const
 {
 	return index < m_reflectors[stage].size() ? m_reflectors[stage][index] : nullptr;
 }
@@ -65,7 +65,7 @@ Blob &ShaderPool::checkShaderStorage(Shader::Stage stage, uint32_t index)
 	return m_shaders[stage][index];
 }
 
-Reflector &ShaderPool::checkReflectorStorage(Shader::Stage stage, uint32_t index)
+ReflectorPtr &ShaderPool::checkReflectorStorage(Shader::Stage stage, uint32_t index)
 {
 	if (index >= m_reflectors[stage].size())
 		m_reflectors[stage].resize(index + 1);

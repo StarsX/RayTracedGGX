@@ -321,6 +321,7 @@ void RayTracedGGX::OnMouseLeave()
 
 void RayTracedGGX::ParseCommandLineArgs(wchar_t *argv[], int argc)
 {
+	wstring_convert<codecvt_utf8<wchar_t>> converter;
 	DXFramework::ParseCommandLineArgs(argv, argc);
 
 	for (auto i = 1; i < argc; ++i)
@@ -328,11 +329,7 @@ void RayTracedGGX::ParseCommandLineArgs(wchar_t *argv[], int argc)
 		if (_wcsnicmp(argv[i], L"-mesh", wcslen(argv[i])) == 0 ||
 			_wcsnicmp(argv[i], L"/mesh", wcslen(argv[i])) == 0)
 		{
-			if (i + 1 < argc)
-			{
-				wstring meshFileName = argv[i + 1];
-				m_meshFileName.assign(meshFileName.begin(), meshFileName.end());
-			}
+			if (i + 1 < argc) m_meshFileName = converter.to_bytes(argv[i + 1]);
 			m_meshPosScale.x = i + 2 < argc ? static_cast<float>(_wtof(argv[i + 2])) : m_meshPosScale.x;
 			m_meshPosScale.y = i + 3 < argc ? static_cast<float>(_wtof(argv[i + 3])) : m_meshPosScale.y;
 			m_meshPosScale.z = i + 4 < argc ? static_cast<float>(_wtof(argv[i + 4])) : m_meshPosScale.z;
