@@ -37,9 +37,6 @@
     <Filter Include="XUSG\Core\Header Files">
       <UniqueIdentifier>{19d6cc84-141e-4472-b877-256e22afd693}</UniqueIdentifier>
     </Filter>
-    <Filter Include="XUSG\Core\Inc">
-      <UniqueIdentifier>{9f657aec-a32b-44e3-ae3c-df572dcec372}</UniqueIdentifier>
-    </Filter>
     <Filter Include="XUSG\RayTracing">
       <UniqueIdentifier>{8a94dc10-18f6-415c-b116-508b87607a00}</UniqueIdentifier>
     </Filter>
@@ -48,6 +45,9 @@
     </Filter>
     <Filter Include="XUSG\RayTracing\Source Files">
       <UniqueIdentifier>{5f91f3cf-7fab-463c-a036-662aca6ea25b}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="XUSG\Core\Source Files\Inc">
+      <UniqueIdentifier>{9f657aec-a32b-44e3-ae3c-df572dcec372}</UniqueIdentifier>
     </Filter>
   </ItemGroup>
   <ItemGroup>
@@ -229,16 +229,16 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="XUSG\Core\XUSGBlend.inl">
-      <Filter>XUSG\Core\Inc</Filter>
+      <Filter>XUSG\Core\Source Files\Inc</Filter>
     </None>
     <None Include="XUSG\Core\XUSGDepthStencil.inl">
-      <Filter>XUSG\Core\Inc</Filter>
+      <Filter>XUSG\Core\Source Files\Inc</Filter>
     </None>
     <None Include="XUSG\Core\XUSGRasterizer.inl">
-      <Filter>XUSG\Core\Inc</Filter>
+      <Filter>XUSG\Core\Source Files\Inc</Filter>
     </None>
     <None Include="XUSG\Core\XUSGSampler.inl">
-      <Filter>XUSG\Core\Inc</Filter>
+      <Filter>XUSG\Core\Source Files\Inc</Filter>
     </None>
     <None Include="Content\Shaders\BRDFModels.hlsli">
       <Filter>Shaders</Filter>
