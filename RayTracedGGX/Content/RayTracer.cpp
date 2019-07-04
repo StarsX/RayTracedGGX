@@ -7,8 +7,8 @@
 #include "RayTracer.h"
 
 #define SAMPLE_COUNT 2
-#define ALIGNED_DIV(x, n)	(((x) - 1) / (n) + 1)
-#define SizeOfInUint32(obj)	ALIGNED_DIV(sizeof(obj), sizeof(uint32_t))
+#define DIV_UP(x, n)		(((x) - 1) / (n) + 1)
+#define SizeOfInUint32(obj)	DIV_UP(sizeof(obj), sizeof(uint32_t))
 
 using namespace std;
 using namespace DirectX;
@@ -866,7 +866,7 @@ void RayTracer::spatialPass(const RayTracing::CommandList &commandList, uint8_t 
 
 	if (srcSRV != SRV_TABLE_SPATIAL && srcSRV != SRV_TABLE_SPATIAL1)
 		commandList.SetPipelineState(m_pipelines[SPATIAL_PASS]);
-	commandList.Dispatch(ALIGNED_DIV(m_viewport.x, 8), ALIGNED_DIV(m_viewport.y, 8), 1);
+	commandList.Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
 }
 
 void RayTracer::temporalSS(const RayTracing::CommandList &commandList)
@@ -897,5 +897,5 @@ void RayTracer::temporalSS(const RayTracing::CommandList &commandList)
 	commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
 	commandList.SetPipelineState(m_pipelines[m_pipeIndex == GGX ? TEMPORAL_SS : TEMPORAL_AA]);
-	commandList.Dispatch(ALIGNED_DIV(m_viewport.x, 8), ALIGNED_DIV(m_viewport.y, 8), 1);
+	commandList.Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
 }
