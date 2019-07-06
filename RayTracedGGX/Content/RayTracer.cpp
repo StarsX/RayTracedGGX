@@ -7,7 +7,6 @@
 #include "RayTracer.h"
 
 #define SAMPLE_COUNT 2
-#define DIV_UP(x, n)		(((x) - 1) / (n) + 1)
 #define SizeOfInUint32(obj)	DIV_UP(sizeof(obj), sizeof(uint32_t))
 
 using namespace std;
