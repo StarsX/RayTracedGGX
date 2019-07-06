@@ -133,7 +133,7 @@ void RayTracedGGX::LoadPipeline()
 	// Create a RTV and a command allocator for each frame.
 	for (auto n = 0u; n < FrameCount; ++n)
 	{
-		m_renderTargets[n].CreateFromSwapChain(m_device.Common, m_swapChain, n);
+		N_RETURN(m_renderTargets[n].CreateFromSwapChain(m_device.Common, m_swapChain, n), ThrowIfFailed(E_FAIL));
 
 		Util::DescriptorTable rtvTable;
 		rtvTable.SetDescriptors(0, 1, &m_renderTargets[n].GetRTV());
