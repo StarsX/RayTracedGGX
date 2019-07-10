@@ -148,9 +148,16 @@ static const XMFLOAT2 &IncrementalHalton()
 
 void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj, bool isPaused)
 {
+	const auto halton = IncrementalHalton();
+	XMFLOAT2 projBias =
+	{
+		(halton.x * 2.0f - 1.0f) / m_viewport.x,
+		(halton.y * 2.0f - 1.0f) / m_viewport.y
+	};
+
 	{
 		const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
-		RayGenConstants cbRayGen = { XMMatrixTranspose(projToWorld), eyePt, IncrementalHalton() };
+		RayGenConstants cbRayGen = { XMMatrixTranspose(projToWorld), eyePt, XMFLOAT2(-halton.x, halton.y) };
 
 		m_rayGenShaderTables[frameIndex][m_pipeIndex].Reset();
 		m_rayGenShaderTables[frameIndex][m_pipeIndex].AddShaderRecord(ShaderRecord(m_device, m_rayTracingPipelines[m_pipeIndex],
@@ -180,6 +187,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 
 		for (auto i = 0; i < NUM_MESH; ++i)
 		{
+			m_cbBasePass[i].ProjBias = projBias;
 			m_cbBasePass[i].WorldViewProjPrev = m_cbBasePass[i].WorldViewProj;
 			XMStoreFloat4x4(&m_worlds[i], XMMatrixTranspose(worlds[i]));
 			XMStoreFloat4x4(&m_cbBasePass[i].WorldViewProj, XMMatrixTranspose(worlds[i] * viewProj));

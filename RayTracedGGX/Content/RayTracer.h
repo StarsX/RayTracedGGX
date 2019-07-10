@@ -119,6 +119,7 @@ protected:
 	{
 		DirectX::XMFLOAT4X4	WorldViewProj;
 		DirectX::XMFLOAT4X4	WorldViewProjPrev;
+		DirectX::XMFLOAT2	ProjBias;
 	};
 
 	bool createVB(const XUSG::RayTracing::CommandList &commandList, uint32_t numVert,
