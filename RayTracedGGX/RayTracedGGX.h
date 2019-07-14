@@ -40,7 +40,7 @@ public:
 	virtual void OnMouseWheel(float deltaZ, float posX, float posY);
 	virtual void OnMouseLeave();
 
-	virtual void ParseCommandLineArgs(wchar_t *argv[], int argc);
+	virtual void ParseCommandLineArgs(wchar_t* argv[], int argc);
 
 private:
 	static const uint32_t FrameCount = RayTracer::FrameCount;
@@ -60,7 +60,7 @@ private:
 	XUSG::RayTracing::Device m_device;
 	XUSG::RenderTarget m_renderTargets[FrameCount];
 	XUSG::RayTracing::CommandList m_commandList;
-	
+
 	// App resources.
 	std::unique_ptr<RayTracer> m_rayTracer;
 	XUSG::RenderTargetTable	m_rtvTables[FrameCount];
@@ -94,9 +94,9 @@ private:
 	void PopulateCommandList();
 	void WaitForGpu();
 	void MoveToNextFrame();
-	double CalculateFrameStats(float *fTimeStep = nullptr);
+	double CalculateFrameStats(float* fTimeStep = nullptr);
 
 	// Ray tracing
-	void EnableDirectXRaytracing(IDXGIAdapter1 *adapter);
+	void EnableDirectXRaytracing(IDXGIAdapter1* adapter);
 	void CreateRaytracingInterfaces();
 };

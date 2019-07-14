@@ -14,12 +14,12 @@ using namespace DirectX;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
 
-const wchar_t *RayTracer::HitGroupName = L"hitGroup";
-const wchar_t *RayTracer::RaygenShaderName = L"raygenMain";
-const wchar_t *RayTracer::ClosestHitShaderName = L"closestHitMain";
-const wchar_t *RayTracer::MissShaderName = L"missMain";
+const wchar_t* RayTracer::HitGroupName = L"hitGroup";
+const wchar_t* RayTracer::RaygenShaderName = L"raygenMain";
+const wchar_t* RayTracer::ClosestHitShaderName = L"closestHitMain";
+const wchar_t* RayTracer::MissShaderName = L"missMain";
 
-RayTracer::RayTracer(const RayTracing::Device &device) :
+RayTracer::RayTracer(const RayTracing::Device& device) :
 	m_device(device),
 	m_frameParity(0),
 	m_instances(),
@@ -38,9 +38,9 @@ RayTracer::~RayTracer()
 {
 }
 
-bool RayTracer::Init(const RayTracing::CommandList &commandList, uint32_t width, uint32_t height,
-	vector<Resource> &uploaders, Geometry *geometries, const char *fileName,
-	Format rtFormat, const XMFLOAT4 &posScale)
+bool RayTracer::Init(const RayTracing::CommandList& commandList, uint32_t width, uint32_t height,
+	vector<Resource>& uploaders, Geometry* geometries, const char* fileName,
+	Format rtFormat, const XMFLOAT4& posScale)
 {
 	m_viewport = XMUINT2(width, height);
 	m_posScale = posScale;
@@ -89,7 +89,7 @@ void RayTracer::SetPipeline(RayTracingPipeline pipeline)
 	m_pipeIndex = pipeline;
 }
 
-static const XMFLOAT2 &IncrementalHalton()
+static const XMFLOAT2& IncrementalHalton()
 {
 	static auto haltonBase = XMUINT2(0, 0);
 	static auto halton = XMFLOAT2(0.0f, 0.0f);
@@ -168,7 +168,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		static auto angle = 0.0f;
 		angle += !isPaused && m_pipeIndex == TEST ? 0.1f * XM_PI / 180.0f : 0.0f;
 		const auto rot = XMMatrixRotationY(angle);
-		
+
 		const auto n = 256u;
 		static auto i = 0u;
 		HitGroupConstants cbHitGroup = { XMMatrixTranspose(rot), i };
@@ -195,7 +195,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 	}
 }
 
-void RayTracer::Render(const RayTracing::CommandList &commandList, uint32_t frameIndex)
+void RayTracer::Render(const RayTracing::CommandList& commandList, uint32_t frameIndex)
 {
 	updateAccelerationStructures(commandList, frameIndex);
 
@@ -222,8 +222,8 @@ void RayTracer::Render(const RayTracing::CommandList &commandList, uint32_t fram
 	m_frameParity = !m_frameParity;
 }
 
-void RayTracer::ToneMap(const RayTracing::CommandList &commandList, const RenderTargetTable &rtvTable,
-	uint32_t numBarriers, ResourceBarrier *pBarriers)
+void RayTracer::ToneMap(const RayTracing::CommandList& commandList, const RenderTargetTable& rtvTable,
+	uint32_t numBarriers, ResourceBarrier* pBarriers)
 {
 	numBarriers = m_outputViews[UAV_TABLE_TSAMP + m_frameParity].SetBarrier(
 		pBarriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
@@ -250,7 +250,7 @@ void RayTracer::ToneMap(const RayTracing::CommandList &commandList, const Render
 	commandList.DrawIndexed(3, 1, 0, 0, 0);
 }
 
-void RayTracer::ClearHistory(const RayTracing::CommandList &commandList)
+void RayTracer::ClearHistory(const RayTracing::CommandList& commandList)
 {
 	ResourceBarrier barriers[FrameCount];
 	auto numBarriers = 0u;
@@ -267,10 +267,10 @@ void RayTracer::ClearHistory(const RayTracing::CommandList &commandList)
 	}
 }
 
-bool RayTracer::createVB(const RayTracing::CommandList &commandList, uint32_t numVert,
-	uint32_t stride, const uint8_t *pData, vector<Resource> &uploaders)
+bool RayTracer::createVB(const RayTracing::CommandList& commandList, uint32_t numVert,
+	uint32_t stride, const uint8_t* pData, vector<Resource>& uploaders)
 {
-	auto &vertexBuffer = m_vertexBuffers[MODEL_OBJ];
+	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride, D3D12_RESOURCE_FLAG_NONE,
 		D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, 1, nullptr, 1, nullptr,
 		1, nullptr, L"MeshVB"), false);
@@ -280,12 +280,12 @@ bool RayTracer::createVB(const RayTracing::CommandList &commandList, uint32_t nu
 		D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
-bool RayTracer::createIB(const RayTracing::CommandList &commandList, uint32_t numIndices,
-	const uint32_t *pData, vector<Resource> &uploaders)
+bool RayTracer::createIB(const RayTracing::CommandList& commandList, uint32_t numIndices,
+	const uint32_t* pData, vector<Resource>& uploaders)
 {
 	m_numIndices[MODEL_OBJ] = numIndices;
 
-	auto &indexBuffers = m_indexBuffers[MODEL_OBJ];
+	auto& indexBuffers = m_indexBuffers[MODEL_OBJ];
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	N_RETURN(indexBuffers.Create(m_device.Common, byteWidth, DXGI_FORMAT_R32_UINT,
 		D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
@@ -296,7 +296,7 @@ bool RayTracer::createIB(const RayTracing::CommandList &commandList, uint32_t nu
 		byteWidth, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 }
 
-bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList, vector<Resource> &uploaders)
+bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vector<Resource>& uploaders)
 {
 	// Vertex buffer
 	{
@@ -334,7 +334,7 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList, vec
 			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
 		};
 
-		auto &vertexBuffer = m_vertexBuffers[GROUND];
+		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		N_RETURN(vertexBuffer.Create(m_device.Common, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST, 1, nullptr,
 			1, nullptr, 1, nullptr, L"GroundVB"), false);
@@ -370,7 +370,7 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList &commandList, vec
 
 		m_numIndices[GROUND] = static_cast<uint32_t>(size(indices));
 
-		auto &indexBuffers = m_indexBuffers[GROUND];
+		auto& indexBuffers = m_indexBuffers[GROUND];
 		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), DXGI_FORMAT_R32_UINT,
 			D3D12_RESOURCE_FLAG_NONE, D3D12_HEAP_TYPE_DEFAULT, D3D12_RESOURCE_STATE_COPY_DEST,
 			1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
@@ -686,7 +686,7 @@ bool RayTracer::createDescriptorTables()
 	return true;
 }
 
-bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList &commandList, Geometry *geometries)
+bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& commandList, Geometry* geometries)
 {
 	AccelerationStructure::SetFrameCount(FrameCount);
 
@@ -715,29 +715,29 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList &comma
 
 	// Create scratch buffer
 	auto scratchSize = m_topLevelAS.GetScratchDataMaxSize();
-	for (const auto &bottomLevelAS : m_bottomLevelASs)
+	for (const auto& bottomLevelAS : m_bottomLevelASs)
 		scratchSize = (max)(bottomLevelAS.GetScratchDataMaxSize(), scratchSize);
 	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device, m_scratch, scratchSize), false);
 
 	// Get descriptor pool and create descriptor tables
 	N_RETURN(createDescriptorTables(), false);
-	const auto &descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto& descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
 	XMFLOAT4X4 matrices[NUM_MESH];
 	XMStoreFloat4x4(&matrices[GROUND], XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))));
 	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
 		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))));
-	float *const transforms[] =
+	float* const transforms[] =
 	{
 		reinterpret_cast<float*>(&matrices[GROUND]),
 		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
 	};
-	auto &instances = m_instances[FrameCount - 1];
+	auto& instances = m_instances[FrameCount - 1];
 	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, m_bottomLevelASs, transforms);
 
 	// Build bottom level ASs
-	for (auto &bottomLevelAS : m_bottomLevelASs)
+	for (auto& bottomLevelAS : m_bottomLevelASs)
 		bottomLevelAS.Build(commandList, m_scratch, descriptorPool, NumUAVs);
 
 	// Build top level AS
@@ -777,10 +777,10 @@ bool RayTracer::buildShaderTables()
 	return true;
 }
 
-void RayTracer::updateAccelerationStructures(const RayTracing::CommandList &commandList, uint32_t frameIndex)
+void RayTracer::updateAccelerationStructures(const RayTracing::CommandList& commandList, uint32_t frameIndex)
 {
 	// Set instance
-	float *const transforms[] =
+	float* const transforms[] =
 	{
 		reinterpret_cast<float*>(&m_worlds[GROUND]),
 		reinterpret_cast<float*>(&m_worlds[MODEL_OBJ])
@@ -788,11 +788,11 @@ void RayTracer::updateAccelerationStructures(const RayTracing::CommandList &comm
 	TopLevelAS::SetInstances(m_device, m_instances[frameIndex], NUM_MESH, m_bottomLevelASs, transforms);
 
 	// Update top level AS
-	const auto &descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto& descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
 	m_topLevelAS.Build(commandList, m_scratch, m_instances[frameIndex], descriptorPool, NumUAVs, true);
 }
 
-void RayTracer::rayTrace(const RayTracing::CommandList &commandList, uint32_t frameIndex)
+void RayTracer::rayTrace(const RayTracing::CommandList& commandList, uint32_t frameIndex)
 {
 	commandList.SetComputePipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 
@@ -816,7 +816,7 @@ void RayTracer::rayTrace(const RayTracing::CommandList &commandList, uint32_t fr
 		m_missShaderTables[m_pipeIndex], m_rayGenShaderTables[frameIndex][m_pipeIndex]);
 }
 
-void RayTracer::gbufferPass(const RayTracing::CommandList &commandList)
+void RayTracer::gbufferPass(const RayTracing::CommandList& commandList)
 {
 	// Set render target
 	commandList.OMSetRenderTargets(1, m_rtvTable, &m_depth.GetDSV());
@@ -850,7 +850,7 @@ void RayTracer::gbufferPass(const RayTracing::CommandList &commandList)
 	}
 }
 
-void RayTracer::spatialPass(const RayTracing::CommandList &commandList, uint8_t dst, uint8_t src, uint8_t srcSRV)
+void RayTracer::spatialPass(const RayTracing::CommandList& commandList, uint8_t dst, uint8_t src, uint8_t srcSRV)
 {
 	commandList.SetComputePipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
 
@@ -876,7 +876,7 @@ void RayTracer::spatialPass(const RayTracing::CommandList &commandList, uint8_t 
 	commandList.Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
 }
 
-void RayTracer::temporalSS(const RayTracing::CommandList &commandList)
+void RayTracer::temporalSS(const RayTracing::CommandList& commandList)
 {
 	commandList.SetComputePipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
 
