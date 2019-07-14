@@ -24,7 +24,7 @@ AccelerationStructure::~AccelerationStructure()
 {
 }
 
-RawBuffer &AccelerationStructure::GetResult()
+RawBuffer& AccelerationStructure::GetResult()
 {
 	return m_results[m_currentFrame];
 }
@@ -44,7 +44,7 @@ uint32_t AccelerationStructure::GetUpdateScratchDataSize() const
 	return static_cast<uint32_t>(m_prebuildInfo.UpdateScratchDataSizeInBytes);
 }
 
-const WRAPPED_GPU_POINTER &AccelerationStructure::GetResultPointer() const
+const WRAPPED_GPU_POINTER& AccelerationStructure::GetResultPointer() const
 {
 	return m_pointers[m_currentFrame];
 }
@@ -54,7 +54,7 @@ void AccelerationStructure::SetFrameCount(uint32_t frameCount)
 	FrameCount = frameCount;
 }
 
-bool AccelerationStructure::AllocateUAVBuffer(const RayTracing::Device &device, Resource &resource,
+bool AccelerationStructure::AllocateUAVBuffer(const RayTracing::Device& device, Resource& resource,
 	uint64_t byteWidth, ResourceState dstState)
 {
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
@@ -66,8 +66,8 @@ bool AccelerationStructure::AllocateUAVBuffer(const RayTracing::Device &device, 
 	return true;
 }
 
-bool AccelerationStructure::AllocateUploadBuffer(const RayTracing::Device &device, Resource &resource,
-	uint64_t byteWidth, void *pData)
+bool AccelerationStructure::AllocateUploadBuffer(const RayTracing::Device& device, Resource& resource,
+	uint64_t byteWidth, void* pData)
 {
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	const auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth);
@@ -76,7 +76,7 @@ bool AccelerationStructure::AllocateUploadBuffer(const RayTracing::Device &devic
 		&bufferDesc, D3D12_RESOURCE_STATE_GENERIC_READ, nullptr,
 		IID_PPV_ARGS(&resource)), cerr, false);
 
-	void *pMappedData;
+	void* pMappedData;
 	resource->Map(0, nullptr, &pMappedData);
 	memcpy(pMappedData, pData, byteWidth);
 	resource->Unmap(0, nullptr);
@@ -84,10 +84,10 @@ bool AccelerationStructure::AllocateUploadBuffer(const RayTracing::Device &devic
 	return true;
 }
 
-bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t descriptorIndex,
+bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t descriptorIndex,
 	uint32_t numUAVs, uint32_t numSRVs)
 {
-	const auto &inputs = m_buildDesc.Inputs;
+	const auto& inputs = m_buildDesc.Inputs;
 
 	m_prebuildInfo = {};
 	if (device.RaytracingAPI == API::FallbackLayer)
@@ -112,7 +112,7 @@ bool AccelerationStructure::preBuild(const RayTracing::Device &device, uint32_t 
 		== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE ? FrameCount : 1;
 
 	m_results.resize(bufferCount);
-	for (auto &result : m_results)
+	for (auto& result : m_results)
 		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
 			D3D12_HEAP_TYPE_DEFAULT, initialState, numSRVs), false);
 
@@ -142,11 +142,11 @@ BottomLevelAS::~BottomLevelAS()
 {
 }
 
-bool BottomLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs,
-	Geometry *geometries, uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags)
+bool BottomLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs,
+	Geometry* geometries, uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags)
 {
 	m_buildDesc = {};
-	auto &inputs = m_buildDesc.Inputs;
+	auto& inputs = m_buildDesc.Inputs;
 	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 	inputs.Flags = flags;
 	inputs.NumDescs = numDescs;
@@ -157,8 +157,8 @@ bool BottomLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs
 	return preBuild(device, descriptorIndex, numUAVs);
 }
 
-void BottomLevelAS::Build(const RayTracing::CommandList &commandList, const Resource &scratch,
-	const DescriptorPool &descriptorPool, uint32_t numUAVs, bool update)
+void BottomLevelAS::Build(const RayTracing::CommandList& commandList, const Resource& scratch,
+	const DescriptorPool& descriptorPool, uint32_t numUAVs, bool update)
 {
 	// Complete Acceleration Structure desc
 	{
@@ -181,12 +181,12 @@ void BottomLevelAS::Build(const RayTracing::CommandList &commandList, const Reso
 	commandList.Barrier(1, &ResourceBarrier::UAV(m_results[m_currentFrame].GetResource().get()));
 }
 
-void BottomLevelAS::SetGeometries(Geometry *geometries, uint32_t numGeometries, Format vertexFormat,
-	const VertexBufferView *pVBs, const IndexBufferView *pIBs, const GeometryFlags *geometryFlags)
+void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
+	const VertexBufferView* pVBs, const IndexBufferView* pIBs, const GeometryFlags* geometryFlags)
 {
 	for (auto i = 0u; i < numGeometries; ++i)
 	{
-		auto &geometryDesc = geometries[i];
+		auto& geometryDesc = geometries[i];
 
 		assert(pIBs[i].Format == DXGI_FORMAT_R32_UINT || pIBs[i].Format == DXGI_FORMAT_R16_UINT);
 		const uint32_t strideIB = pIBs[i].Format == DXGI_FORMAT_R32_UINT ? sizeof(uint32_t) : sizeof(uint16_t);
@@ -221,11 +221,11 @@ TopLevelAS::~TopLevelAS()
 {
 }
 
-bool TopLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs,
+bool TopLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs,
 	uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags)
 {
 	m_buildDesc = {};
-	auto &inputs = m_buildDesc.Inputs;
+	auto& inputs = m_buildDesc.Inputs;
 	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
 	inputs.Flags = flags;
 	inputs.NumDescs = numDescs;
@@ -235,8 +235,8 @@ bool TopLevelAS::PreBuild(const RayTracing::Device &device, uint32_t numDescs,
 	return preBuild(device, descriptorIndex, numUAVs, 1);
 }
 
-void TopLevelAS::Build(const RayTracing::CommandList &commandList, const Resource &scratch,
-	const Resource &instanceDescs, const DescriptorPool &descriptorPool,
+void TopLevelAS::Build(const RayTracing::CommandList& commandList, const Resource& scratch,
+	const Resource& instanceDescs, const DescriptorPool& descriptorPool,
 	uint32_t numUAVs, bool update)
 {
 	// Complete Acceleration Structure desc
@@ -258,8 +258,8 @@ void TopLevelAS::Build(const RayTracing::CommandList &commandList, const Resourc
 	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
 }
 
-void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instances,
-	uint32_t numInstances, BottomLevelAS *bottomLevelASs, float *const *transforms)
+void TopLevelAS::SetInstances(const RayTracing::Device& device, Resource& instances,
+	uint32_t numInstances, BottomLevelAS* bottomLevelASs, float* const* transforms)
 {
 	// Note on Emulated GPU pointers (AKA Wrapped pointers) requirement in Fallback Layer:
 	// The primary point of divergence between the DXR API and the compute-based Fallback layer is the handling of GPU pointers. 
@@ -283,7 +283,7 @@ void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instan
 
 		if (instances)
 		{
-			void *pMappedData;
+			void* pMappedData;
 			instances->Map(0, nullptr, &pMappedData);
 			memcpy(pMappedData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances);
 			instances->Unmap(0, nullptr);
@@ -302,7 +302,7 @@ void TopLevelAS::SetInstances(const RayTracing::Device &device, Resource &instan
 
 		if (instances)
 		{
-			void *pMappedData;
+			void* pMappedData;
 			instances->Map(0, nullptr, &pMappedData);
 			memcpy(pMappedData, instanceDescs.data(), sizeof(D3D12_RAYTRACING_INSTANCE_DESC) * numInstances);
 			instances->Unmap(0, nullptr);

@@ -37,8 +37,8 @@ bool RayTracing::CommandList::CreateRaytracingInterfaces(const RayTracing::Devic
 	return true;
 }
 
-void RayTracing::CommandList::BuildRaytracingAccelerationStructure(const BuildDesc *pDesc, uint32_t numPostbuildInfoDescs,
-	const PostbuildInfo *pPostbuildInfoDescs, const DescriptorPool &descriptorPool, uint32_t numUAVs) const
+void RayTracing::CommandList::BuildRaytracingAccelerationStructure(const BuildDesc* pDesc, uint32_t numPostbuildInfoDescs,
+	const PostbuildInfo* pPostbuildInfoDescs, const DescriptorPool& descriptorPool, uint32_t numUAVs) const
 {
 	if (m_raytracingAPI == API::FallbackLayer)
 	{
@@ -50,7 +50,7 @@ void RayTracing::CommandList::BuildRaytracingAccelerationStructure(const BuildDe
 		m_native->BuildRaytracingAccelerationStructure(pDesc, numPostbuildInfoDescs, pPostbuildInfoDescs);
 }
 
-void RayTracing::CommandList::SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool *pDescriptorPools) const
+void RayTracing::CommandList::SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool* pDescriptorPools) const
 {
 	vector<DescriptorPool::element_type*> ppDescriptorPools(numDescriptorPools);
 	for (auto i = 0u; i < numDescriptorPools; ++i)
@@ -62,7 +62,7 @@ void RayTracing::CommandList::SetDescriptorPools(uint32_t numDescriptorPools, co
 		m_commandList->SetDescriptorHeaps(numDescriptorPools, ppDescriptorPools.data());
 }
 
-void RayTracing::CommandList::SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS &topLevelAS) const
+void RayTracing::CommandList::SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS& topLevelAS) const
 {
 	if (m_raytracingAPI == API::FallbackLayer)
 		m_fallback->SetTopLevelAccelerationStructure(index, topLevelAS.GetResultPointer());
@@ -70,13 +70,13 @@ void RayTracing::CommandList::SetTopLevelAccelerationStructure(uint32_t index, c
 		SetComputeRootShaderResourceView(index, const_cast<TopLevelAS&>(topLevelAS).GetResult().GetResource());
 }
 
-void RayTracing::CommandList::DispatchRays(const RayTracing::Pipeline &pipeline,
+void RayTracing::CommandList::DispatchRays(const RayTracing::Pipeline& pipeline,
 	uint32_t width, uint32_t height, uint32_t depth,
-	const ShaderTable &hitGroup,
-	const ShaderTable &miss,
-	const ShaderTable &rayGen) const
+	const ShaderTable& hitGroup,
+	const ShaderTable& miss,
+	const ShaderTable& rayGen) const
 {
-	auto dispatchRays = [&](auto *commandList, auto *stateObject, auto *dispatchDesc)
+	auto dispatchRays = [&](auto* commandList, auto* stateObject, auto* dispatchDesc)
 	{
 		// Since each shader table has only one shader record, the stride is same as the size.
 		dispatchDesc->HitGroupTable.StartAddress = hitGroup.GetResource()->GetGPUVirtualAddress();

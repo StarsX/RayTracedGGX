@@ -18,14 +18,14 @@ RayTracing::PipelineLayout::~PipelineLayout()
 {
 }
 
-XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Device &device,
-	PipelineLayoutCache &pipelineLayoutCache, uint8_t flags, uint32_t numUAVs, const wchar_t *name)
+XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Device& device,
+	PipelineLayoutCache& pipelineLayoutCache, uint8_t flags, uint32_t numUAVs, const wchar_t* name)
 {
 	m_pipelineLayoutKey[0] = flags;
-	const auto &key = m_pipelineLayoutKey;
+	const auto& key = m_pipelineLayoutKey;
 
 	const auto numLayouts = static_cast<uint32_t>((key.size() - 1) / sizeof(void*));
-	const auto pDescriptorTableLayoutPtrs = reinterpret_cast<DescriptorTableLayout::element_type* const*>(&key[1]);
+	const auto pDescriptorTableLayoutPtrs = reinterpret_cast<DescriptorTableLayout::element_type * const*>(&key[1]);
 
 	vector<D3D12_ROOT_PARAMETER1> descriptorTableLayouts(numLayouts);
 	for (auto i = 0u; i < numLayouts; ++i)
@@ -55,8 +55,8 @@ XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Devi
 	return layout;
 }
 
-XUSG::PipelineLayout RayTracing::PipelineLayout::GetPipelineLayout(const Device &device,
-	PipelineLayoutCache &pipelineLayoutCache, uint8_t flags, uint32_t numUAVs, const wchar_t *name)
+XUSG::PipelineLayout RayTracing::PipelineLayout::GetPipelineLayout(const Device& device,
+	PipelineLayoutCache& pipelineLayoutCache, uint8_t flags, uint32_t numUAVs, const wchar_t* name)
 {
 	auto layout = pipelineLayoutCache.GetPipelineLayout(*this, flags, name, false);
 

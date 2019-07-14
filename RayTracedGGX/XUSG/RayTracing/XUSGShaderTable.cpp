@@ -9,8 +9,8 @@ using namespace std;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
 
-ShaderRecord::ShaderRecord(const RayTracing::Device &device, const RayTracing::Pipeline &pipeline,
-	const void *shader, void *pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
+ShaderRecord::ShaderRecord(const RayTracing::Device& device, const RayTracing::Pipeline& pipeline,
+	const void* shader, void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
 	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {
 	if (device.RaytracingAPI == RayTracing::API::FallbackLayer)
@@ -25,8 +25,8 @@ ShaderRecord::ShaderRecord(const RayTracing::Device &device, const RayTracing::P
 	m_shaderID.Size = GetShaderIDSize(device);
 }
 
-ShaderRecord::ShaderRecord(void *pShaderID, uint32_t shaderIDSize,
-	void *pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
+ShaderRecord::ShaderRecord(void* pShaderID, uint32_t shaderIDSize,
+	void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
 	m_shaderID(pShaderID, shaderIDSize),
 	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {
@@ -36,7 +36,7 @@ ShaderRecord::~ShaderRecord()
 {
 }
 
-void ShaderRecord::CopyTo(void *dest) const
+void ShaderRecord::CopyTo(void* dest) const
 {
 	const auto byteDest = static_cast<uint8_t*>(dest);
 	memcpy(dest, m_shaderID.Ptr, m_shaderID.Size);
@@ -45,7 +45,7 @@ void ShaderRecord::CopyTo(void *dest) const
 		memcpy(byteDest + m_shaderID.Size, m_localDescriptorArgs.Ptr, m_localDescriptorArgs.Size);
 }
 
-uint32_t ShaderRecord::GetShaderIDSize(const RayTracing::Device &device)
+uint32_t ShaderRecord::GetShaderIDSize(const RayTracing::Device& device)
 {
 	const auto shaderIDSize = device.RaytracingAPI == RayTracing::API::FallbackLayer ?
 		device.Fallback->GetShaderIdentifierSize() : D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
@@ -66,11 +66,11 @@ ShaderTable::~ShaderTable()
 	if (m_resource) Unmap();
 }
 
-bool ShaderTable::Create(const RayTracing::Device &device, uint32_t numShaderRecords,
-	uint32_t shaderRecordSize, const wchar_t *name)
+bool ShaderTable::Create(const RayTracing::Device& device, uint32_t numShaderRecords,
+	uint32_t shaderRecordSize, const wchar_t* name)
 {
 	if (m_resource) Unmap();
-	
+
 	m_shaderRecordSize = POW2_UP(shaderRecordSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
 	//m_shaderRecords.reserve(numShaderRecords);
 
@@ -81,7 +81,7 @@ bool ShaderTable::Create(const RayTracing::Device &device, uint32_t numShaderRec
 	return true;
 }
 
-bool ShaderTable::AddShaderRecord(const ShaderRecord &shaderRecord)
+bool ShaderTable::AddShaderRecord(const ShaderRecord& shaderRecord)
 {
 	//if (m_shaderRecords.size() >= m_shaderRecords.capacity()) return false;
 	//m_shaderRecords.push_back(shaderRecord);
@@ -91,7 +91,7 @@ bool ShaderTable::AddShaderRecord(const ShaderRecord &shaderRecord)
 	return true;
 }
 
-void *ShaderTable::Map()
+void* ShaderTable::Map()
 {
 	if (m_mappedShaderRecords == nullptr)
 	{
@@ -119,7 +119,7 @@ void ShaderTable::Reset()
 	Map();
 }
 
-const Resource &ShaderTable::GetResource() const
+const Resource& ShaderTable::GetResource() const
 {
 	return m_resource;
 }
@@ -129,7 +129,7 @@ uint32_t ShaderTable::GetShaderRecordSize() const
 	return m_shaderRecordSize;
 }
 
-bool ShaderTable::allocate(const RayTracing::Device &device, uint32_t byteWidth, const wchar_t *name)
+bool ShaderTable::allocate(const RayTracing::Device& device, uint32_t byteWidth, const wchar_t* name)
 {
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_UPLOAD);
 	const auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth);

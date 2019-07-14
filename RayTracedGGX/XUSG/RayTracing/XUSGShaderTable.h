@@ -14,23 +14,23 @@ namespace XUSG
 		class ShaderRecord
 		{
 		public:
-			ShaderRecord(const Device &device, const Pipeline &pipeline, const void *shader,
-				void *pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
-			ShaderRecord(void *pShaderID, uint32_t shaderIDSize,
-				void *pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
+			ShaderRecord(const Device& device, const Pipeline& pipeline, const void* shader,
+				void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
+			ShaderRecord(void* pShaderID, uint32_t shaderIDSize,
+				void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
 			virtual ~ShaderRecord();
 
-			void CopyTo(void *dest) const;
+			void CopyTo(void* dest) const;
 
-			static uint32_t GetShaderIDSize(const Device &device);
+			static uint32_t GetShaderIDSize(const Device& device);
 
 		protected:
 			struct PointerWithSize
 			{
 				PointerWithSize() : Ptr(nullptr), Size(0) {}
-				PointerWithSize(void *ptr, uint32_t size) : Ptr(ptr), Size(size) {};
+				PointerWithSize(void* ptr, uint32_t size) : Ptr(ptr), Size(size) {};
 
-				void *Ptr;
+				void* Ptr;
 				uint32_t Size;
 			};
 			PointerWithSize m_shaderID;
@@ -43,12 +43,12 @@ namespace XUSG
 			ShaderTable();
 			virtual ~ShaderTable();
 
-			bool Create(const Device &device, uint32_t numShaderRecords, uint32_t shaderRecordSize,
-				const wchar_t *name = nullptr);
+			bool Create(const Device& device, uint32_t numShaderRecords, uint32_t shaderRecordSize,
+				const wchar_t* name = nullptr);
 
 			bool AddShaderRecord(const ShaderRecord& shaderRecord);
 
-			void *Map();
+			void* Map();
 			void Unmap();
 			void Reset();
 
@@ -56,13 +56,13 @@ namespace XUSG
 			uint32_t GetShaderRecordSize() const;
 
 		protected:
-			bool allocate(const Device &device, uint32_t byteWidth, const wchar_t *name);
+			bool allocate(const Device& device, uint32_t byteWidth, const wchar_t* name);
 
 			Resource m_resource;
 
 			//std::vector<ShaderRecord> m_shaderRecords;
 
-			void *m_mappedShaderRecords;
+			void* m_mappedShaderRecords;
 			uint32_t m_shaderRecordSize;
 		};
 	}

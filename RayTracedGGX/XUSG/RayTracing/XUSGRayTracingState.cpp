@@ -29,15 +29,15 @@ void State::SetShaderLibrary(Blob shaderLib)
 	m_pKeyHeader->ShaderLib = shaderLib.get();
 }
 
-void State::SetHitGroup(uint32_t index, const void *hitGroup, const void *closestHitShader,
-	const void *anyHitShader, const void *intersectionShader, uint8_t type)
+void State::SetHitGroup(uint32_t index, const void* hitGroup, const void* closestHitShader,
+	const void* anyHitShader, const void* intersectionShader, uint8_t type)
 {
 	m_isComplete = false;
 
 	if (index >= m_keyHitGroups.size())
 		m_keyHitGroups.resize(index + 1);
 
-	auto &keyHitGroup = m_keyHitGroups[index];
+	auto& keyHitGroup = m_keyHitGroups[index];
 	keyHitGroup.HitGroup = hitGroup;
 	keyHitGroup.ClosestHitShader = closestHitShader;
 	keyHitGroup.AnyHitShader = anyHitShader;
@@ -52,14 +52,14 @@ void State::SetShaderConfig(uint32_t maxPayloadSize, uint32_t maxAttributeSize)
 	m_pKeyHeader->MaxAttributeSize = maxAttributeSize;
 }
 
-void State::SetLocalPipelineLayout(uint32_t index, const PipelineLayout &layout, uint32_t numShaders, const void **pShaders)
+void State::SetLocalPipelineLayout(uint32_t index, const PipelineLayout& layout, uint32_t numShaders, const void** pShaders)
 {
 	m_isComplete = false;
 
 	if (index >= m_keyLocalPipelineLayouts.size())
 		m_keyLocalPipelineLayouts.resize(index + 1);
 
-	auto &keyLocalPipelineLayout = m_keyLocalPipelineLayouts[index];
+	auto& keyLocalPipelineLayout = m_keyLocalPipelineLayouts[index];
 	keyLocalPipelineLayout.Header.PipelineLayout = layout.get();
 	keyLocalPipelineLayout.Header.NumShaders = numShaders;
 
@@ -67,7 +67,7 @@ void State::SetLocalPipelineLayout(uint32_t index, const PipelineLayout &layout,
 	memcpy(keyLocalPipelineLayout.Shaders.data(), pShaders, sizeof(void*) * numShaders);
 }
 
-void State::SetGlobalPipelineLayout(const PipelineLayout &layout)
+void State::SetGlobalPipelineLayout(const PipelineLayout& layout)
 {
 	m_isComplete = false;
 	m_pKeyHeader->GlobalPipelineLayout = layout.get();
@@ -79,17 +79,17 @@ void State::SetMaxRecursionDepth(uint32_t depth)
 	m_pKeyHeader->MaxRecursionDepth = depth;
 }
 
-RayTracing::Pipeline State::CreatePipeline(PipelineCache &pipelineCache, const wchar_t *name)
+RayTracing::Pipeline State::CreatePipeline(PipelineCache& pipelineCache, const wchar_t* name)
 {
 	return pipelineCache.CreatePipeline(*this, name);
 }
 
-RayTracing::Pipeline State::GetPipeline(PipelineCache &pipelineCache, const wchar_t *name)
+RayTracing::Pipeline State::GetPipeline(PipelineCache& pipelineCache, const wchar_t* name)
 {
 	return pipelineCache.GetPipeline(*this, name);
 }
 
-const string &State::GetKey()
+const string& State::GetKey()
 {
 	if (!m_isComplete) complete();
 
@@ -105,7 +105,7 @@ void State::complete()
 	const auto sizeKeyHitGroups = sizeof(KeyHitGroup) * m_keyHitGroups.size();
 	auto size = sizeof(KeyHeader) + sizeKeyHitGroups;
 	size += sizeof(KeyLocalPipelineLayoutHeader) * m_keyLocalPipelineLayouts.size();
-	for (const auto &keyLocalPipelineLayout : m_keyLocalPipelineLayouts)
+	for (const auto& keyLocalPipelineLayout : m_keyLocalPipelineLayouts)
 		size += sizeof(void*) * keyLocalPipelineLayout.Header.NumShaders;
 
 	m_key.resize(size);
@@ -115,7 +115,7 @@ void State::complete()
 
 	auto pKeyLocalPipelineLayoutHeader = reinterpret_cast<KeyLocalPipelineLayoutHeader*>
 		(&m_key[sizeof(KeyHeader) + sizeKeyHitGroups]);
-	for (const auto &keyLocalPipelineLayout : m_keyLocalPipelineLayouts)
+	for (const auto& keyLocalPipelineLayout : m_keyLocalPipelineLayouts)
 	{
 		// Copy the header
 		memcpy(pKeyLocalPipelineLayoutHeader, &keyLocalPipelineLayout.Header, sizeof(KeyLocalPipelineLayoutHeader));
@@ -141,7 +141,7 @@ PipelineCache::PipelineCache() :
 {
 }
 
-PipelineCache::PipelineCache(const RayTracing::Device &device) :
+PipelineCache::PipelineCache(const RayTracing::Device& device) :
 	PipelineCache()
 {
 	SetDevice(device);
@@ -151,27 +151,27 @@ PipelineCache::~PipelineCache()
 {
 }
 
-void PipelineCache::SetDevice(const RayTracing::Device &device)
+void PipelineCache::SetDevice(const RayTracing::Device& device)
 {
 	m_device = device;
 }
 
-void PipelineCache::SetPipeline(const string &key, const RayTracing::Pipeline &pipeline)
+void PipelineCache::SetPipeline(const string& key, const RayTracing::Pipeline& pipeline)
 {
 	m_pipelines[key] = pipeline;
 }
 
-RayTracing::Pipeline PipelineCache::CreatePipeline(State &state, const wchar_t *name)
+RayTracing::Pipeline PipelineCache::CreatePipeline(State& state, const wchar_t* name)
 {
 	return createPipeline(state.GetKey(), name);
 }
 
-RayTracing::Pipeline PipelineCache::GetPipeline(State &state, const wchar_t *name)
+RayTracing::Pipeline PipelineCache::GetPipeline(State& state, const wchar_t* name)
 {
 	return getPipeline(state.GetKey(), name);
 }
 
-RayTracing::Pipeline PipelineCache::createPipeline(const string &key, const wchar_t *name)
+RayTracing::Pipeline PipelineCache::createPipeline(const string& key, const wchar_t* name)
 {
 	// Get header
 	const auto& keyHeader = reinterpret_cast<const State::KeyHeader&>(key[0]);
@@ -188,7 +188,7 @@ RayTracing::Pipeline PipelineCache::createPipeline(const string &key, const wcha
 	const auto pKeyHitGroups = reinterpret_cast<const State::KeyHitGroup*>(&key[sizeof(State::KeyHeader)]);
 	for (auto i = 0u; i < keyHeader.NumHitGroups; ++i)
 	{
-		const auto &keyHitGroup = pKeyHitGroups[i];
+		const auto& keyHitGroup = pKeyHitGroups[i];
 		auto hitGroup = pDesc.CreateSubobject<CD3D12_HIT_GROUP_SUBOBJECT>();
 		if (keyHitGroup.ClosestHitShader)
 			hitGroup->SetClosestHitShaderImport(reinterpret_cast<const wchar_t*>(keyHitGroup.ClosestHitShader));
@@ -262,7 +262,7 @@ RayTracing::Pipeline PipelineCache::createPipeline(const string &key, const wcha
 	return pipeline;
 }
 
-RayTracing::Pipeline PipelineCache::getPipeline(const string &key, const wchar_t *name)
+RayTracing::Pipeline PipelineCache::getPipeline(const string& key, const wchar_t* name)
 {
 	const auto pPipeline = m_pipelines.find(key);
 
