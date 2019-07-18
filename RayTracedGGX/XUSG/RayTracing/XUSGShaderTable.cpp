@@ -71,7 +71,8 @@ bool ShaderTable::Create(const RayTracing::Device& device, uint32_t numShaderRec
 {
 	if (m_resource) Unmap();
 
-	m_shaderRecordSize = POW2_UP(shaderRecordSize, D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT);
+	m_shaderRecordSize = (shaderRecordSize + D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT - 1) &
+		~(D3D12_RAYTRACING_SHADER_RECORD_BYTE_ALIGNMENT - 1);
 	//m_shaderRecords.reserve(numShaderRecords);
 
 	const auto bufferWidth = numShaderRecords * m_shaderRecordSize;
