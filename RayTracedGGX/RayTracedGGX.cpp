@@ -114,18 +114,11 @@ void RayTracedGGX::LoadPipeline()
 	ThrowIfFailed(swapChain.As(&m_swapChain));
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
-	m_descriptorTableCache.SetDevice(m_device.Common);
-
 	// Create frame resources.
 	// Create a RTV and a command allocator for each frame.
 	for (auto n = 0u; n < FrameCount; ++n)
 	{
 		N_RETURN(m_renderTargets[n].CreateFromSwapChain(m_device.Common, m_swapChain, n), ThrowIfFailed(E_FAIL));
-
-		Util::DescriptorTable rtvTable;
-		rtvTable.SetDescriptors(0, 1, &m_renderTargets[n].GetRTV());
-		m_rtvTables[n] = rtvTable.GetRtvTable(m_descriptorTableCache);
-
 		ThrowIfFailed(m_device.Common->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[n])));
 	}
 }
@@ -178,7 +171,7 @@ void RayTracedGGX::LoadAssets()
 
 	// View initialization
 	m_focusPt = XMFLOAT3(0.0f, 3.0f, 0.0f);
-	m_eyePt = XMFLOAT3(-10.0f, 10.0f, 20.0f);
+	m_eyePt = XMFLOAT3(10.0f, 10.0f, -20.0f);
 	const auto focusPt = XMLoadFloat3(&m_focusPt);
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMMatrixLookAtLH(eyePt, focusPt, XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));
@@ -349,7 +342,7 @@ void RayTracedGGX::PopulateCommandList()
 
 	ResourceBarrier barriers[2];
 	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET);
-	m_rayTracer->ToneMap(m_commandList, m_rtvTables[m_frameIndex], numBarriers, barriers);
+	m_rayTracer->ToneMap(m_commandList, m_renderTargets[m_frameIndex].GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
 	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);

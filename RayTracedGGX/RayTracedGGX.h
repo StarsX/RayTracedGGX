@@ -45,8 +45,6 @@ public:
 private:
 	static const uint32_t FrameCount = RayTracer::FrameCount;
 
-	XUSG::DescriptorTableCache		m_descriptorTableCache;
-
 	// Pipeline objects.
 	XUSG::Viewport			m_viewport;
 	XUSG::RectRange			m_scissorRect;
@@ -63,7 +61,6 @@ private:
 
 	// App resources.
 	std::unique_ptr<RayTracer> m_rayTracer;
-	XUSG::RenderTargetTable	m_rtvTables[FrameCount];
 	XMFLOAT4X4		m_proj;
 	XMFLOAT4X4		m_view;
 	XMFLOAT3		m_focusPt;

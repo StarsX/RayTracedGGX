@@ -192,6 +192,8 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 			XMStoreFloat4x4(&m_cbBasePass[i].WorldViewProj, XMMatrixTranspose(worlds[i] * viewProj));
 		}
 	}
+
+	m_frameParity = !m_frameParity;
 }
 
 void RayTracer::Render(const RayTracing::CommandList& commandList, uint32_t frameIndex)
@@ -217,11 +219,9 @@ void RayTracer::Render(const RayTracing::CommandList& commandList, uint32_t fram
 		spatialPass(commandList, UAV_TABLE_SPATIAL, UAV_TABLE_SPATIAL1, SRV_TABLE_SPATIAL1);
 	}
 	temporalSS(commandList);
-
-	m_frameParity = !m_frameParity;
 }
 
-void RayTracer::ToneMap(const RayTracing::CommandList& commandList, const RenderTargetTable& rtvTable,
+void RayTracer::ToneMap(const RayTracing::CommandList& commandList, const Descriptor& rtv,
 	uint32_t numBarriers, ResourceBarrier* pBarriers)
 {
 	numBarriers = m_outputViews[UAV_TABLE_TSAMP + m_frameParity].SetBarrier(
@@ -230,7 +230,7 @@ void RayTracer::ToneMap(const RayTracing::CommandList& commandList, const Render
 	commandList.Barrier(numBarriers, pBarriers);
 
 	// Set render target
-	commandList.OMSetRenderTargets(1, rtvTable, nullptr);
+	commandList.OMSetRenderTargets(1, &rtv);
 
 	// Set descriptor tables
 	commandList.SetGraphicsPipelineLayout(m_pipelineLayouts[TONE_MAP_LAYOUT]);
@@ -246,7 +246,7 @@ void RayTracer::ToneMap(const RayTracing::CommandList& commandList, const Render
 	commandList.RSSetScissorRects(1, &scissorRect);
 
 	commandList.IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-	commandList.DrawIndexed(3, 1, 0, 0, 0);
+	commandList.Draw(3, 1, 0, 0);
 }
 
 void RayTracer::ClearHistory(const RayTracing::CommandList& commandList)
@@ -519,15 +519,19 @@ bool RayTracer::createPipelines(Format rtFormat)
 		N_RETURN(m_rayTracingPipelines[GGX].Native || m_rayTracingPipelines[GGX].Fallback, false);
 	}
 
+	auto vsIndex = 0u;
+	auto psIndex = 0u;
+	auto csIndex = 0u;
+
 	{
-		const auto vs = m_shaderPool.CreateShader(Shader::Stage::VS, 0, L"VSBasePass.cso");
-		const auto ps = m_shaderPool.CreateShader(Shader::Stage::PS, 0, L"PSGBuffer.cso");
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::VS, vsIndex, L"VSBasePass.cso"), false);
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::PS, psIndex, L"PSGBuffer.cso"), false);
 
 		Graphics::State state;
 		state.IASetInputLayout(m_inputLayout);
 		state.SetPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);
-		state.SetShader(Shader::Stage::VS, m_shaderPool.GetShader(Shader::Stage::VS, 0));
-		state.SetShader(Shader::Stage::PS, m_shaderPool.GetShader(Shader::Stage::PS, 0));
+		state.SetShader(Shader::Stage::VS, m_shaderPool.GetShader(Shader::Stage::VS, vsIndex++));
+		state.SetShader(Shader::Stage::PS, m_shaderPool.GetShader(Shader::Stage::PS, psIndex++));
 		state.IASetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		state.OMSetNumRenderTargets(1);
 		state.OMSetRTVFormat(0, DXGI_FORMAT_R16G16_FLOAT);
@@ -536,40 +540,40 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
-		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 0, L"TemporalSS.cso");
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::CS, csIndex, L"CSTemporalSS.cso"), false);
 
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
-		state.SetShader(shader);
+		state.SetShader(m_shaderPool.GetShader(Shader::Stage::CS, csIndex++));
 		X_RETURN(m_pipelines[TEMPORAL_SS], state.GetPipeline(m_computePipelineCache, L"TemporalSS"), false);
 	}
 
 	{
-		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 1, L"SpatialPass.cso");
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::CS, csIndex, L"CS_SpatialPass.cso"), false);
 
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
-		state.SetShader(shader);
+		state.SetShader(m_shaderPool.GetShader(Shader::Stage::CS, csIndex++));
 		X_RETURN(m_pipelines[SPATIAL_PASS], state.GetPipeline(m_computePipelineCache, L"SpatialPass"), false);
 	}
 
 	{
-		const auto shader = m_shaderPool.CreateShader(Shader::Stage::CS, 2, L"TemporalAA.cso");
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::CS, csIndex, L"CSTemporalAA.cso"), false);
 
 		Compute::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
-		state.SetShader(shader);
+		state.SetShader(m_shaderPool.GetShader(Shader::Stage::CS, csIndex++));
 		X_RETURN(m_pipelines[TEMPORAL_AA], state.GetPipeline(m_computePipelineCache, L"TemporalAA"), false);
 	}
 
 	{
-		const auto vs = m_shaderPool.CreateShader(Shader::Stage::VS, 1, L"VSScreenQuad.cso");
-		const auto ps = m_shaderPool.CreateShader(Shader::Stage::PS, 1, L"PSToneMap.cso");
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::VS, vsIndex, L"VSScreenQuad.cso"), false);
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::PS, psIndex, L"PSToneMap.cso"), false);
 
 		Graphics::State state;
 		state.SetPipelineLayout(m_pipelineLayouts[TONE_MAP_LAYOUT]);
-		state.SetShader(Shader::Stage::VS, m_shaderPool.GetShader(Shader::Stage::VS, 1));
-		state.SetShader(Shader::Stage::PS, m_shaderPool.GetShader(Shader::Stage::PS, 1));
+		state.SetShader(Shader::Stage::VS, m_shaderPool.GetShader(Shader::Stage::VS, vsIndex++));
+		state.SetShader(Shader::Stage::PS, m_shaderPool.GetShader(Shader::Stage::PS, psIndex++));
 		state.DSSetState(Graphics::DEPTH_STENCIL_NONE, m_graphicsPipelineCache);
 		state.IASetPrimitiveTopologyType(D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE);
 		state.OMSetNumRenderTargets(1);

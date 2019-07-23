@@ -202,9 +202,6 @@
     <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\TemporalSS.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\RayTracedGGX.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -214,16 +211,19 @@
     <FxCompile Include="Content\Shaders\VSBasePass.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\TemporalAA.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\PSToneMap.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\VSScreenQuad.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\SpatialPass.hlsl">
+    <FxCompile Include="Content\Shaders\CSTemporalAA.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSTemporalSS.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CS_SpatialPass.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

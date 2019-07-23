@@ -10,7 +10,7 @@ using namespace XUSG;
 using namespace XUSG::RayTracing;
 
 ShaderRecord::ShaderRecord(const RayTracing::Device& device, const RayTracing::Pipeline& pipeline,
-	const void* shader, void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
+	const void* shader, const void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
 	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {
 	if (device.RaytracingAPI == RayTracing::API::FallbackLayer)
@@ -26,7 +26,7 @@ ShaderRecord::ShaderRecord(const RayTracing::Device& device, const RayTracing::P
 }
 
 ShaderRecord::ShaderRecord(void* pShaderID, uint32_t shaderIDSize,
-	void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
+	const void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
 	m_shaderID(pShaderID, shaderIDSize),
 	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {

@@ -105,7 +105,7 @@ float3 computeDirectionGGX(float a, float3 normal, float2 xi)
 //--------------------------------------------------------------------------------------
 float3 environment(float3 dir)
 {
-	const float3 sunDir = normalize(float3(1.0, 1.0, 1.0));
+	const float3 sunDir = normalize(float3(-1.0, 1.0, -1.0));
 	const float sumAmt = saturate(dot(dir, sunDir));
 
 	const float a = dot(dir, float3(0.0, 1.0, 0.0)) * 0.5 + 0.5;

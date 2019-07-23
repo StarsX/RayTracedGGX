@@ -15,9 +15,9 @@ namespace XUSG
 		{
 		public:
 			ShaderRecord(const Device& device, const Pipeline& pipeline, const void* shader,
-				void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
+				const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
 			ShaderRecord(void* pShaderID, uint32_t shaderIDSize,
-				void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
+				const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
 			virtual ~ShaderRecord();
 
 			void CopyTo(void* dest) const;
@@ -28,9 +28,9 @@ namespace XUSG
 			struct PointerWithSize
 			{
 				PointerWithSize() : Ptr(nullptr), Size(0) {}
-				PointerWithSize(void* ptr, uint32_t size) : Ptr(ptr), Size(size) {};
+				PointerWithSize(const void* ptr, uint32_t size) : Ptr(ptr), Size(size) {};
 
-				void* Ptr;
+				const void* Ptr;
 				uint32_t Size;
 			};
 			PointerWithSize m_shaderID;

@@ -36,7 +36,7 @@ public:
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
 	void Render(const XUSG::RayTracing::CommandList& commandList, uint32_t frameIndex);
-	void ToneMap(const XUSG::RayTracing::CommandList& commandList, const XUSG::RenderTargetTable& rtvTable,
+	void ToneMap(const XUSG::RayTracing::CommandList& commandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 	void ClearHistory(const XUSG::RayTracing::CommandList& commandList);
 
