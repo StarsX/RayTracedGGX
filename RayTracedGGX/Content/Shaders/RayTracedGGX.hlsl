@@ -5,7 +5,7 @@
 #include "BRDFModels.hlsli"
 #include "RayTracedGGX.hlsli"
 
-#define ROUGHNESS	0.25
+static const float g_roughnesses[] = { 0.4, 0.2 };
 
 //--------------------------------------------------------------------------------------
 // Ray generation
@@ -86,7 +86,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	RayDesc ray;
 	const bool isCentroidSample = index.z;
 	const float2 xi = isCentroidSample ? 0.0 : GetHammersley(index.xy);
-	const float a = ROUGHNESS * ROUGHNESS;
+	const float roughness = g_roughnesses[InstanceIndex()];
+	const float a = roughness * roughness;
 	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N, xi);
 	ray.Origin = hitWorldPosition();
@@ -109,7 +110,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 
 		// Visibility factor
 		const float NoV = saturate(dot(N, V));
-		const float vis = Vis_Schlick(ROUGHNESS, NoV, NoL);
+		const float vis = Vis_Schlick(roughness, NoV, NoL);
 
 		// BRDF
 		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
@@ -118,7 +119,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 		//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
 		// pdf = D * NoH
 		const float3 specular = F * NoL * vis / NoH;
-		radiance *= isCentroidSample ? saturate(specular) : specular;
+		//radiance *= isCentroidSample ? saturate(specular) : specular;
+		radiance *= saturate(specular);
 	}
 
 	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);

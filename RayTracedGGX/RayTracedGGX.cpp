@@ -171,7 +171,7 @@ void RayTracedGGX::LoadAssets()
 
 	// View initialization
 	m_focusPt = XMFLOAT3(0.0f, 3.0f, 0.0f);
-	m_eyePt = XMFLOAT3(10.0f, 10.0f, -20.0f);
+	m_eyePt = XMFLOAT3(10.0f, 10.0f, -24.0f);
 	const auto focusPt = XMLoadFloat3(&m_focusPt);
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMMatrixLookAtLH(eyePt, focusPt, XMVectorSet(0.0f, 1.0f, 0.0f, 1.0f));

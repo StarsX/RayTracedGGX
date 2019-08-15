@@ -179,7 +179,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 
 		XMMATRIX worlds[NUM_MESH] =
 		{
-			XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f),
+			XMMatrixScaling(10.0f, 0.5f, 10.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f),
 			XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) * rot *
 			XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)
 		};
