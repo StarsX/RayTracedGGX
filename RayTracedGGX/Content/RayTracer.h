@@ -93,7 +93,7 @@ protected:
 
 	enum UAVTable : uint8_t
 	{
-		UAV_TABLE_OUTPUT,
+		UAV_TABLE_RT_OUT,
 		UAV_TABLE_SPATIAL,
 		UAV_TABLE_SPATIAL1,
 		UAV_TABLE_TSAMP,
@@ -152,7 +152,7 @@ protected:
 	DirectX::XMFLOAT4X4 m_worlds[NUM_MESH];
 	BasePassConstants	m_cbBasePass[NUM_MESH];
 
-	static const uint32_t NumUAVs = NUM_MESH + 1 + NUM_UAV_TABLE;
+	static const uint32_t NumUAVs = NUM_MESH + 1;
 	XUSG::RayTracing::BottomLevelAS m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 

@@ -58,7 +58,7 @@ bool RayTracer::Init(const RayTracing::CommandList& commandList, uint32_t width,
 	N_RETURN(createPipelines(rtFormat), false);
 
 	// Create output view and build acceleration structures
-	m_outputViews[UAV_TABLE_OUTPUT].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
+	m_outputViews[UAV_TABLE_RT_OUT].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
 		SAMPLE_COUNT, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS, 1, 1, D3D12_HEAP_TYPE_DEFAULT,
 		D3D12_RESOURCE_STATE_COMMON, false, L"RayTracingOut");
 	m_outputViews[UAV_TABLE_SPATIAL].Create(m_device.Common, width, height, DXGI_FORMAT_R16G16B16A16_FLOAT,
@@ -205,7 +205,7 @@ void RayTracer::Render(const RayTracing::CommandList& commandList, uint32_t fram
 	commandList.Barrier(numBarriers, barriers);
 	gbufferPass(commandList);
 
-	numBarriers = m_outputViews[UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	numBarriers = m_outputViews[UAV_TABLE_RT_OUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
 	numBarriers = m_velocity.SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, 0xffffffff, D3D12_RESOURCE_BARRIER_FLAG_BEGIN_ONLY);
 	commandList.Barrier(numBarriers, barriers);
@@ -213,7 +213,7 @@ void RayTracer::Render(const RayTracing::CommandList& commandList, uint32_t fram
 
 	if (m_pipeIndex == GGX)
 	{
-		spatialPass(commandList, UAV_TABLE_SPATIAL1, UAV_TABLE_OUTPUT, SRV_TABLE_TS);
+		spatialPass(commandList, UAV_TABLE_SPATIAL1, UAV_TABLE_RT_OUT, SRV_TABLE_TS);
 		spatialPass(commandList, UAV_TABLE_SPATIAL, UAV_TABLE_SPATIAL1, SRV_TABLE_SPATIAL1);
 		spatialPass(commandList, UAV_TABLE_SPATIAL1, UAV_TABLE_SPATIAL, SRV_TABLE_SPATIAL);
 		spatialPass(commandList, UAV_TABLE_SPATIAL, UAV_TABLE_SPATIAL1, SRV_TABLE_SPATIAL1);
@@ -602,8 +602,8 @@ bool RayTracer::createDescriptorTables()
 	// Output UAV
 	{
 		Util::DescriptorTable descriptorTable;
-		descriptorTable.SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_OUTPUT].GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_OUTPUT], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
+		descriptorTable.SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_RT_OUT].GetUAV());
+		X_RETURN(m_uavTables[UAV_TABLE_RT_OUT], descriptorTable.GetCbvSrvUavTable(m_descriptorTableCache), false);
 	}
 
 	// Spatially resolved UAVs
@@ -653,7 +653,7 @@ bool RayTracer::createDescriptorTables()
 	{
 		Descriptor descriptors[] =
 		{
-			m_outputViews[UAV_TABLE_OUTPUT].GetSRV(),
+			m_outputViews[UAV_TABLE_RT_OUT].GetSRV(),
 			m_outputViews[UAV_TABLE_TSAMP + !i].GetSRV(),
 			m_velocity.GetSRV(),
 			m_outputViews[UAV_TABLE_SPATIAL].GetSRV()
@@ -807,7 +807,7 @@ void RayTracer::rayTrace(const RayTracing::CommandList& commandList, uint32_t fr
 	};
 	commandList.SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
-	commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_OUTPUT]);
+	commandList.SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_RT_OUT]);
 	commandList.SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, m_topLevelAS);
 	commandList.SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	commandList.SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
@@ -893,7 +893,7 @@ void RayTracer::temporalSS(const RayTracing::CommandList& commandList)
 
 	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputViews[UAV_TABLE_TSAMP + m_frameParity].SetBarrier(barriers, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	numBarriers = m_outputViews[UAV_TABLE_OUTPUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_outputViews[UAV_TABLE_RT_OUT].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_outputViews[UAV_TABLE_TSAMP + !m_frameParity].SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE |
 		D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_velocity.SetBarrier(barriers, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
