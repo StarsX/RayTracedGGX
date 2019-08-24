@@ -73,7 +73,8 @@ void RayTracedGGX::LoadPipeline()
 		dxgiAdapter = nullptr;
 		ThrowIfFailed(factory->EnumAdapters1(i, &dxgiAdapter));
 		EnableDirectXRaytracing(dxgiAdapter.get());
-		hr = D3D12CreateDevice(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device.Common));
+		hr = D3D12CreateDevice(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0,
+			__uuidof(*static_cast<ID3D12Device*>(m_device.Common.get())), &m_device.Common);
 	}
 
 	dxgiAdapter->GetDesc1(&dxgiAdapterDesc);
@@ -81,12 +82,8 @@ void RayTracedGGX::LoadPipeline()
 		m_title += dxgiAdapterDesc.VendorId == 0x1414 && dxgiAdapterDesc.DeviceId == 0x8c ? L" (WARP)" : L" (Software)";
 	ThrowIfFailed(hr);
 
-	// Describe and create the command queue.
-	D3D12_COMMAND_QUEUE_DESC queueDesc = {};
-	queueDesc.Flags = D3D12_COMMAND_QUEUE_FLAG_NONE;
-	queueDesc.Type = D3D12_COMMAND_LIST_TYPE_DIRECT;
-
-	ThrowIfFailed(m_device.Common->CreateCommandQueue(&queueDesc, IID_PPV_ARGS(&m_commandQueue)));
+	// Create the command queue.
+	N_RETURN(m_device.Common->GetCommandQueue(m_commandQueue, CommandListType::DIRECT, CommandQueueFlags::NONE), ThrowIfFailed(E_FAIL));
 
 	// Describe and create the swap chain.
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -119,7 +116,7 @@ void RayTracedGGX::LoadPipeline()
 	for (auto n = 0u; n < FrameCount; ++n)
 	{
 		N_RETURN(m_renderTargets[n].CreateFromSwapChain(m_device.Common, m_swapChain, n), ThrowIfFailed(E_FAIL));
-		ThrowIfFailed(m_device.Common->CreateCommandAllocator(D3D12_COMMAND_LIST_TYPE_DIRECT, IID_PPV_ARGS(&m_commandAllocators[n])));
+		N_RETURN(m_device.Common->GetCommandAllocator(m_commandAllocators[n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
 	}
 }
 
@@ -127,8 +124,8 @@ void RayTracedGGX::LoadPipeline()
 void RayTracedGGX::LoadAssets()
 {
 	// Create the command list.
-	ThrowIfFailed(m_device.Common->CreateCommandList(0, D3D12_COMMAND_LIST_TYPE_DIRECT, m_commandAllocators[m_frameIndex].get(),
-		nullptr, IID_PPV_ARGS(&m_commandList.GetCommandList())));
+	N_RETURN(m_device.Common->GetCommandList(m_commandList.GetCommandList(), 0, CommandListType::DIRECT,
+		m_commandAllocators[m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracing interfaces
 	CreateRaytracingInterfaces();
@@ -144,12 +141,12 @@ void RayTracedGGX::LoadAssets()
 
 	// Close the command list and execute it to begin the initial GPU setup.
 	ThrowIfFailed(m_commandList.Close());
-	ID3D12CommandList* const ppCommandLists[] = { m_commandList.GetCommandList().get() };
+	BaseCommandList* const ppCommandLists[] = { m_commandList.GetCommandList().get() };
 	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
-		ThrowIfFailed(m_device.Common->CreateFence(m_fenceValues[m_frameIndex]++, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_fence)));
+		N_RETURN(m_device.Common->GetFence(m_fence, m_fenceValues[m_frameIndex]++, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
 
 		// Create an event handle to use for frame synchronization.
 		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -203,7 +200,7 @@ void RayTracedGGX::OnRender()
 	PopulateCommandList();
 
 	// Execute the command list.
-	ID3D12CommandList* const ppCommandLists[] = { m_commandList.GetCommandList().get() };
+	BaseCommandList* const ppCommandLists[] = { m_commandList.GetCommandList().get() };
 	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
 
 	// Present the frame.
