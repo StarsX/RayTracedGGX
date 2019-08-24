@@ -60,8 +60,8 @@ bool AccelerationStructure::AllocateUAVBuffer(const RayTracing::Device& device, 
 	const auto heapProperties = CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT);
 	const auto bufferDesc = CD3DX12_RESOURCE_DESC::Buffer(byteWidth, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
 
-	V_RETURN(device.Common->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE,
-		&bufferDesc, dstState, nullptr, IID_PPV_ARGS(&resource)), cerr, false);
+	V_RETURN(device.Common->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
+		static_cast<D3D12_RESOURCE_STATES>(dstState), nullptr, IID_PPV_ARGS(&resource)), cerr, false);
 
 	return true;
 }
@@ -105,16 +105,16 @@ bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t 
 	//  - the system will be doing this type of access in its implementation of acceleration structure builds behind the scenes.
 	//  - from the app point of view, synchronization of writes/reads to acceleration structures is accomplished using UAV barriers.
 	const auto initialState = device.RaytracingAPI == API::FallbackLayer ?
-		device.Fallback->GetAccelerationStructureResourceState() :
-		D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE;
+		static_cast<ResourceState>(device.Fallback->GetAccelerationStructureResourceState()) :
+		ResourceState::RAYTRACING_ACCELERATION_STRUCTURE;
 
 	const auto bufferCount = (inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
 		== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE ? FrameCount : 1;
 
 	m_results.resize(bufferCount);
 	for (auto& result : m_results)
-		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS,
-			D3D12_HEAP_TYPE_DEFAULT, initialState, numSRVs), false);
+		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(), ResourceFlag::ALLOW_UNORDERED_ACCESS,
+			MemoryType::DEFAULT, initialState, numSRVs), false);
 
 	// The Fallback Layer interface uses WRAPPED_GPU_POINTER to encapsulate the underlying pointer
 	// which will either be an emulated GPU pointer for the compute - based path or a GPU_VIRTUAL_ADDRESS for the DXR path.
@@ -194,7 +194,7 @@ void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, 
 		geometryDesc = {};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 		geometryDesc.Triangles.IndexFormat = pIBs[i].Format;
-		geometryDesc.Triangles.VertexFormat = vertexFormat;
+		geometryDesc.Triangles.VertexFormat = static_cast<decltype(geometryDesc.Triangles.VertexFormat)>(vertexFormat);
 		geometryDesc.Triangles.IndexCount = pIBs[i].SizeInBytes / strideIB;
 		geometryDesc.Triangles.VertexCount = pVBs[i].SizeInBytes / pVBs[i].StrideInBytes;
 		geometryDesc.Triangles.IndexBuffer = pIBs ? pIBs[i].BufferLocation : 0;

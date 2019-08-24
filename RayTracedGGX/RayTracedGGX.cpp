@@ -139,7 +139,7 @@ void RayTracedGGX::LoadAssets()
 	vector<Resource> uploaders(0);
 	Geometry geometries[RayTracer::NUM_MESH];
 	if (!m_rayTracer->Init(m_commandList, m_width, m_height, uploaders, geometries,
-		m_meshFileName.c_str(), DXGI_FORMAT_R8G8B8A8_UNORM, m_meshPosScale))
+		m_meshFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -341,11 +341,11 @@ void RayTracedGGX::PopulateCommandList()
 	m_rayTracer->Render(m_commandList, m_frameIndex);
 
 	ResourceBarrier barriers[2];
-	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, ResourceState::RENDER_TARGET);
 	m_rayTracer->ToneMap(m_commandList, m_renderTargets[m_frameIndex].GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
-	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, D3D12_RESOURCE_STATE_PRESENT);
+	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, ResourceState::PRESENT);
 	m_commandList.Barrier(numBarriers, barriers);
 
 	ThrowIfFailed(m_commandList.Close());
