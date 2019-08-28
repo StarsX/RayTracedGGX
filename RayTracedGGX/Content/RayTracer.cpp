@@ -688,8 +688,6 @@ bool RayTracer::createDescriptorTables()
 
 bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& commandList, Geometry* geometries)
 {
-	AccelerationStructure::SetFrameCount(FrameCount);
-
 	// Set geometries
 	VertexBufferView vertexBufferViews[NUM_MESH];
 	IndexBufferView indexBufferViews[NUM_MESH];
