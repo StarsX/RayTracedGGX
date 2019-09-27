@@ -27,6 +27,7 @@ class RayTracedGGX : public DXFramework
 {
 public:
 	RayTracedGGX(uint32_t width, uint32_t height, std::wstring name);
+	virtual ~RayTracedGGX();
 
 	virtual void OnInit();
 	virtual void OnUpdate();
