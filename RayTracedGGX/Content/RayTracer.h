@@ -164,7 +164,7 @@ protected:
 	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable	m_uavTables[NUM_UAV_TABLE];
 	XUSG::DescriptorTable	m_samplerTable;
-	XUSG::RenderTargetTable	m_rtvTable;
+	XUSG::Framebuffer		m_framebuffer;
 
 	XUSG::VertexBuffer		m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer		m_indexBuffers[NUM_MESH];

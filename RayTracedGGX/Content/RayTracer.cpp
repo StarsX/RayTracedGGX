@@ -260,7 +260,7 @@ void RayTracer::ClearHistory(const RayTracing::CommandList& commandList)
 	for (auto i = 0ui8; i < 2; ++i)
 	{
 		const uint8_t j = UAV_TABLE_TSAMP + i;
-		commandList.ClearUnorderedAccessViewFloat(*m_uavTables[j], m_outputViews[j].GetUAV(),
+		commandList.ClearUnorderedAccessViewFloat(m_uavTables[j], m_outputViews[j].GetUAV(),
 			m_outputViews[j].GetResource(), clearColor);
 	}
 }
@@ -672,7 +672,7 @@ bool RayTracer::createDescriptorTables()
 	{
 		Util::DescriptorTable rtvTable;
 		rtvTable.SetDescriptors(0, 1, &m_velocity.GetRTV());
-		X_RETURN(m_rtvTable, rtvTable.GetRtvTable(m_descriptorTableCache), false);
+		m_framebuffer = rtvTable.GetFramebuffer(m_descriptorTableCache, & m_depth.GetDSV());
 	}
 
 	// Create the sampler
@@ -816,8 +816,8 @@ void RayTracer::rayTrace(const RayTracing::CommandList& commandList, uint32_t fr
 
 void RayTracer::gbufferPass(const RayTracing::CommandList& commandList)
 {
-	// Set render target
-	commandList.OMSetRenderTargets(1, m_rtvTable, &m_depth.GetDSV());
+	// Set framebuffer
+	commandList.OMSetFramebuffer(m_framebuffer);
 
 	// Clear render target
 	const float clearColor[4] = {};
