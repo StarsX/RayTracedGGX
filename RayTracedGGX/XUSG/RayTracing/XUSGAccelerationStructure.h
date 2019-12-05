@@ -11,6 +11,12 @@ namespace XUSG
 {
 	namespace RayTracing
 	{
+		struct ResourceView
+		{
+			Resource resource;
+			uint64_t offset;
+		};
+
 		class AccelerationStructure
 		{
 		public:
@@ -60,7 +66,7 @@ namespace XUSG
 
 			static void SetGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
 				const VertexBufferView* pVBs, const IndexBufferView* pIBs = nullptr,
-				const GeometryFlags* geometryFlags = nullptr);
+				const GeometryFlags* geometryFlags = nullptr, const ResourceView* pTransforms = nullptr);
 		};
 
 		class TopLevelAS :

@@ -181,7 +181,8 @@ void BottomLevelAS::Build(const RayTracing::CommandList& commandList, const Reso
 }
 
 void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
-	const VertexBufferView* pVBs, const IndexBufferView* pIBs, const GeometryFlags* geometryFlags)
+	const VertexBufferView* pVBs, const IndexBufferView* pIBs, const GeometryFlags* geometryFlags,
+	const ResourceView* pTransforms)
 {
 	for (auto i = 0u; i < numGeometries; ++i)
 	{
@@ -192,6 +193,7 @@ void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, 
 
 		geometryDesc = {};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
+		geometryDesc.Triangles.Transform3x4 = pTransforms ? pTransforms[i].resource->GetGPUVirtualAddress() + pTransforms[i].offset: 0;
 		geometryDesc.Triangles.IndexFormat = pIBs[i].Format;
 		geometryDesc.Triangles.VertexFormat = static_cast<decltype(geometryDesc.Triangles.VertexFormat)>(vertexFormat);
 		geometryDesc.Triangles.IndexCount = pIBs[i].SizeInBytes / strideIB;

@@ -101,10 +101,6 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
     </ClCompile>
-    <ClCompile Include="Content\ObjLoader.cpp">
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
-      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
-    </ClCompile>
     <ClCompile Include="Content\RayTracer.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
@@ -157,6 +153,10 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
     </ClCompile>
+    <ClCompile Include="XUSG\Optional\XUSGObjLoader.cpp">
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
+    </ClCompile>
     <ClCompile Include="XUSG\RayTracing\XUSGAccelerationStructure.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
@@ -185,7 +185,6 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
     <ClInclude Include="Common\DXFrameworkHelper.h" />
     <ClInclude Include="Common\StepTimer.h" />
     <ClInclude Include="Common\Win32Application.h" />
-    <ClInclude Include="Content\ObjLoader.h" />
     <ClInclude Include="Content\RayTracer.h" />
     <ClInclude Include="RayTracedGGX.h" />
     <ClInclude Include="stdafx.h" />
@@ -200,6 +199,7 @@ PostbuildCopy.bat "$(ProjectDir)..\Bin\"
     <ClInclude Include="XUSG\Core\XUSGResource.h" />
     <ClInclude Include="XUSG\Core\XUSGShader.h" />
     <ClInclude Include="XUSG\Core\XUSGType.h" />
+    <ClInclude Include="XUSG\Optional\XUSGObjLoader.h" />
     <ClInclude Include="XUSG\RayTracing\XUSGAccelerationStructure.h" />
     <ClInclude Include="XUSG\RayTracing\XUSGRayTracing.h" />
     <ClInclude Include="XUSG\RayTracing\XUSGRayTracingPipelineLayout.h" />

@@ -49,6 +49,15 @@
     <Filter Include="XUSG\Core\Source Files\Inc">
       <UniqueIdentifier>{9f657aec-a32b-44e3-ae3c-df572dcec372}</UniqueIdentifier>
     </Filter>
+    <Filter Include="XUSG\Optional">
+      <UniqueIdentifier>{f5f77362-2600-4645-924b-1913b86dc530}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="XUSG\Optional\Source Files">
+      <UniqueIdentifier>{23ea2deb-cf5d-45fc-9d7d-2bdc3ac385db}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="XUSG\Optional\Header Files">
+      <UniqueIdentifier>{f932e200-8456-4313-a1f6-62cc47d3bec5}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -102,9 +111,6 @@
     <ClCompile Include="RayTracedGGX.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="Content\ObjLoader.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
     <ClCompile Include="Content\RayTracer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -113,6 +119,9 @@
     </ClCompile>
     <ClCompile Include="XUSG\Core\XUSGReflector.cpp">
       <Filter>XUSG\Core\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="XUSG\Optional\XUSGObjLoader.cpp">
+      <Filter>XUSG\Optional\Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -179,9 +188,6 @@
     <ClInclude Include="RayTracedGGX.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="Content\ObjLoader.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Content\RayTracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
@@ -196,6 +202,9 @@
     </ClInclude>
     <ClInclude Include="Common\dxcapi.h">
       <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="XUSG\Optional\XUSGObjLoader.h">
+      <Filter>XUSG\Optional\Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

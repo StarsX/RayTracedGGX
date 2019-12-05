@@ -2,7 +2,7 @@
 // By Stars XU Tianchen
 //--------------------------------------------------------------------------------------
 
-#include "ObjLoader.h"
+#include "Optional/XUSGObjLoader.h"
 #include "RayTracer.h"
 
 #define SAMPLE_COUNT 2
