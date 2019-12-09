@@ -1,5 +1,5 @@
 //--------------------------------------------------------------------------------------
-// By Stars XU Tianchen
+// Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
 //--------------------------------------------------------------------------------------
@@ -12,8 +12,7 @@ Texture2D g_txSource;
 //--------------------------------------------------------------------------------------
 min16float4 main(float4 Pos : SV_POSITION) : SV_TARGET
 {
-	const uint2 loc = Pos.xy;
-	min16float4 result = min16float4(g_txSource[loc]);
+	min16float4 result = min16float4(g_txSource[Pos.xy]);
 	result.xyz /= result.xyz + 1.0;
 
 	return min16float4(result.xyz * 1.25, result.w);
