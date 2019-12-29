@@ -112,8 +112,8 @@ bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t 
 
 	m_results.resize(bufferCount);
 	for (auto& result : m_results)
-		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(), ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			MemoryType::DEFAULT, initialState, numSRVs), false);
+		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(),
+			ResourceFlag::ALLOW_UNORDERED_ACCESS, MemoryType::DEFAULT, numSRVs), false);
 
 	// The Fallback Layer interface uses WRAPPED_GPU_POINTER to encapsulate the underlying pointer
 	// which will either be an emulated GPU pointer for the compute - based path or a GPU_VIRTUAL_ADDRESS for the DXR path.

@@ -57,25 +57,22 @@ bool RayTracer::Init(const RayTracing::CommandList& commandList, uint32_t width,
 	N_RETURN(createPipelines(rtFormat), false);
 
 	// Create output view and build acceleration structures
-	m_outputViews[UAV_TABLE_RT_OUT].Create(m_device.Common, width, height, Format::R16G16B16A16_FLOAT,
-		SAMPLE_COUNT, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT,
-		ResourceState::COMMON, false, L"RayTracingOut");
-	m_outputViews[UAV_TABLE_SPATIAL].Create(m_device.Common, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT,
-		ResourceState::NON_PIXEL_SHADER_RESOURCE, false, L"SpatialOut0");
+	m_outputViews[UAV_TABLE_RT_OUT].Create(m_device.Common, width, height,
+		Format::R16G16B16A16_FLOAT, SAMPLE_COUNT, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+		1, 1, MemoryType::DEFAULT, false, L"RayTracingOut");
+	m_outputViews[UAV_TABLE_SPATIAL].Create(m_device.Common, width, height,
+		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+		1, 1, MemoryType::DEFAULT, false, L"SpatialOut0");
 	m_outputViews[UAV_TABLE_SPATIAL1].Create(m_device.Common, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT,
-		ResourceState::COMMON, false, L"SpatialOut1");
+		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"SpatialOut1");
 	m_outputViews[UAV_TABLE_TSAMP].Create(m_device.Common, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT,
-		ResourceState::COMMON, false, L"TemporalSSOut0");
+		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"TemporalSSOut0");
 	m_outputViews[UAV_TABLE_TSAMP1].Create(m_device.Common, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT,
-		ResourceState::COMMON, false, L"TemporalSSOut1");
-	m_velocity.Create(m_device.Common, width, height, Format::R16G16_FLOAT, 1, ResourceFlag::NONE,
-		1, 1, ResourceState::COMMON, nullptr, false, L"Velocity");
-	m_depth.Create(m_device.Common, width, height, Format::D24_UNORM_S8_UINT, ResourceFlag::DENY_SHADER_RESOURCE,
-		1, 1, 1, ResourceState::COMMON, 1.0f, 0, false, L"Depth");
+		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"TemporalSSOut1");
+	m_velocity.Create(m_device.Common, width, height, Format::R16G16_FLOAT,
+		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity");
+	m_depth.Create(m_device.Common, width, height, Format::D24_UNORM_S8_UINT,
+		ResourceFlag::DENY_SHADER_RESOURCE, 1, 1, 1, 1.0f, 0, false, L"Depth");
 	N_RETURN(buildAccelerationStructures(commandList, geometries), false);
 	N_RETURN(buildShaderTables(), false);
 
@@ -269,13 +266,14 @@ bool RayTracer::createVB(const RayTracing::CommandList& commandList, uint32_t nu
 	uint32_t stride, const uint8_t* pData, vector<Resource>& uploaders)
 {
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
-	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride, ResourceFlag::NONE,
-		MemoryType::DEFAULT, ResourceState::COPY_DEST, 1, nullptr, 1, nullptr,
-		1, nullptr, L"MeshVB"), false);
+	N_RETURN(vertexBuffer.Create(m_device.Common, numVert, stride,
+		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
+		nullptr, 1, nullptr, L"MeshVB"), false);
 	uploaders.push_back(nullptr);
 
-	return vertexBuffer.Upload(commandList, uploaders.back(), pData, stride * numVert,
-		ResourceState::NON_PIXEL_SHADER_RESOURCE);
+	return vertexBuffer.Upload(commandList, uploaders.back(),
+		ResourceState::NON_PIXEL_SHADER_RESOURCE,
+		pData, stride * numVert);
 }
 
 bool RayTracer::createIB(const RayTracing::CommandList& commandList, uint32_t numIndices,
@@ -285,13 +283,13 @@ bool RayTracer::createIB(const RayTracing::CommandList& commandList, uint32_t nu
 
 	auto& indexBuffers = m_indexBuffers[MODEL_OBJ];
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
-	N_RETURN(indexBuffers.Create(m_device.Common, byteWidth, Format::R32_UINT,
-		ResourceFlag::NONE, MemoryType::DEFAULT, ResourceState::COPY_DEST,
-		1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
+	N_RETURN(indexBuffers.Create(m_device.Common, byteWidth, Format::R32_UINT, ResourceFlag::NONE,
+		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
 	uploaders.push_back(nullptr);
 
-	return indexBuffers.Upload(commandList, uploaders.back(), pData,
-		byteWidth, ResourceState::NON_PIXEL_SHADER_RESOURCE);
+	return indexBuffers.Upload(commandList, uploaders.back(),
+		ResourceState::NON_PIXEL_SHADER_RESOURCE,
+		pData, byteWidth);
 }
 
 bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vector<Resource>& uploaders)
@@ -334,12 +332,12 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vec
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		N_RETURN(vertexBuffer.Create(m_device.Common, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
-			ResourceFlag::NONE, MemoryType::DEFAULT, ResourceState::COPY_DEST, 1, nullptr,
-			1, nullptr, 1, nullptr, L"GroundVB"), false);
+			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
 		uploaders.push_back(nullptr);
 
-		N_RETURN(vertexBuffer.Upload(commandList, uploaders.back(), vertices, sizeof(vertices),
-			ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
+		N_RETURN(vertexBuffer.Upload(commandList, uploaders.back(),
+			ResourceState::NON_PIXEL_SHADER_RESOURCE,
+			vertices, sizeof(vertices)), false);
 	}
 
 	// Index Buffer
@@ -369,13 +367,13 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vec
 		m_numIndices[GROUND] = static_cast<uint32_t>(size(indices));
 
 		auto& indexBuffers = m_indexBuffers[GROUND];
-		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), Format::R32_UINT,
-			ResourceFlag::NONE, MemoryType::DEFAULT, ResourceState::COPY_DEST,
-			1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
+		N_RETURN(indexBuffers.Create(m_device.Common, sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
+			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
 		uploaders.push_back(nullptr);
 
-		N_RETURN(indexBuffers.Upload(commandList, uploaders.back(), indices, sizeof(indices),
-			ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
+		N_RETURN(indexBuffers.Upload(commandList, uploaders.back(),
+			ResourceState::NON_PIXEL_SHADER_RESOURCE,
+			indices, sizeof(indices)), false);
 	}
 
 	return true;
