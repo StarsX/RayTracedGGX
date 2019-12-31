@@ -271,9 +271,8 @@ bool RayTracer::createVB(const RayTracing::CommandList& commandList, uint32_t nu
 		nullptr, 1, nullptr, L"MeshVB"), false);
 	uploaders.push_back(nullptr);
 
-	return vertexBuffer.Upload(commandList, uploaders.back(),
-		ResourceState::NON_PIXEL_SHADER_RESOURCE,
-		pData, stride * numVert);
+	return vertexBuffer.Upload(commandList, uploaders.back(), pData,
+		stride * numVert, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool RayTracer::createIB(const RayTracing::CommandList& commandList, uint32_t numIndices,
@@ -287,9 +286,8 @@ bool RayTracer::createIB(const RayTracing::CommandList& commandList, uint32_t nu
 		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
 	uploaders.push_back(nullptr);
 
-	return indexBuffers.Upload(commandList, uploaders.back(),
-		ResourceState::NON_PIXEL_SHADER_RESOURCE,
-		pData, byteWidth);
+	return indexBuffers.Upload(commandList, uploaders.back(), pData,
+		byteWidth, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vector<Resource>& uploaders)
@@ -335,9 +333,8 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vec
 			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
 		uploaders.push_back(nullptr);
 
-		N_RETURN(vertexBuffer.Upload(commandList, uploaders.back(),
-			ResourceState::NON_PIXEL_SHADER_RESOURCE,
-			vertices, sizeof(vertices)), false);
+		N_RETURN(vertexBuffer.Upload(commandList, uploaders.back(), vertices,
+			sizeof(vertices), 0, ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
 	// Index Buffer
@@ -371,9 +368,8 @@ bool RayTracer::createGroundMesh(const RayTracing::CommandList& commandList, vec
 			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
 		uploaders.push_back(nullptr);
 
-		N_RETURN(indexBuffers.Upload(commandList, uploaders.back(),
-			ResourceState::NON_PIXEL_SHADER_RESOURCE,
-			indices, sizeof(indices)), false);
+		N_RETURN(indexBuffers.Upload(commandList, uploaders.back(), indices,
+			sizeof(indices), 0, ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
 	return true;
