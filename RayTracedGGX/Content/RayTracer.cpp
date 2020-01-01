@@ -702,8 +702,7 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& comma
 		N_RETURN(m_bottomLevelASs[i].PreBuild(m_device, 1, &geometries[i],
 			bottomLevelASIndex + i, NumUAVs), false);
 	N_RETURN(m_topLevelAS.PreBuild(m_device, NUM_MESH, topLevelASIndex, NumUAVs,
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE |
-		D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_PREFER_FAST_TRACE), false);
+		BuildFlags::ALLOW_UPDATE | BuildFlags::PREFER_FAST_TRACE), false);
 
 	// Create scratch buffer
 	auto scratchSize = m_topLevelAS.GetScratchDataMaxSize();

@@ -33,7 +33,7 @@ namespace XUSG
 			static void SetFrameCount(uint32_t frameCount);
 
 			static bool AllocateUAVBuffer(const Device& device, Resource& resource,
-				uint64_t byteWidth, ResourceState dstState = ResourceState(0x8));
+				uint64_t byteWidth, ResourceState dstState = ResourceState::UNORDERED_ACCESS);
 			static bool AllocateUploadBuffer(const Device& device, Resource& resource,
 				uint64_t byteWidth, void* pData);
 
@@ -60,7 +60,7 @@ namespace XUSG
 			virtual ~BottomLevelAS();
 
 			bool PreBuild(const RayTracing::Device& device, uint32_t numDescs, Geometry* geometries,
-				uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags = BuildFlags(0x4));
+				uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags = BuildFlags::PREFER_FAST_TRACE);
 			void Build(const RayTracing::CommandList& commandList, const Resource& scratch,
 				const DescriptorPool& descriptorPool, uint32_t numUAVs, bool update = false);
 
@@ -77,7 +77,7 @@ namespace XUSG
 			virtual ~TopLevelAS();
 
 			bool PreBuild(const RayTracing::Device& device, uint32_t numDescs, uint32_t descriptorIndex,
-				uint32_t numUAVs, BuildFlags flags = BuildFlags(0x4));
+				uint32_t numUAVs, BuildFlags flags = BuildFlags::PREFER_FAST_TRACE);
 			void Build(const RayTracing::CommandList& commandList, const Resource& scratch,
 				const Resource& instanceDescs, const DescriptorPool& descriptorPool,
 				uint32_t numUAVs, bool update = false);

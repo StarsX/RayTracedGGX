@@ -103,10 +103,6 @@ bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t 
 	// and must have resource flag D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS. The ALLOW_UNORDERED_ACCESS requirement simply acknowledges both: 
 	//  - the system will be doing this type of access in its implementation of acceleration structure builds behind the scenes.
 	//  - from the app point of view, synchronization of writes/reads to acceleration structures is accomplished using UAV barriers.
-	const auto initialState = device.RaytracingAPI == API::FallbackLayer ?
-		static_cast<ResourceState>(device.Fallback->GetAccelerationStructureResourceState()) :
-		ResourceState::RAYTRACING_ACCELERATION_STRUCTURE;
-
 	const auto bufferCount = (inputs.Flags & D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE)
 		== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE ? FrameCount : 1;
 
@@ -147,7 +143,7 @@ bool BottomLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs
 	m_buildDesc = {};
 	auto& inputs = m_buildDesc.Inputs;
 	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-	inputs.Flags = flags;
+	inputs.Flags = static_cast<decltype(inputs.Flags)>(flags);
 	inputs.NumDescs = numDescs;
 	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_BOTTOM_LEVEL;
 	inputs.pGeometryDescs = geometries;
@@ -205,7 +201,7 @@ void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, 
 		// Mark the geometry as opaque. 
 		// PERFORMANCE TIP: mark geometry as opaque whenever applicable as it can enable important ray processing optimizations.
 		// Note: When rays encounter opaque geometry an any hit shader will not be executed whether it is present or not.
-		geometryDesc.Flags = geometryFlags ? geometryFlags[i] : D3D12_RAYTRACING_GEOMETRY_FLAG_OPAQUE;
+		geometryDesc.Flags = static_cast<decltype(geometryDesc.Flags)>(geometryFlags ? geometryFlags[i] : GeometryFlags::FULL_OPAQUE);
 	}
 }
 
@@ -228,7 +224,7 @@ bool TopLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs,
 	m_buildDesc = {};
 	auto& inputs = m_buildDesc.Inputs;
 	inputs.DescsLayout = D3D12_ELEMENTS_LAYOUT_ARRAY;
-	inputs.Flags = flags;
+	inputs.Flags = static_cast<decltype(inputs.Flags)>(flags);
 	inputs.NumDescs = numDescs;
 	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 
