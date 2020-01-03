@@ -11,23 +11,31 @@ namespace XUSG
 {
 	namespace RayTracing
 	{
+#if ENABLE_DXR_FALLBACK
 		enum class API
 		{
 			FallbackLayer,
 			NativeRaytracing,
 		};
+#endif
 
 		struct Device
 		{
+#if ENABLE_DXR_FALLBACK
 			API RaytracingAPI;
+#endif
 			XUSG::Device Common;
+#if ENABLE_DXR_FALLBACK
 			com_ptr<ID3D12RaytracingFallbackDevice> Fallback;
+#endif
 			com_ptr<ID3D12Device5> Native;
 		};
 
 		struct Pipeline
 		{
+#if ENABLE_DXR_FALLBACK
 			com_ptr<ID3D12RaytracingFallbackStateObject> Fallback;
+#endif
 			com_ptr<ID3D12StateObject> Native;
 		};
 
@@ -53,7 +61,9 @@ namespace XUSG
 
 		DEFINE_ENUM_FLAG_OPERATORS(GeometryFlags);
 
+#if ENABLE_DXR_FALLBACK
 		using FallbackCommandList = com_ptr<ID3D12RaytracingFallbackCommandList>;
+#endif
 		using NativeCommandList = com_ptr<ID3D12GraphicsCommandList4>;
 
 		using BuildDesc = D3D12_BUILD_RAYTRACING_ACCELERATION_STRUCTURE_DESC;

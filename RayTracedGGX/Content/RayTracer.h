@@ -152,7 +152,6 @@ protected:
 	DirectX::XMFLOAT4X4 m_worlds[NUM_MESH];
 	BasePassConstants	m_cbBasePass[NUM_MESH];
 
-	static const uint32_t NumUAVs = NUM_MESH + 1;
 	XUSG::RayTracing::BottomLevelAS m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS m_topLevelAS;
 

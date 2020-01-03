@@ -2,6 +2,7 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
+#include "XUSGAccelerationStructure.h"
 #include "XUSGRayTracingPipelineLayout.h"
 
 using namespace std;
@@ -18,7 +19,7 @@ RayTracing::PipelineLayout::~PipelineLayout()
 }
 
 XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Device& device,
-	PipelineLayoutCache& pipelineLayoutCache, PipelineLayoutFlag flags, uint32_t numUAVs, const wchar_t* name)
+	PipelineLayoutCache& pipelineLayoutCache, PipelineLayoutFlag flags, const wchar_t* name)
 {
 	m_pipelineLayoutKey[0] = static_cast<uint8_t>(flags);
 	const auto& key = m_pipelineLayoutKey;
@@ -35,14 +36,16 @@ XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Devi
 
 	XUSG::PipelineLayout layout;
 	Blob signature, error;
+#if ENABLE_DXR_FALLBACK
 	if (device.RaytracingAPI == RayTracing::API::FallbackLayer)
 	{
-		H_RETURN(device.Fallback->D3D12SerializeRootSignature(&layoutDesc.Desc_1_0, D3D_ROOT_SIGNATURE_VERSION_1,
-			&signature, &error, numUAVs), cerr, reinterpret_cast<wchar_t*>(error->GetBufferPointer()), nullptr);
+		H_RETURN(device.Fallback->D3D12SerializeRootSignature(&layoutDesc.Desc_1_0, D3D_ROOT_SIGNATURE_VERSION_1, &signature,
+			&error, AccelerationStructure::GetUAVCount()), cerr, reinterpret_cast<wchar_t*>(error->GetBufferPointer()), nullptr);
 		V_RETURN(device.Fallback->CreateRootSignature(1, signature->GetBufferPointer(), signature->GetBufferSize(),
 			IID_PPV_ARGS(&layout)), cerr, nullptr);
 	}
 	else // DirectX Raytracing
+#endif
 	{
 		H_RETURN(D3D12SerializeRootSignature(&layoutDesc.Desc_1_0, D3D_ROOT_SIGNATURE_VERSION_1, &signature, &error),
 			cerr, reinterpret_cast<wchar_t*>(error->GetBufferPointer()), nullptr);
@@ -55,13 +58,13 @@ XUSG::PipelineLayout RayTracing::PipelineLayout::CreatePipelineLayout(const Devi
 }
 
 XUSG::PipelineLayout RayTracing::PipelineLayout::GetPipelineLayout(const Device& device,
-	PipelineLayoutCache& pipelineLayoutCache, PipelineLayoutFlag flags, uint32_t numUAVs, const wchar_t* name)
+	PipelineLayoutCache& pipelineLayoutCache, PipelineLayoutFlag flags, const wchar_t* name)
 {
 	auto layout = pipelineLayoutCache.GetPipelineLayout(*this, flags, name, false);
 
 	if (!layout)
 	{
-		layout = CreatePipelineLayout(device, pipelineLayoutCache, flags, numUAVs, name);
+		layout = CreatePipelineLayout(device, pipelineLayoutCache, flags, name);
 		pipelineLayoutCache.SetPipelineLayout(m_pipelineLayoutKey, layout);
 	}
 

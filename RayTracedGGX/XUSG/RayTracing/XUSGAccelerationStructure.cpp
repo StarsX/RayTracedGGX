@@ -12,6 +12,9 @@ using namespace XUSG::RayTracing;
 // Acceleration structure
 //--------------------------------------------------------------------------------------
 
+#if ENABLE_DXR_FALLBACK
+uint32_t AccelerationStructure::NumUAVs;
+#endif
 uint32_t AccelerationStructure::FrameCount = 1;
 
 AccelerationStructure::AccelerationStructure() :
@@ -43,10 +46,23 @@ uint32_t AccelerationStructure::GetUpdateScratchDataSize() const
 	return static_cast<uint32_t>(m_prebuildInfo.UpdateScratchDataSizeInBytes);
 }
 
+#if ENABLE_DXR_FALLBACK
 const WRAPPED_GPU_POINTER& AccelerationStructure::GetResultPointer() const
 {
 	return m_pointers[m_currentFrame];
 }
+
+uint32_t AccelerationStructure::GetUAVCount()
+{
+	return NumUAVs;
+}
+
+void AccelerationStructure::SetUAVCount(uint32_t numUAVs)
+{
+	NumUAVs = numUAVs;
+}
+
+#endif
 
 void AccelerationStructure::SetFrameCount(uint32_t frameCount)
 {
@@ -83,15 +99,16 @@ bool AccelerationStructure::AllocateUploadBuffer(const RayTracing::Device& devic
 	return true;
 }
 
-bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t descriptorIndex,
-	uint32_t numUAVs, uint32_t numSRVs)
+bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t descriptorIndex, uint32_t numSRVs)
 {
 	const auto& inputs = m_buildDesc.Inputs;
 
 	m_prebuildInfo = {};
+#if ENABLE_DXR_FALLBACK
 	if (device.RaytracingAPI == API::FallbackLayer)
-		device.Fallback->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &m_prebuildInfo, numUAVs);
+		device.Fallback->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &m_prebuildInfo, NumUAVs);
 	else // DirectX Raytracing
+#endif
 		device.Native->GetRaytracingAccelerationStructurePrebuildInfo(&inputs, &m_prebuildInfo);
 
 	N_RETURN(m_prebuildInfo.ResultDataMaxSizeInBytes > 0, false);
@@ -111,6 +128,7 @@ bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t 
 		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(),
 			ResourceFlag::ALLOW_UNORDERED_ACCESS, MemoryType::DEFAULT, numSRVs), false);
 
+#if ENABLE_DXR_FALLBACK
 	// The Fallback Layer interface uses WRAPPED_GPU_POINTER to encapsulate the underlying pointer
 	// which will either be an emulated GPU pointer for the compute - based path or a GPU_VIRTUAL_ADDRESS for the DXR path.
 	if (device.RaytracingAPI == API::FallbackLayer)
@@ -120,6 +138,7 @@ bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t 
 			m_pointers[i] = device.Fallback->GetWrappedPointerSimple(descriptorIndex,
 				m_results[i].GetResource()->GetGPUVirtualAddress());
 	}
+#endif
 
 	return true;
 }
@@ -138,7 +157,7 @@ BottomLevelAS::~BottomLevelAS()
 }
 
 bool BottomLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs,
-	Geometry* geometries, uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags)
+	Geometry* geometries, uint32_t descriptorIndex, BuildFlags flags)
 {
 	m_buildDesc = {};
 	auto& inputs = m_buildDesc.Inputs;
@@ -149,11 +168,11 @@ bool BottomLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs
 	inputs.pGeometryDescs = geometries;
 
 	// Get required sizes for an acceleration structure.
-	return preBuild(device, descriptorIndex, numUAVs);
+	return preBuild(device, descriptorIndex);
 }
 
 void BottomLevelAS::Build(const RayTracing::CommandList& commandList, const Resource& scratch,
-	const DescriptorPool& descriptorPool, uint32_t numUAVs, bool update)
+	const DescriptorPool& descriptorPool, bool update)
 {
 	// Complete Acceleration Structure desc
 	{
@@ -170,7 +189,7 @@ void BottomLevelAS::Build(const RayTracing::CommandList& commandList, const Reso
 	}
 
 	// Build acceleration structure.
-	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
+	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool);
 
 	// Resource barrier
 	commandList.Barrier(1, &ResourceBarrier::UAV(m_results[m_currentFrame].GetResource().get()));
@@ -219,7 +238,7 @@ TopLevelAS::~TopLevelAS()
 }
 
 bool TopLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs,
-	uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags)
+	uint32_t descriptorIndex, BuildFlags flags)
 {
 	m_buildDesc = {};
 	auto& inputs = m_buildDesc.Inputs;
@@ -229,12 +248,11 @@ bool TopLevelAS::PreBuild(const RayTracing::Device& device, uint32_t numDescs,
 	inputs.Type = D3D12_RAYTRACING_ACCELERATION_STRUCTURE_TYPE_TOP_LEVEL;
 
 	// Get required sizes for an acceleration structure.
-	return preBuild(device, descriptorIndex, numUAVs, 1);
+	return preBuild(device, descriptorIndex, 1);
 }
 
 void TopLevelAS::Build(const RayTracing::CommandList& commandList, const Resource& scratch,
-	const Resource& instanceDescs, const DescriptorPool& descriptorPool,
-	uint32_t numUAVs, bool update)
+	const Resource& instanceDescs, const DescriptorPool& descriptorPool, bool update)
 {
 	// Complete Acceleration Structure desc
 	{
@@ -252,12 +270,13 @@ void TopLevelAS::Build(const RayTracing::CommandList& commandList, const Resourc
 	}
 
 	// Build acceleration structure.
-	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool, numUAVs);
+	commandList.BuildRaytracingAccelerationStructure(&m_buildDesc, 0, nullptr, descriptorPool);
 }
 
 void TopLevelAS::SetInstances(const RayTracing::Device& device, Resource& instances,
 	uint32_t numInstances, BottomLevelAS* bottomLevelASs, float* const* transforms)
 {
+#if ENABLE_DXR_FALLBACK
 	// Note on Emulated GPU pointers (AKA Wrapped pointers) requirement in Fallback Layer:
 	// The primary point of divergence between the DXR API and the compute-based Fallback layer is the handling of GPU pointers. 
 	// DXR fundamentally requires that GPUs be able to dynamically read from arbitrary addresses in GPU memory. 
@@ -288,6 +307,7 @@ void TopLevelAS::SetInstances(const RayTracing::Device& device, Resource& instan
 		else AllocateUploadBuffer(device, instances, sizeof(D3D12_RAYTRACING_FALLBACK_INSTANCE_DESC) * numInstances, instanceDescs.data());
 	}
 	else // DirectX Raytracing
+#endif
 	{
 		vector<D3D12_RAYTRACING_INSTANCE_DESC> instanceDescs(numInstances);
 		for (auto i = 0u; i < numInstances; ++i)

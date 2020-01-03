@@ -13,11 +13,13 @@ ShaderRecord::ShaderRecord(const RayTracing::Device& device, const RayTracing::P
 	const void* shader, const void* pLocalDescriptorArgs, uint32_t localDescriptorArgSize) :
 	m_localDescriptorArgs(pLocalDescriptorArgs, localDescriptorArgSize)
 {
+#if ENABLE_DXR_FALLBACK
 	if (device.RaytracingAPI == RayTracing::API::FallbackLayer)
 		m_shaderID.Ptr = pipeline.Fallback->GetShaderIdentifier(reinterpret_cast<const wchar_t*>(shader));
 	else // DirectX Raytracing
+#endif
 	{
-		ComPtr<ID3D12StateObjectPropertiesPrototype> stateObjectProperties;
+		ComPtr<ID3D12StateObjectProperties> stateObjectProperties;
 		ThrowIfFailed(pipeline.Native.As(&stateObjectProperties));
 		m_shaderID.Ptr = stateObjectProperties->GetShaderIdentifier(reinterpret_cast<const wchar_t*>(shader));
 	}
@@ -47,8 +49,12 @@ void ShaderRecord::CopyTo(void* dest) const
 
 uint32_t ShaderRecord::GetShaderIDSize(const RayTracing::Device& device)
 {
+#if ENABLE_DXR_FALLBACK
 	const auto shaderIDSize = device.RaytracingAPI == RayTracing::API::FallbackLayer ?
 		device.Fallback->GetShaderIdentifierSize() : D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+#else
+	const auto shaderIDSize = D3D12_SHADER_IDENTIFIER_SIZE_IN_BYTES;
+#endif
 
 	return shaderIDSize;
 }

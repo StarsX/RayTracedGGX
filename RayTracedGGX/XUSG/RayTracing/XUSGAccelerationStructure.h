@@ -28,8 +28,13 @@ namespace XUSG
 			uint32_t GetResultDataMaxSize() const;
 			uint32_t GetScratchDataMaxSize() const;
 			uint32_t GetUpdateScratchDataSize() const;
+#if ENABLE_DXR_FALLBACK
 			const WRAPPED_GPU_POINTER& GetResultPointer() const;
 
+			static uint32_t GetUAVCount();
+
+			static void SetUAVCount(uint32_t numUAVs);
+#endif
 			static void SetFrameCount(uint32_t frameCount);
 
 			static bool AllocateUAVBuffer(const Device& device, Resource& resource,
@@ -38,17 +43,21 @@ namespace XUSG
 				uint64_t byteWidth, void* pData);
 
 		protected:
-			bool preBuild(const RayTracing::Device& device, uint32_t descriptorIndex,
-				uint32_t numUAVs, uint32_t numSRVs = 0);
+			bool preBuild(const RayTracing::Device& device, uint32_t descriptorIndex, uint32_t numSRVs = 0);
 
 			BuildDesc		m_buildDesc;
 			PrebuildInfo	m_prebuildInfo;
 
 			std::vector<RawBuffer> m_results;
+#if ENABLE_DXR_FALLBACK
 			std::vector<WRAPPED_GPU_POINTER> m_pointers;
+#endif
 
 			uint32_t		m_currentFrame;
 
+#if ENABLE_DXR_FALLBACK
+			static uint32_t NumUAVs;
+#endif
 			static uint32_t FrameCount;
 		};
 
@@ -60,9 +69,9 @@ namespace XUSG
 			virtual ~BottomLevelAS();
 
 			bool PreBuild(const RayTracing::Device& device, uint32_t numDescs, Geometry* geometries,
-				uint32_t descriptorIndex, uint32_t numUAVs, BuildFlags flags = BuildFlags::PREFER_FAST_TRACE);
+				uint32_t descriptorIndex, BuildFlags flags = BuildFlags::PREFER_FAST_TRACE);
 			void Build(const RayTracing::CommandList& commandList, const Resource& scratch,
-				const DescriptorPool& descriptorPool, uint32_t numUAVs, bool update = false);
+				const DescriptorPool& descriptorPool, bool update = false);
 
 			static void SetGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
 				const VertexBufferView* pVBs, const IndexBufferView* pIBs = nullptr,
@@ -77,10 +86,9 @@ namespace XUSG
 			virtual ~TopLevelAS();
 
 			bool PreBuild(const RayTracing::Device& device, uint32_t numDescs, uint32_t descriptorIndex,
-				uint32_t numUAVs, BuildFlags flags = BuildFlags::PREFER_FAST_TRACE);
+				BuildFlags flags = BuildFlags::PREFER_FAST_TRACE);
 			void Build(const RayTracing::CommandList& commandList, const Resource& scratch,
-				const Resource& instanceDescs, const DescriptorPool& descriptorPool,
-				uint32_t numUAVs, bool update = false);
+				const Resource& instanceDescs, const DescriptorPool& descriptorPool, bool update = false);
 
 			static void SetInstances(const RayTracing::Device& device, Resource& instances,
 				uint32_t numInstances, BottomLevelAS* bottomLevelASs, float* const* transforms);

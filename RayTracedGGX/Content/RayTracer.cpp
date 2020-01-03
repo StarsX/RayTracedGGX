@@ -30,6 +30,8 @@ RayTracer::RayTracer(const RayTracing::Device& device) :
 	m_pipelineLayoutCache.SetDevice(device.Common);
 
 	m_descriptorTableCache.SetName(L"RayTracerDescriptorTableCache");
+
+	AccelerationStructure::SetUAVCount(NUM_MESH + 1);
 }
 
 RayTracer::~RayTracer()
@@ -400,8 +402,9 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout.SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout.SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout.SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
-		X_RETURN(m_pipelineLayouts[GLOBAL_LAYOUT], pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			PipelineLayoutFlag::NONE, NumUAVs, L"RayTracerGlobalPipelineLayout"), false);
+		X_RETURN(m_pipelineLayouts[GLOBAL_LAYOUT], pipelineLayout.GetPipelineLayout(
+			m_device, m_pipelineLayoutCache, PipelineLayoutFlag::NONE,
+			L"RayTracerGlobalPipelineLayout"), false);
 	}
 
 	// Local pipeline layout for RayGen shader
@@ -409,8 +412,9 @@ bool RayTracer::createPipelineLayouts()
 	{
 		RayTracing::PipelineLayout pipelineLayout;
 		pipelineLayout.SetConstants(0, SizeOfInUint32(RayGenConstants), 0);
-		X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT, NumUAVs, L"RayTracerRayGenPipelineLayout"), false);
+		X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout.GetPipelineLayout(
+			m_device, m_pipelineLayoutCache, PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
+			L"RayTracerRayGenPipelineLayout"), false);
 	}
 
 	// Local pipeline layout for Hit group
@@ -418,8 +422,9 @@ bool RayTracer::createPipelineLayouts()
 	{
 		RayTracing::PipelineLayout pipelineLayout;
 		pipelineLayout.SetConstants(0, SizeOfInUint32(HitGroupConstants), 1);
-		X_RETURN(m_pipelineLayouts[HIT_GROUP_LAYOUT], pipelineLayout.GetPipelineLayout(m_device, m_pipelineLayoutCache,
-			PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT, NumUAVs, L"RayTracerHitGroupPipelineLayout"), false);
+		X_RETURN(m_pipelineLayouts[HIT_GROUP_LAYOUT], pipelineLayout.GetPipelineLayout(
+			m_device, m_pipelineLayoutCache, PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
+			L"RayTracerHitGroupPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for g-buffer pass
@@ -699,9 +704,8 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& comma
 
 	// Prebuild
 	for (auto i = 0; i < NUM_MESH; ++i)
-		N_RETURN(m_bottomLevelASs[i].PreBuild(m_device, 1, &geometries[i],
-			bottomLevelASIndex + i, NumUAVs), false);
-	N_RETURN(m_topLevelAS.PreBuild(m_device, NUM_MESH, topLevelASIndex, NumUAVs,
+		N_RETURN(m_bottomLevelASs[i].PreBuild(m_device, 1, &geometries[i], bottomLevelASIndex + i), false);
+	N_RETURN(m_topLevelAS.PreBuild(m_device, NUM_MESH, topLevelASIndex,
 		BuildFlags::ALLOW_UPDATE | BuildFlags::PREFER_FAST_TRACE), false);
 
 	// Create scratch buffer
@@ -729,10 +733,10 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& comma
 
 	// Build bottom level ASs
 	for (auto& bottomLevelAS : m_bottomLevelASs)
-		bottomLevelAS.Build(commandList, m_scratch, descriptorPool, NumUAVs);
+		bottomLevelAS.Build(commandList, m_scratch, descriptorPool);
 
 	// Build top level AS
-	m_topLevelAS.Build(commandList, m_scratch, instances, descriptorPool, NumUAVs);
+	m_topLevelAS.Build(commandList, m_scratch, instances, descriptorPool);
 
 	return true;
 }
@@ -780,7 +784,7 @@ void RayTracer::updateAccelerationStructures(const RayTracing::CommandList& comm
 
 	// Update top level AS
 	const auto& descriptorPool = m_descriptorTableCache.GetDescriptorPool(CBV_SRV_UAV_POOL);
-	m_topLevelAS.Build(commandList, m_scratch, m_instances[frameIndex], descriptorPool, NumUAVs, true);
+	m_topLevelAS.Build(commandList, m_scratch, m_instances[frameIndex], descriptorPool, true);
 }
 
 void RayTracer::rayTrace(const RayTracing::CommandList& commandList, uint32_t frameIndex)

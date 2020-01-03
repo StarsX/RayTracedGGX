@@ -24,8 +24,7 @@ namespace XUSG
 			void BuildRaytracingAccelerationStructure(const BuildDesc* pDesc,
 				uint32_t numPostbuildInfoDescs,
 				const PostbuildInfo* pPostbuildInfoDescs,
-				const DescriptorPool& descriptorPool,
-				uint32_t numUAVs) const;
+				const DescriptorPool& descriptorPool) const;
 
 			void SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool* pDescriptorPools) const;
 			void SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS& topLevelAS) const;
@@ -33,10 +32,14 @@ namespace XUSG
 				const ShaderTable& hitGroup, const ShaderTable& miss, const ShaderTable& rayGen) const;
 
 		protected:
+#if ENABLE_DXR_FALLBACK
 			FallbackCommandList m_fallback;
+#endif
 			NativeCommandList m_native;
 
+#if ENABLE_DXR_FALLBACK
 			API m_raytracingAPI;
+#endif
 		};
 	}
 }
