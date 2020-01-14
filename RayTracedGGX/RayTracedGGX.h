@@ -62,10 +62,10 @@ private:
 
 	// App resources.
 	std::unique_ptr<RayTracer> m_rayTracer;
-	XMFLOAT4X4		m_proj;
-	XMFLOAT4X4		m_view;
-	XMFLOAT3		m_focusPt;
-	XMFLOAT3		m_eyePt;
+	XMFLOAT4X4	m_proj;
+	XMFLOAT4X4	m_view;
+	XMFLOAT3	m_focusPt;
+	XMFLOAT3	m_eyePt;
 
 	// Synchronization objects.
 	uint32_t	m_frameIndex;
