@@ -477,12 +477,15 @@ bool RayTracer::createPipelineLayouts()
 
 bool RayTracer::createPipelines(Format rtFormat)
 {
-	{
-		Blob shaderLib;
-		V_RETURN(D3DReadFileToBlob(L"RayTracedTest.cso", &shaderLib), cerr, false);
+	auto vsIndex = 0u;
+	auto psIndex = 0u;
+	auto csIndex = 0u;
 
+	{
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::CS, csIndex, L"RayTracedTest.cso"), false);
+		
 		RayTracing::State state;
-		state.SetShaderLibrary(shaderLib);
+		state.SetShaderLibrary(m_shaderPool.GetShader(Shader::Stage::CS, csIndex++));
 		state.SetHitGroup(0, HitGroupName, ClosestHitShaderName);
 		state.SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
 		state.SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
@@ -497,11 +500,10 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
-		Blob shaderLib;
-		V_RETURN(D3DReadFileToBlob(L"RayTracedGGX.cso", &shaderLib), cerr, false);
-
+		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::CS, csIndex, L"RayTracedGGX.cso"), false);
+		
 		RayTracing::State state;
-		state.SetShaderLibrary(shaderLib);
+		state.SetShaderLibrary(m_shaderPool.GetShader(Shader::Stage::CS, csIndex++));
 		state.SetHitGroup(0, HitGroupName, ClosestHitShaderName);
 		state.SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
 		state.SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
@@ -514,10 +516,6 @@ bool RayTracer::createPipelines(Format rtFormat)
 
 		N_RETURN(m_rayTracingPipelines[GGX].Native || m_rayTracingPipelines[GGX].Fallback, false);
 	}
-
-	auto vsIndex = 0u;
-	auto psIndex = 0u;
-	auto csIndex = 0u;
 
 	{
 		N_RETURN(m_shaderPool.CreateShader(Shader::Stage::VS, vsIndex, L"VSBasePass.cso"), false);
