@@ -697,8 +697,8 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& comma
 		vertexBufferViews, indexBufferViews);
 
 	// Descriptor index in descriptor pool
-	const uint32_t bottomLevelASIndex = 0;
-	const uint32_t topLevelASIndex = bottomLevelASIndex + NUM_MESH;
+	const auto bottomLevelASIndex = 0u;
+	const auto topLevelASIndex = bottomLevelASIndex + NUM_MESH;
 
 	// Prebuild
 	for (auto i = 0; i < NUM_MESH; ++i)
