@@ -124,9 +124,14 @@ bool AccelerationStructure::preBuild(const RayTracing::Device& device, uint32_t 
 		== D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BUILD_FLAG_ALLOW_UPDATE ? FrameCount : 1;
 
 	m_results.resize(bufferCount);
+#if ENABLE_DXR_FALLBACK
+	const auto resourceFlags = device.RaytracingAPI == API::FallbackLayer ? ResourceFlag::ALLOW_UNORDERED_ACCESS : ResourceFlag::ACCELERATION_STRUCTURE;
+#else
+	const auto resourceFlags = ResourceFlag::ACCELERATION_STRUCTURE;
+#endif
 	for (auto& result : m_results)
 		N_RETURN(result.Create(device.Common, GetResultDataMaxSize(),
-			ResourceFlag::ALLOW_UNORDERED_ACCESS, MemoryType::DEFAULT, numSRVs), false);
+			resourceFlags, MemoryType::DEFAULT, numSRVs), false);
 
 #if ENABLE_DXR_FALLBACK
 	// The Fallback Layer interface uses WRAPPED_GPU_POINTER to encapsulate the underlying pointer
@@ -202,16 +207,20 @@ void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, 
 	for (auto i = 0u; i < numGeometries; ++i)
 	{
 		auto& geometryDesc = geometries[i];
-
-		assert(pIBs[i].Format == DXGI_FORMAT_R32_UINT || pIBs[i].Format == DXGI_FORMAT_R16_UINT);
-		const uint32_t strideIB = pIBs[i].Format == DXGI_FORMAT_R32_UINT ? sizeof(uint32_t) : sizeof(uint16_t);
+		
+		auto strideIB = 0u;
+		if (pIBs)
+		{
+			assert(pIBs[i].Format == DXGI_FORMAT_R32_UINT || pIBs[i].Format == DXGI_FORMAT_R16_UINT);
+			strideIB = pIBs[i].Format == DXGI_FORMAT_R32_UINT ? sizeof(uint32_t) : sizeof(uint16_t);
+		}
 
 		geometryDesc = {};
 		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_TRIANGLES;
 		geometryDesc.Triangles.Transform3x4 = pTransforms ? pTransforms[i].resource->GetGPUVirtualAddress() + pTransforms[i].offset: 0;
-		geometryDesc.Triangles.IndexFormat = pIBs[i].Format;
+		geometryDesc.Triangles.IndexFormat = pIBs ? pIBs[i].Format : DXGI_FORMAT_UNKNOWN;
 		geometryDesc.Triangles.VertexFormat = static_cast<decltype(geometryDesc.Triangles.VertexFormat)>(vertexFormat);
-		geometryDesc.Triangles.IndexCount = pIBs[i].SizeInBytes / strideIB;
+		geometryDesc.Triangles.IndexCount = pIBs ? pIBs[i].SizeInBytes / strideIB : 0;
 		geometryDesc.Triangles.VertexCount = pVBs[i].SizeInBytes / pVBs[i].StrideInBytes;
 		geometryDesc.Triangles.IndexBuffer = pIBs ? pIBs[i].BufferLocation : 0;
 		geometryDesc.Triangles.VertexBuffer.StartAddress = pVBs ? pVBs[i].BufferLocation : 0;
