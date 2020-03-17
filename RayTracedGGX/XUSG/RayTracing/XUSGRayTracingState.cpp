@@ -30,7 +30,7 @@ void State::SetShaderLibrary(Blob shaderLib)
 }
 
 void State::SetHitGroup(uint32_t index, const void* hitGroup, const void* closestHitShader,
-	const void* anyHitShader, const void* intersectionShader, uint8_t type)
+	const void* anyHitShader, const void* intersectionShader, HitGroupType type)
 {
 	m_isComplete = false;
 
@@ -42,7 +42,7 @@ void State::SetHitGroup(uint32_t index, const void* hitGroup, const void* closes
 	keyHitGroup.ClosestHitShader = closestHitShader;
 	keyHitGroup.AnyHitShader = anyHitShader;
 	keyHitGroup.IntersectionShader = intersectionShader;
-	keyHitGroup.Type = type;
+	keyHitGroup.Type = static_cast<uint8_t>(type);
 }
 
 void State::SetShaderConfig(uint32_t maxPayloadSize, uint32_t maxAttributeSize)

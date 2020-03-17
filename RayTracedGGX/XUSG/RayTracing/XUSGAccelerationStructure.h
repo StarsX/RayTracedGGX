@@ -73,9 +73,11 @@ namespace XUSG
 			void Build(const RayTracing::CommandList& commandList, const Resource& scratch,
 				const DescriptorPool& descriptorPool, bool update = false);
 
-			static void SetGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
+			static void SetTriangleGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
 				const VertexBufferView* pVBs, const IndexBufferView* pIBs = nullptr,
 				const GeometryFlags* geometryFlags = nullptr, const ResourceView* pTransforms = nullptr);
+			static void SetAABBGeometries(Geometry* geometries, uint32_t numGeometries,
+				const VertexBufferView* pVBs, const GeometryFlags* geometryFlags = nullptr);
 		};
 
 		class TopLevelAS :

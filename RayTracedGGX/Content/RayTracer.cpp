@@ -693,7 +693,7 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList& comma
 		vertexBufferViews[i] = m_vertexBuffers[i].GetVBV();
 		indexBufferViews[i] = m_indexBuffers[i].GetIBV();
 	}
-	BottomLevelAS::SetGeometries(geometries, NUM_MESH, Format::R32G32B32_FLOAT,
+	BottomLevelAS::SetTriangleGeometries(geometries, NUM_MESH, Format::R32G32B32_FLOAT,
 		vertexBufferViews, indexBufferViews);
 
 	// Descriptor index in descriptor pool

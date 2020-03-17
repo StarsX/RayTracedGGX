@@ -54,7 +54,7 @@ namespace XUSG
 			void SetShaderLibrary(Blob shaderLib);
 			void SetHitGroup(uint32_t index, const void* hitGroup, const void* closestHitShader,
 				const void* anyHitShader = nullptr, const void* intersectionShader = nullptr,
-				uint8_t type = 0);
+				HitGroupType type = HitGroupType::TRIANGLES);
 			void SetShaderConfig(uint32_t maxPayloadSize, uint32_t maxAttributeSize);
 			void SetLocalPipelineLayout(uint32_t index, const XUSG::PipelineLayout& layout,
 				uint32_t numShaders, const void** pShaders);

@@ -61,6 +61,12 @@ namespace XUSG
 
 		DEFINE_ENUM_FLAG_OPERATORS(GeometryFlags);
 
+		enum class HitGroupType : uint8_t
+		{
+			TRIANGLES = D3D12_HIT_GROUP_TYPE_TRIANGLES,
+			PROCEDURAL = D3D12_HIT_GROUP_TYPE_PROCEDURAL_PRIMITIVE
+		};
+
 #if ENABLE_DXR_FALLBACK
 		using FallbackCommandList = com_ptr<ID3D12RaytracingFallbackCommandList>;
 #endif

@@ -200,7 +200,7 @@ void BottomLevelAS::Build(const RayTracing::CommandList& commandList, const Reso
 	commandList.Barrier(1, &ResourceBarrier::UAV(m_results[m_currentFrame].GetResource().get()));
 }
 
-void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
+void BottomLevelAS::SetTriangleGeometries(Geometry* geometries, uint32_t numGeometries, Format vertexFormat,
 	const VertexBufferView* pVBs, const IndexBufferView* pIBs, const GeometryFlags* geometryFlags,
 	const ResourceView* pTransforms)
 {
@@ -221,10 +221,29 @@ void BottomLevelAS::SetGeometries(Geometry* geometries, uint32_t numGeometries, 
 		geometryDesc.Triangles.IndexFormat = pIBs ? pIBs[i].Format : DXGI_FORMAT_UNKNOWN;
 		geometryDesc.Triangles.VertexFormat = static_cast<decltype(geometryDesc.Triangles.VertexFormat)>(vertexFormat);
 		geometryDesc.Triangles.IndexCount = pIBs ? pIBs[i].SizeInBytes / strideIB : 0;
-		geometryDesc.Triangles.VertexCount = pVBs[i].SizeInBytes / pVBs[i].StrideInBytes;
+		geometryDesc.Triangles.VertexCount = pVBs ? pVBs[i].SizeInBytes / pVBs[i].StrideInBytes : 0;
 		geometryDesc.Triangles.IndexBuffer = pIBs ? pIBs[i].BufferLocation : 0;
 		geometryDesc.Triangles.VertexBuffer.StartAddress = pVBs ? pVBs[i].BufferLocation : 0;
 		geometryDesc.Triangles.VertexBuffer.StrideInBytes = pVBs ? pVBs[i].StrideInBytes : 0;
+
+		// Mark the geometry as opaque. 
+		// PERFORMANCE TIP: mark geometry as opaque whenever applicable as it can enable important ray processing optimizations.
+		// Note: When rays encounter opaque geometry an any hit shader will not be executed whether it is present or not.
+		geometryDesc.Flags = static_cast<decltype(geometryDesc.Flags)>(geometryFlags ? geometryFlags[i] : GeometryFlags::FULL_OPAQUE);
+	}
+}
+
+void BottomLevelAS::SetAABBGeometries(Geometry* geometries, uint32_t numGeometries, const VertexBufferView* pVBs, const GeometryFlags* geometryFlags)
+{
+	for (auto i = 0u; i < numGeometries; ++i)
+	{
+		auto& geometryDesc = geometries[i];
+
+		geometryDesc = {};
+		geometryDesc.Type = D3D12_RAYTRACING_GEOMETRY_TYPE_PROCEDURAL_PRIMITIVE_AABBS;
+		geometryDesc.AABBs.AABBCount = pVBs ? pVBs[i].SizeInBytes / pVBs[i].StrideInBytes : 0;
+		geometryDesc.AABBs.AABBs.StartAddress = pVBs ? pVBs[i].BufferLocation : 0;
+		geometryDesc.AABBs.AABBs.StrideInBytes = pVBs ? pVBs[i].StrideInBytes : sizeof(D3D12_RAYTRACING_AABB);
 
 		// Mark the geometry as opaque. 
 		// PERFORMANCE TIP: mark geometry as opaque whenever applicable as it can enable important ray processing optimizations.
