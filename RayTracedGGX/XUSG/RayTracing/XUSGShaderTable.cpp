@@ -105,7 +105,7 @@ void* ShaderTable::Map()
 		// Map and initialize the constant buffer. We don't unmap this until the
 		// app closes. Keeping things mapped for the lifetime of the resource is okay.
 		CD3DX12_RANGE readRange(0, 0);	// We do not intend to read from this resource on the CPU.
-		V_RETURN(m_resource->Map(0, &readRange, &m_mappedShaderRecords), cerr, false);
+		V_RETURN(m_resource->Map(0, &readRange, &m_mappedShaderRecords), cerr, nullptr);
 	}
 
 	return m_mappedShaderRecords;
