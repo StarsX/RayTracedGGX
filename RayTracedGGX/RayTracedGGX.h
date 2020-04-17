@@ -57,8 +57,8 @@ private:
 	bool m_isDxrSupported;
 
 	XUSG::RayTracing::Device m_device;
-	XUSG::RenderTarget m_renderTargets[FrameCount];
-	XUSG::RayTracing::CommandList m_commandList;
+	XUSG::RenderTarget::uptr m_renderTargets[FrameCount];
+	XUSG::RayTracing::CommandList::uptr m_commandList;
 
 	// App resources.
 	std::unique_ptr<RayTracer> m_rayTracer;

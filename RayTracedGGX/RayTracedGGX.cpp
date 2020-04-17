@@ -97,7 +97,7 @@ void RayTracedGGX::LoadPipeline()
 	ThrowIfFailed(hr);
 
 	// Create the command queue.
-	N_RETURN(m_device.Common->GetCommandQueue(m_commandQueue, CommandListType::DIRECT, CommandQueueFlags::NONE), ThrowIfFailed(E_FAIL));
+	N_RETURN(m_device.Common->GetCommandQueue(m_commandQueue, CommandListType::DIRECT, CommandQueueFlag::NONE), ThrowIfFailed(E_FAIL));
 
 	// Describe and create the swap chain.
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -129,7 +129,8 @@ void RayTracedGGX::LoadPipeline()
 	// Create a RTV and a command allocator for each frame.
 	for (auto n = 0u; n < FrameCount; ++n)
 	{
-		N_RETURN(m_renderTargets[n].CreateFromSwapChain(m_device.Common, m_swapChain, n), ThrowIfFailed(E_FAIL));
+		m_renderTargets[n] = RenderTarget::MakeUnique();
+		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.Common, m_swapChain, n), ThrowIfFailed(E_FAIL));
 		N_RETURN(m_device.Common->GetCommandAllocator(m_commandAllocators[n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
 	}
 }
@@ -138,7 +139,8 @@ void RayTracedGGX::LoadPipeline()
 void RayTracedGGX::LoadAssets()
 {
 	// Create the command list.
-	N_RETURN(m_device.Common->GetCommandList(m_commandList.GetCommandList(), 0, CommandListType::DIRECT,
+	m_commandList = RayTracing::CommandList::MakeUnique();
+	N_RETURN(m_device.Common->GetCommandList(m_commandList->GetCommandList(), 0, CommandListType::DIRECT,
 		m_commandAllocators[m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracing interfaces
@@ -149,13 +151,13 @@ void RayTracedGGX::LoadAssets()
 
 	vector<Resource> uploaders(0);
 	Geometry geometries[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(m_commandList, m_width, m_height, uploaders, geometries,
+	if (!m_rayTracer->Init(m_commandList.get(), m_width, m_height, uploaders, geometries,
 		m_meshFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
-	ThrowIfFailed(m_commandList.Close());
-	BaseCommandList* const ppCommandLists[] = { m_commandList.GetCommandList().get() };
+	ThrowIfFailed(m_commandList->Close());
+	BaseCommandList* const ppCommandLists[] = { m_commandList->GetCommandList().get() };
 	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -214,7 +216,7 @@ void RayTracedGGX::OnRender()
 	PopulateCommandList();
 
 	// Execute the command list.
-	BaseCommandList* const ppCommandLists[] = { m_commandList.GetCommandList().get() };
+	BaseCommandList* const ppCommandLists[] = { m_commandList->GetCommandList().get() };
 	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
 
 	// Present the frame.
@@ -340,26 +342,27 @@ void RayTracedGGX::PopulateCommandList()
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
-	ThrowIfFailed(m_commandList.Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
+	const auto pCommandList = m_commandList.get();
+	ThrowIfFailed(pCommandList->Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
 
 	if (m_isPipeChanged)
 	{
-		m_rayTracer->ClearHistory(m_commandList);
+		m_rayTracer->ClearHistory(pCommandList);
 		m_isPipeChanged = false;
 	}
 
 	// Record commands.
-	m_rayTracer->Render(m_commandList, m_frameIndex);
+	m_rayTracer->Render(pCommandList, m_frameIndex);
 
 	ResourceBarrier barriers[2];
-	auto numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, ResourceState::RENDER_TARGET);
-	m_rayTracer->ToneMap(m_commandList, m_renderTargets[m_frameIndex].GetRTV(), numBarriers, barriers);
+	auto numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
+	m_rayTracer->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
-	numBarriers = m_renderTargets[m_frameIndex].SetBarrier(barriers, ResourceState::PRESENT);
-	m_commandList.Barrier(numBarriers, barriers);
+	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::PRESENT);
+	pCommandList->Barrier(numBarriers, barriers);
 
-	ThrowIfFailed(m_commandList.Close());
+	ThrowIfFailed(pCommandList->Close());
 }
 
 // Wait for pending GPU work to complete.
@@ -490,5 +493,5 @@ void RayTracedGGX::CreateRaytracingInterfaces()
 		ThrowIfFailed(hr);
 	}
 
-	m_commandList.CreateRaytracingInterfaces(m_device);
+	m_commandList->CreateRaytracingInterfaces(m_device);
 }
