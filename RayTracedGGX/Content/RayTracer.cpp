@@ -740,9 +740,9 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
 	};
 	auto& instances = m_instances[FrameCount - 1];
-	const BottomLevelAS* pBottomLevelASs[NUM_MESH];
-	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASs[i].get();
-	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, pBottomLevelASs, transforms);
+	const BottomLevelAS* ppBottomLevelASs[NUM_MESH];
+	for (auto i = 0u; i < NUM_MESH; ++i) ppBottomLevelASs[i] = m_bottomLevelASs[i].get();
+	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, ppBottomLevelASs, transforms);
 
 	// Build bottom level ASs
 	for (auto& bottomLevelAS : m_bottomLevelASs)

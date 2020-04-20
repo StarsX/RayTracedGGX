@@ -140,7 +140,8 @@ void RayTracedGGX::LoadAssets()
 {
 	// Create the command list.
 	m_commandList = RayTracing::CommandList::MakeUnique();
-	N_RETURN(m_device.Common->GetCommandList(m_commandList->GetCommandList(), 0, CommandListType::DIRECT,
+	const auto pCommandList = m_commandList.get();
+	N_RETURN(m_device.Common->GetCommandList(pCommandList, 0, CommandListType::DIRECT,
 		m_commandAllocators[m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracing interfaces
@@ -151,14 +152,13 @@ void RayTracedGGX::LoadAssets()
 
 	vector<Resource> uploaders(0);
 	Geometry geometries[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(m_commandList.get(), m_width, m_height, uploaders, geometries,
+	if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries,
 		m_meshFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
-	ThrowIfFailed(m_commandList->Close());
-	BaseCommandList* const ppCommandLists[] = { m_commandList->GetCommandList().get() };
-	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
+	ThrowIfFailed(pCommandList->Close());
+	m_commandQueue->SubmitCommandList(pCommandList);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
@@ -216,8 +216,7 @@ void RayTracedGGX::OnRender()
 	PopulateCommandList();
 
 	// Execute the command list.
-	BaseCommandList* const ppCommandLists[] = { m_commandList->GetCommandList().get() };
-	m_commandQueue->ExecuteCommandLists(static_cast<uint32_t>(size(ppCommandLists)), ppCommandLists);
+	m_commandQueue->SubmitCommandList(m_commandList.get());
 
 	// Present the frame.
 	ThrowIfFailed(m_swapChain->Present(0, 0));
