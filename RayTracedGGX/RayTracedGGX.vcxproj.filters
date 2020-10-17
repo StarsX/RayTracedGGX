@@ -115,12 +115,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Content\Shaders\RayTracedTest.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Content\Shaders\RayTracedGGX.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\PSGBuffer.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -150,5 +144,13 @@
     <None Include="Content\Shaders\RayTracedGGX.hlsli">
       <Filter>Shaders</Filter>
     </None>
+  </ItemGroup>
+  <ItemGroup>
+    <CustomBuild Include="Content\Shaders\RayTracedGGX.hlsl">
+      <Filter>Shaders</Filter>
+    </CustomBuild>
+    <CustomBuild Include="Content\Shaders\RayTracedTest.hlsl">
+      <Filter>Shaders</Filter>
+    </CustomBuild>
   </ItemGroup>
 </Project>
