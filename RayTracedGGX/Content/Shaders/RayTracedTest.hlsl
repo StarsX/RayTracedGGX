@@ -5,7 +5,7 @@
 #include "BRDFModels.hlsli"
 #include "RayTracedGGX.hlsli"
 
-#define ROUGHNESS	0.0
+#define ROUGHNESS 0.0
 
 RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {

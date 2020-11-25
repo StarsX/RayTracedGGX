@@ -63,10 +63,8 @@ float2 GetHammersley(uint2 index, uint2 dim)
 
 RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {
-	const uint2 index = DispatchRaysIndex().xy;
-
 	// Trace a reflection ray.
-	const float2 xi = GetHammersley(index.xy, DispatchRaysDimensions().xy);
+	const float2 xi = GetHammersley(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
 	const float roughness = g_roughnesses[instanceIdx];
 	const float a = roughness * roughness;
 	const float3 H = computeDirectionGGX(a, N, xi);

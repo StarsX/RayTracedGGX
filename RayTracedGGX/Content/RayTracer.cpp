@@ -905,8 +905,6 @@ void RayTracer::temporalSS(const RayTracing::CommandList* pCommandList)
 		ResourceState::PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::END_ONLY);
-	if (m_pipeIndex == GGX)
-		numBarriers = m_outputViews[UAV_TABLE_SPATIAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 
 	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSAMP + m_frameParity]);

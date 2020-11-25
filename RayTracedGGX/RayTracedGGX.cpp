@@ -199,6 +199,9 @@ void RayTracedGGX::OnUpdate()
 	pauseTime = m_isPaused ? totalTime - time : pauseTime;
 	time = totalTime - pauseTime;
 
+	if (m_isPipeChanged)
+		m_rayTracer->SetPipeline(m_isTesting ? RayTracer::TEST : RayTracer::GGX);
+
 	// View
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMLoadFloat4x4(&m_view);
@@ -346,7 +349,6 @@ void RayTracedGGX::PopulateCommandList()
 
 	if (m_isPipeChanged)
 	{
-		m_rayTracer->SetPipeline(m_isTesting ? RayTracer::TEST : RayTracer::GGX);
 		m_rayTracer->ClearHistory(pCommandList);
 		m_isPipeChanged = false;
 	}
