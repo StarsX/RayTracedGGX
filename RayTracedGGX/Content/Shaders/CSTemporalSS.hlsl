@@ -5,18 +5,34 @@
 //--------------------------------------------------------------------------------------
 // Definitions
 //--------------------------------------------------------------------------------------
-#define	_VARIANCE_AABB_		1
+#ifdef _FORCE_FP32_
+typedef float		HALF;
+typedef float2		HALF2;
+typedef float3		HALF3;
+typedef float4		HALF4;
+#else
+typedef min16float	HALF;
+typedef min16float2	HALF2;
+typedef min16float3	HALF3;
+typedef min16float4	HALF4;
+#endif
 
-#define	NUM_NEIGHBORS		8
-#define	NUM_SAMPLES			(NUM_NEIGHBORS + 1)
-#define	NUM_NEIGHBORS_H		4
+#define	_VARIANCE_AABB_	1
 
-#define GET_LUMA(v)			dot(v, g_lumBase)
+#define	NUM_NEIGHBORS	8
+#define	NUM_SAMPLES		(NUM_NEIGHBORS + 1)
+#define	NUM_NEIGHBORS_H	4
+
+#define GET_LUMA(v)		dot(v, g_lumBase)
 
 //--------------------------------------------------------------------------------------
 // Constants
 //--------------------------------------------------------------------------------------
-static const min16float3 g_lumBase = { 0.25, 0.5, 0.25 };
+static const uint g_historyBits = 4;
+static const uint g_historyMask = (1 << g_historyBits) - 1;
+static const float g_historyMax = g_historyMask;
+
+static const HALF3 g_lumBase = { 0.25, 0.5, 0.25 };
 static const int2 g_texOffsets[] =
 {
 	int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1),
@@ -26,118 +42,150 @@ static const int2 g_texOffsets[] =
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float4>	RenderTarget;
-Texture2DArray		g_txCurrent	: register (t0);
-Texture2D			g_txHistory	: register (t1);
-Texture2D<float2>	g_velocity	: register (t2);
-Texture2D			g_txSpatial	: register (t3);
+#ifdef _R11G11B10_
+RWTexture2D<float3>	g_rwRenderTarget;
+RWTexture2D<float>	g_rwMetaData;
+Texture2D<float3>	g_txCurrent;
+Texture2D<float3>	g_txHistory;
+Texture2D<float2>	g_txVelocity;
+Texture2D<float>	g_txMasks;
+Texture2D<float>	g_txHistMeta;
+#else
+RWTexture2D<float4>	g_rwRenderTarget;
+Texture2D			g_txCurrent;
+Texture2D			g_txHistory;
+Texture2D<float2>	g_txVelocity;
+#endif
 
 //--------------------------------------------------------------------------------------
-// Samplers
+// Sampler
 //--------------------------------------------------------------------------------------
-SamplerState g_sampler;
+SamplerState g_smpLinear;
+
+//--------------------------------------------------------------------------------------
+// A fast invertible tone map that preserves color (Reinhard)
+//--------------------------------------------------------------------------------------
+HALF3 TM(float3 hdr)
+{
+	const HALF3 rgb = HALF3(hdr);
+
+	return rgb / (1.0 + dot(rgb, g_lumBase));
+}
+
+//--------------------------------------------------------------------------------------
+// Inverse of preceding function
+//--------------------------------------------------------------------------------------
+HALF3 ITM(HALF3 rgb)
+{
+	return rgb / max(1.0 - dot(rgb, g_lumBase), 1e-4);
+}
 
 //--------------------------------------------------------------------------------------
 // Maxinum velocity of 3x3
 //--------------------------------------------------------------------------------------
-min16float4 VelocityMax(int2 tex)
+HALF4 VelocityMax(int2 pos)
 {
-	min16float4 velocity = min16float2(g_velocity[tex]).xyxy;
-	min16float speedSq = dot(velocity.xy, velocity.xy);
+	const float2 velocity = g_txVelocity[pos];
 
-	min16float2 velocities[NUM_NEIGHBORS_H];
+	float2 velocities[NUM_NEIGHBORS_H];
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS_H; ++i)
-		velocities[i] = min16float2(g_velocity[tex + g_texOffsets[i + NUM_NEIGHBORS_H]]);
+		velocities[i] = g_txVelocity[pos + g_texOffsets[i + NUM_NEIGHBORS_H]];
 
+	HALF4 velocityMax = HALF2(velocity).xyxy;
+	HALF speedSq = dot(velocityMax.xy, velocityMax.xy);
 	//[unroll]
 	for (i = 0; i < NUM_NEIGHBORS_H; ++i)
 	{
-		const min16float speedSqN = dot(velocities[i], velocities[i]);
+		const HALF2 neighbor = HALF2(velocities[i]);
+#if 0
+		velocityMax.xy = max(neighbor, velocityMax.xy);
+#else
+		const HALF speedSqN = dot(neighbor, neighbor);
 		if (speedSqN > speedSq)
 		{
-			velocity.xy = velocities[i];
+			velocityMax.xy = neighbor;
 			speedSq = speedSqN;
 		}
+#endif
 	}
 
-	return velocity;
+	return velocityMax;
 }
 
 //--------------------------------------------------------------------------------------
 // Minimum and maxinum of the neighbor samples, returning Gaussian blurred color
 //--------------------------------------------------------------------------------------
-min16float4 NeighborMinMax(out min16float4 neighborMin, out min16float4 neighborMax,
-	min16float4 center, min16float3 current, int2 tex, min16float gamma = 1.0)
+HALF4 NeighborMinMax(out HALF4 neighborMin, out HALF4 neighborMax,
+	HALF4 current, int2 pos, HALF gamma = 1.0)
 {
-	static min16float weights[] =
+	static const HALF weights[] =
 	{
 		0.5, 0.5, 0.5, 0.5,
 		0.25, 0.25, 0.25, 0.25
 	};
 
-	min16float4 neighbors[NUM_NEIGHBORS];
+	float4 neighbors[NUM_NEIGHBORS];
 	[unroll]
 	for (uint i = 0; i < NUM_NEIGHBORS; ++i)
-		neighbors[i] = min16float4(g_txCurrent[uint3(tex + g_texOffsets[i], 1)]);
-		//neighbors[i] = min16float4(g_txSpatial[tex + g_texOffsets[i]]);
+		neighbors[i] = g_txCurrent[pos + g_texOffsets[i]];
 
-	min16float4 gaussian = center;
+	HALF3 mu = current.xyz;
+	current.w = current.w < 0.5 ? 0.0 : 1.0;
 
 #if	_VARIANCE_AABB_
 #define	m1	mu
-	min16float3 mu = center.xyz;
-	min16float3 m2 = m1 * m1 + current * current;
-	m1 = mu + current;
+	HALF3 m2 = m1 * m1;
 #else
 	neighborMin.xyz = neighborMax.xyz = mu;
-	neighborMin.xyz = min(current, neighborMin.xyz);
-	neighborMax.xyz = max(current, neighborMax.xyz);
 #endif
 
 	//[unroll]
 	for (i = 0; i < NUM_NEIGHBORS; ++i)
 	{
-		gaussian += neighbors[i] * weights[i];
+		HALF4 neighbor = HALF4(neighbors[i]);
+		neighbor.xyz = TM(neighbor.xyz);
+		neighbor.w = neighbor.w < 0.5 ? 0.0 : 1.0;
+		current += neighbor * weights[i];
 
 #if	_VARIANCE_AABB_
-		m1 += neighbors[i].xyz;
-		m2 += neighbors[i].xyz * neighbors[i].xyz;
+		m1 += neighbor.xyz;
+		m2 += neighbor.xyz * neighbor.xyz;
 #else
-		neighborMin.xyz = min(neighbors[i], neighborMin.xyz);
-		neighborMax.xyz = max(neighbors[i], neighborMax.xyz);
+		neighborMin.xyz = min(neighbor, neighborMin.xyz);
+		neighborMax.xyz = max(neighbor, neighborMax.xyz);
 #endif
 	}
 
 #if	_VARIANCE_AABB_
-	mu /= NUM_SAMPLES + 1;
-	const min16float3 sigma = sqrt(abs(m2 / (NUM_SAMPLES + 1) - mu * mu));
-	const min16float3 gsigma = gamma * sigma;
+	mu /= NUM_SAMPLES;
+	const HALF3 sigma = sqrt(abs(m2 / NUM_SAMPLES - mu * mu));
+	const HALF3 gsigma = gamma * sigma;
 	neighborMin.xyz = mu - gsigma;
 	neighborMax.xyz = mu + gsigma;
-	neighborMin.w = GET_LUMA(mu -sigma);
+	neighborMin.w = GET_LUMA(mu - sigma);
 	neighborMax.w = GET_LUMA(mu + sigma);
 #else
 	neighborMin.w = GET_LUMA(neighborMin.xyz);
 	neighborMax.w = GET_LUMA(neighborMax.xyz);
 #endif
 
-	gaussian /= 4.0;
+	current /= 4.0;
 
-	return gaussian;
+	return current;
 }
 
 //--------------------------------------------------------------------------------------
 // Clip color
 //--------------------------------------------------------------------------------------
-min16float3 clipColor(min16float3 color, min16float3 minColor, min16float3 maxColor)
+HALF3 clipColor(HALF3 color, HALF3 minColor, HALF3 maxColor)
 {
-	const min16float3 cent = 0.5 * (maxColor + minColor);
-	const min16float3 dist = 0.5 * (maxColor - minColor);
+	const HALF3 cent = 0.5 * (maxColor + minColor);
+	const HALF3 dist = 0.5 * (maxColor - minColor);
 
-	const min16float3 disp = color - cent;
-	const min16float3 dir = abs(disp / dist);
-	const min16float maxComp = max(dir.x, max(dir.y, dir.z));
+	const HALF3 disp = color - cent;
+	const HALF3 dir = abs(disp / dist);
+	const HALF maxComp = max(dir.x, max(dir.y, dir.z));
 
 	if (maxComp > 1.0) return cent + disp / maxComp;
 	else return color;
@@ -148,42 +196,65 @@ void main(uint2 DTid : SV_DispatchThreadID)
 {
 	float2 texSize;
 	g_txHistory.GetDimensions(texSize.x, texSize.y);
-	const float2 tex = (DTid + 0.5) / texSize;
+	const float2 uv = (DTid + 0.5) / texSize;
 
-	const min16float4 current = min16float4(g_txCurrent[uint3(DTid, 0)]);
-	const min16float4 curCent = min16float4(g_txCurrent[uint3(DTid, 1)]);	// Centroid sample for color clipping
-	const min16float4 spatial = min16float4(g_txSpatial[DTid]);
-	const min16float4 velocity = VelocityMax(DTid);
-	const float2 texBack = tex - velocity.xy;
-	min16float4 history = min16float4(g_txHistory.SampleLevel(g_sampler, texBack, 0));
-	
-	const min16float speed = abs(velocity.x) + abs(velocity.y);
+	// Load G-buffers
+	const float4 current = g_txCurrent[DTid];
+	const HALF4 velocity = VelocityMax(DTid);
+	const float2 uvBack = uv - velocity.xy;
+	float4 history = g_txHistory.SampleLevel(g_smpLinear, uvBack, 0);
 
-	min16float4 neighborMin, neighborMax;
-	//min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, spatial, current.xyz, DTid);
-	min16float4 filtered = NeighborMinMax(neighborMin, neighborMax, curCent, current.xyz, DTid);
-	//filtered.xyz = lerp(current.xyz, filtered.xyz, saturate(speed * 32.0));
+	// Speed to history blur
+	const float2 historyBlurAmp = 4.0 * texSize;
+	const HALF2 historyBlurs = HALF2(abs(velocity.xy) * historyBlurAmp);
+	HALF curHistoryBlur = saturate(historyBlurs.x + historyBlurs.y);
 
-	if (speed > 0.0)
-		history.xyz = clipColor(history.xyz, neighborMin.xyz, neighborMax.xyz);
+	// Evaluate history weight that indicates the convergence from metadata
+	HALF historyBlur = HALF(1.0 - history.w);
+	historyBlur = max(historyBlur, curHistoryBlur);
+	history.w = history.w * g_historyMax + 1.0;
 
-	const min16float maxSamples = 256.0;
-	history.w = speed > 0.0 ? 0.0 : history.w;
-	min16float3 result = history.w * history.xyz + (history.w >= maxSamples ? 0.0 : current.xyz);
-	history.w = min(history.w + 1.0, maxSamples);
-	result /= history.w;
-	result = filtered.w > 0.0 ? result : current.xyz;
+	// Compute color-space AABB
+	HALF4 neighborMin, neighborMax;
+	const HALF4 currentTM = HALF4(TM(current.xyz), current.w);
+	//const HALF gamma = historyBlur > 0.0 || current.w <= 0.0 ? 1.0 : 16.0;
+	HALF gamma = historyBlur > 0.0 ? 16.0 : 32.0;
+	gamma = current.w <= 0.0 ? 1.0 : gamma;
+	HALF4 filtered = NeighborMinMax(neighborMin, neighborMax, currentTM, DTid, gamma);
 
-	//history.w = speed > 0.0 ? 0.0 : history.w;
-	//const min16float alpha = history.w + 1.0 / 255.0;
-	//min16float blend = history.w < 1.0 ? history.w / alpha : 1.0;
-	//blend = filtered.w > 0.0 ? blend : 0.0;
+	// Clip historical color
+	HALF3 historyTM = TM(history.xyz);
+	historyTM = clipColor(historyTM, neighborMin.xyz, neighborMax.xyz);
+	const HALF contrast = neighborMax.w - neighborMin.w;
 
-	//const min16float3 result = lerp(current.xyz, history.xyz, blend);
+	// Add aliasing
+	static const HALF lumContrastFactor = 32.0;
+	HALF addAlias = historyBlur * 0.5 + 0.25;
+	addAlias = saturate(addAlias + 1.0 / (1.0 + contrast * lumContrastFactor));
+	filtered.xyz = lerp(filtered.xyz, currentTM.xyz, addAlias);
 
-	RenderTarget[DTid] = min16float4(result, history.w);
-	//RenderTarget[DTid] = min16float4(spatial.xyz, history.w);
-	//RenderTarget[DTid] = min16float4(result, alpha) * current.w;
-	//RenderTarget[DTid] = g_currentImage[uint3(DTid, 1)];
-	//RenderTarget[DTid] = float4(abs(velocity.x) > 1e-5 ? 1.0 : 0.0, abs(velocity.y) > 1e-5 ? 1.0 : 0.0, 0.0, alpha);
+	// Calculate blend factor
+	const HALF lumHist = GET_LUMA(historyTM);
+	const HALF distToClamp = min(abs(neighborMin.w - lumHist), abs(neighborMax.w - lumHist));
+#if 0
+	const float historyAmt = 1.0 / history.w + historyBlur / 8.0;
+	const HALF historyFactor = HALF(distToClamp * historyAmt * (1.0 + historyBlur * historyAmt * 8.0));
+	HALF blend = historyFactor / (distToClamp + contrast);
+#else
+	const HALF historyAmt = min(HALF(1.0 / history.w + historyBlur / 8.0), 1.0);
+	HALF blend = 0.0625 / lerp(2.0, distToClamp + contrast, historyAmt);
+#endif
+	blend = min(blend, 0.25);
+
+	//HALF3 result = HALF3(current.xyz);
+	HALF3 result = ITM(lerp(historyTM, currentTM.xyz, blend));
+	result = any(isnan(result)) ? filtered.xyz : result;
+	history.w = min(history.w / g_historyMax, 1.0 - curHistoryBlur);
+
+#ifdef _R11G11B10_
+	g_rwRenderTarget[DTid] = result;
+	g_rwMetaData[DTid] = history.w;
+#else
+	g_rwRenderTarget[DTid] = float4(result, history.w);
+#endif
 }

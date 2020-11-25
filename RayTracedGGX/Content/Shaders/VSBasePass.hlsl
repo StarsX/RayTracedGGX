@@ -16,6 +16,7 @@ struct VSOut
 	float4	Pos		: SV_POSITION;
 	float4	CSPos	: POSCURRENT;
 	float4	TSPos 	: POSHISTORY;
+	float3	Norm	: NORMAL;
 };
 
 //--------------------------------------------------------------------------------------
@@ -25,6 +26,7 @@ cbuffer cbPerObject
 {
 	matrix	g_worldViewProj;
 	matrix	g_worldViewProjPrev;
+	float4x3 g_normal;
 	float2	g_projBias;
 };
 
@@ -41,6 +43,7 @@ VSOut main(VSIn input)
 	output.CSPos = output.Pos;
 
 	output.Pos.xy += g_projBias * output.Pos.w;
+	output.Norm = mul(input.Nrm, (float3x3)g_normal);
 
 	return output;
 }

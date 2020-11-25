@@ -27,8 +27,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
-	m_isTesting(true),
-	m_isPipeChanged(false),
+	m_isTesting(false),
+	m_isPipeChanged(true),
 	m_isPaused(false),
 	m_tracking(false),
 	m_meshFileName("Media/bunny.obj"),
@@ -241,7 +241,6 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	case 'T':
 		m_isTesting = !m_isTesting;
 		m_isPipeChanged = true;
-		m_rayTracer->SetPipeline(m_isTesting ? RayTracer::TEST : RayTracer::GGX);
 		break;
 	}
 }
@@ -347,6 +346,7 @@ void RayTracedGGX::PopulateCommandList()
 
 	if (m_isPipeChanged)
 	{
+		m_rayTracer->SetPipeline(m_isTesting ? RayTracer::TEST : RayTracer::GGX);
 		m_rayTracer->ClearHistory(pCommandList);
 		m_isPipeChanged = false;
 	}

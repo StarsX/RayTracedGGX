@@ -47,7 +47,6 @@ protected:
 	{
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
-		HIT_GROUP_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
 		RESAMPLE_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
@@ -63,7 +62,9 @@ protected:
 		ACCELERATION_STRUCTURE = SHADER_RESOURCES,
 		SAMPLER,
 		INDEX_BUFFERS,
-		VERTEX_BUFFERS
+		VERTEX_BUFFERS,
+		CONSTANTS,
+		G_BUFFERS
 	};
 
 	enum PipelineIndex : uint8_t
@@ -71,16 +72,24 @@ protected:
 		GBUFFER_PASS,
 		SPATIAL_PASS,
 		TEMPORAL_SS,
-		TEMPORAL_AA,
 		TONE_MAP,
 
 		NUM_PIPELINE
+	};
+
+	enum GBuffer : uint8_t
+	{
+		NORMAL,
+		VELOCITY,
+
+		NUM_GBUFFER
 	};
 
 	enum SRVTable : uint8_t
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
+		SRV_TABLE_GB,
 		SRV_TABLE_SPATIAL,
 		SRV_TABLE_SPATIAL1,
 		SRV_TABLE_TS,
@@ -106,12 +115,11 @@ protected:
 	{
 		DirectX::XMMATRIX	ProjToWorld;
 		DirectX::XMVECTOR	EyePt;
-		DirectX::XMFLOAT2	Jitter;
 	};
 
-	struct HitGroupConstants
+	struct GlobalConstants
 	{
-		DirectX::XMMATRIX	Normal;
+		DirectX::XMFLOAT3X4	Normal;
 		uint32_t			FrameIndex;
 	};
 
@@ -119,6 +127,7 @@ protected:
 	{
 		DirectX::XMFLOAT4X4	WorldViewProj;
 		DirectX::XMFLOAT4X4	WorldViewProjPrev;
+		DirectX::XMFLOAT3X4	Normal;
 		DirectX::XMFLOAT2	ProjBias;
 	};
 
@@ -169,7 +178,7 @@ protected:
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];
 
 	XUSG::Texture2D::uptr		m_outputViews[NUM_UAV_TABLE];
-	XUSG::RenderTarget::uptr	m_velocity;
+	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
 	XUSG::DepthStencil::uptr	m_depth;
 
 	XUSG::Resource		m_scratch;
@@ -192,4 +201,6 @@ protected:
 	XUSG::Compute::PipelineCache::uptr		m_computePipelineCache;
 	XUSG::PipelineLayoutCache::uptr			m_pipelineLayoutCache;
 	XUSG::DescriptorTableCache::uptr		m_descriptorTableCache;
+
+	GlobalConstants		m_cbRaytracing;
 };

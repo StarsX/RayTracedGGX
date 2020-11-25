@@ -7,32 +7,6 @@
 
 static const float g_roughnesses[] = { 0.4, 0.2 };
 
-//--------------------------------------------------------------------------------------
-// Ray generation
-//--------------------------------------------------------------------------------------
-[shader("raygeneration")]
-void raygenMain()
-{
-	// Trace the ray.
-	RayDesc ray;
-
-	// Fallback layer has no depth
-	uint2 dim = DispatchRaysDimensions().xy;
-	dim.y >>= 1;
-
-	uint3 index = DispatchRaysIndex();
-	index.yz = uint2(index.y >> 1, index.y & 1);
-
-	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
-	generateCameraRay(index, dim, ray.Origin, ray.Direction);
-
-	RayPayload payload = traceRadianceRay(ray, 0);
-
-	// Write the raytraced color to the output texture.
-	const float a = payload.RecursionDepth > 0 ? 1.0 : 0.0;
-	RenderTarget[index] = float4(payload.Color, a);
-}
-
 // Quasirandom low-discrepancy sequences
 float2 Hammersley(uint i, uint num)
 {
@@ -61,38 +35,43 @@ uint MortonIndex(uint2 pos)
 	return MortonCode(pos.x) | (MortonCode(pos.y) << 1);
 }
 
-float2 GetHammersley(uint2 index)
+uint Hash(uint seed)
 {
-	const uint n = 256;
-	uint i = MortonIndex(index.xy % 16);
-	//uint i = (index.y % 16) * 16 + (index.x % 16);
-	i = (i + l_cbHitGroup.FrameIndex) % n;
-
-	return Hammersley(i, n);
+	seed = (seed ^ 61) ^ (seed >> 16);
+	seed *= 9;
+	seed = seed ^ (seed >> 4);
+	seed *= 0x27d4eb2d;
+	seed = seed ^ (seed >> 15);
+	
+	return seed;
 }
 
-//--------------------------------------------------------------------------------------
-// Ray closest hit
-//--------------------------------------------------------------------------------------
-[shader("closesthit")]
-void closestHitMain(inout RayPayload payload, TriAttributes attr)
+float2 GetHammersley(uint2 index, uint2 dim)
 {
-	Vertex input = getInput(attr.barycentrics);
+	const uint n = 512;
+	const uint x = index.y * dim.x + index.x;
+	const uint y = index.x * dim.y + index.y;
+	uint s = MortonIndex(uint2(x, y));
+	s = s ^ g_cb.FrameIndex;
 
-	uint3 index = DispatchRaysIndex();
-	index.yz = uint2(index.y >> 1, index.y & 1);
+	[unroll]
+	for (uint i = 0; i < 1; ++i) s = Hash(s);
+	s %= n;
+
+	return Hammersley(s, n);
+}
+
+RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
+{
+	const uint2 index = DispatchRaysIndex().xy;
 
 	// Trace a reflection ray.
-	RayDesc ray;
-	const bool isCentroidSample = index.z;
-	const float2 xi = isCentroidSample ? 0.0 : GetHammersley(index.xy);
-	const float roughness = g_roughnesses[InstanceIndex()];
+	const float2 xi = GetHammersley(index.xy, DispatchRaysDimensions().xy);
+	const float roughness = g_roughnesses[instanceIdx];
 	const float a = roughness * roughness;
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N, xi);
-	ray.Origin = hitWorldPosition();
-	ray.Direction = reflect(WorldRayDirection(), H);
-	float3 radiance = traceRadianceRay(ray, ++payload.RecursionDepth).Color;
+	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
+	RayPayload payload = traceRadianceRay(ray, recursionDepth);
 
 	const float NoL = saturate(dot(N, ray.Direction));
 
@@ -104,9 +83,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 			float3(0.95, 0.93, 0.88),	// Silver
 			float3(1.00, 0.71, 0.29)	// Gold
 		};
-		const float3 V = -WorldRayDirection();
 		const float VoH = saturate(dot(V, H));
-		const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
+		const float3 F = F_Schlick(specColors[instanceIdx], VoH);
 
 		// Visibility factor
 		const float NoV = saturate(dot(N, V));
@@ -119,11 +97,44 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 		//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
 		// pdf = D * NoH
 		const float3 specular = F * NoL * vis / NoH;
-		//radiance *= isCentroidSample ? saturate(specular) : specular;
-		radiance *= saturate(specular);
+		//payload.Color *= isCentroidSample ? saturate(specular) : specular;
+		payload.Color *= saturate(specular);
 	}
 
-	//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
+	return payload;
+}
 
-	payload.Color = radiance;
+//--------------------------------------------------------------------------------------
+// Ray generation
+//--------------------------------------------------------------------------------------
+[shader("raygeneration")]
+void raygenMain()
+{
+	const uint2 dim = DispatchRaysDimensions().xy;
+	const uint2 index = DispatchRaysIndex().xy;
+
+	// Generate a ray corresponding to an index from a primary surface.
+	float3 N, V, pos;
+	const uint instanceIdx = getPrimarySurface(index, dim, N, V, pos);
+
+	RayPayload payload;
+	if (instanceIdx != 0xffffffff)
+	{
+		const RayPayload payload = computeLighting(instanceIdx, N, V, pos);
+		RenderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
+	}
+	else RenderTarget[index] = float4(environment(-V), 0.0);
+}
+
+//--------------------------------------------------------------------------------------
+// Ray closest hit
+//--------------------------------------------------------------------------------------
+[shader("closesthit")]
+void closestHitMain(inout RayPayload payload, TriAttributes attr)
+{
+	Vertex input = getInput(attr.barycentrics);
+
+	// Trace a reflection ray.
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
+	payload = computeLighting(InstanceIndex(), N, -WorldRayDirection(), hitWorldPosition(), 1);
 }

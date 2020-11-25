@@ -7,45 +7,13 @@
 
 #define ROUGHNESS	0.0
 
-//--------------------------------------------------------------------------------------
-// Ray generation
-//--------------------------------------------------------------------------------------
-[shader("raygeneration")]
-void raygenMain()
+RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {
-	// Trace the ray.
-	RayDesc ray;
-
-	const uint2 dim = DispatchRaysDimensions().xy;
-	uint3 index = DispatchRaysIndex();
-	index.z = 0;
-
-	// Generate a ray for a camera pixel corresponding to an index from the dispatched 2D grid.
-	generateCameraRay(index, dim, ray.Origin, ray.Direction);
-
-	RayPayload payload = traceRadianceRay(ray, 0);
-
-	// Write the raytraced color to the output texture.
-	const float a = payload.RecursionDepth > 0 ? 1.0 : 0.0;
-	RenderTarget[index] = float4(payload.Color, a);
-}
-
-//--------------------------------------------------------------------------------------
-// Ray closest hit
-//--------------------------------------------------------------------------------------
-[shader("closesthit")]
-void closestHitMain(inout RayPayload payload, TriAttributes attr)
-{
-	Vertex input = getInput(attr.barycentrics);
-
 	// Trace a reflection ray.
-	RayDesc ray;
 	const float a = ROUGHNESS * ROUGHNESS;
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)l_cbHitGroup.Normal) : input.Nrm);
 	const float3 H = computeDirectionGGX(a, N, 0.0);
-	ray.Origin = hitWorldPosition();
-	ray.Direction = reflect(WorldRayDirection(), H);
-	float3 radiance = traceRadianceRay(ray, ++payload.RecursionDepth).Color;
+	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
+	RayPayload payload = traceRadianceRay(ray, recursionDepth);
 
 	const float NoL = saturate(dot(N, ray.Direction));
 
@@ -57,9 +25,8 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 			float3(0.95, 0.93, 0.88),	// Silver
 			float3(1.00, 0.71, 0.29)	// Gold
 		};
-		const float3 V = -WorldRayDirection();
 		const float VoH = saturate(dot(V, H));
-		const float3 F = F_Schlick(specColors[InstanceIndex()], VoH);
+		const float3 F = F_Schlick(specColors[instanceIdx], VoH);
 
 		// Visibility factor
 		const float NoV = saturate(dot(N, V));
@@ -69,14 +36,49 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
 		const float NoH = saturate(dot(N, H));
 		// pdf = D * NoH / (4 * VoH)
-		//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
+		//payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
 		// pdf = D * NoH
-		radiance *= saturate(F * NoL * vis / NoH);
-		//radiance *= EnvBRDFApprox(specColors[InstanceIndex()], ROUGHNESS, NoV);
+		payload.Color *= saturate(F * NoL * vis / NoH);
+		//payload.Color *= EnvBRDFApprox(specColors[InstanceIndex()], ROUGHNESS, NoV);
 
 		//const float3 color = float3(1.0 - attr.barycentrics.x - attr.barycentrics.y, attr.barycentrics.xy);
 	}
-	else radiance = 0.0;
+	else payload.Color = 0.0;
 
-	payload.Color = radiance;
+	return payload;
+}
+
+//--------------------------------------------------------------------------------------
+// Ray generation
+//--------------------------------------------------------------------------------------
+[shader("raygeneration")]
+void raygenMain()
+{
+	const uint2 dim = DispatchRaysDimensions().xy;
+	const uint2 index = DispatchRaysIndex().xy;
+
+	// Generate a ray corresponding to an index from a primary surface.
+	float3 N, V, pos;
+	const uint instanceIdx = getPrimarySurface(index, dim, N, V, pos);
+
+	RayPayload payload;
+	if (instanceIdx != 0xffffffff)
+	{
+		const RayPayload payload = computeLighting(instanceIdx, N, V, pos);
+		RenderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
+	}	
+	else RenderTarget[index] = float4(environment(-V), 0.0);
+}
+
+//--------------------------------------------------------------------------------------
+// Ray closest hit
+//--------------------------------------------------------------------------------------
+[shader("closesthit")]
+void closestHitMain(inout RayPayload payload, TriAttributes attr)
+{
+	Vertex input = getInput(attr.barycentrics);
+
+	// Trace a reflection ray.
+	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
+	payload = computeLighting(InstanceIndex(), N, -WorldRayDirection(), hitWorldPosition(), 1);
 }

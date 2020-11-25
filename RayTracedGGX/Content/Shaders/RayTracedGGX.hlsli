@@ -2,7 +2,7 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#define MAX_RECURSION_DEPTH	2
+#define MAX_RECURSION_DEPTH	1
 
 typedef RaytracingAccelerationStructure RaytracingAS;
 typedef BuiltInTriangleIntersectionAttributes TriAttributes;
@@ -22,46 +22,40 @@ struct RayPayload
 	uint	RecursionDepth;
 };
 
+struct GlobalConstants
+{
+	float4x3 Normal;
+	uint	FrameIndex;
+};
+
 struct RayGenConstants
 {
 	matrix	ProjToWorld;
 	float3	EyePt;
-	float2	Jitter;
 };
 
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<RayGenConstants> l_cbRayGen : register(b0);
+ConstantBuffer<GlobalConstants> g_cb : register(b0);
+ConstantBuffer<RayGenConstants> l_cbRayGen : register (b1);
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2DArray<float4>	RenderTarget	: register(u0);
-RaytracingAS				g_scene : register(t0);
+RWTexture2D<float4>			RenderTarget	: register (u0);
+RaytracingAS				g_scene			: register (t0);
+Texture2D					g_normal		: register (t1);
+Texture2D<float>			g_depth			: register (t2);
 
 // IA buffers
-Buffer<uint>				g_indexBuffers[]	: register(t0, space1);
-StructuredBuffer<Vertex>	g_vertexBuffers[]	: register(t0, space2);
+Buffer<uint>				g_indexBuffers[]	: register (t0, space1);
+StructuredBuffer<Vertex>	g_vertexBuffers[]	: register (t0, space2);
 
 //--------------------------------------------------------------------------------------
 // Samplers
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler;
-
-//--------------------------------------------------------------------------------------
-// Structs
-//--------------------------------------------------------------------------------------
-struct HitGroupConstants
-{
-	matrix	Normal;
-	uint	FrameIndex;
-};
-
-//--------------------------------------------------------------------------------------
-// Constant buffers
-//--------------------------------------------------------------------------------------
-ConstantBuffer<HitGroupConstants> l_cbHitGroup : register(b1);
 
 //--------------------------------------------------------------------------------------
 // Compute direction in local space
@@ -136,23 +130,38 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
 }
 
 //--------------------------------------------------------------------------------------
-// Generate a ray in world space for a camera pixel corresponding to an index
+// Generate a ray in world space for a primary-surface pixel corresponding to an index
 // from the dispatched 2D grid.
 //--------------------------------------------------------------------------------------
-void generateCameraRay(uint3 index, uint2 dim, out float3 origin, out float3 direction)
+uint getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out float3 pos)
 {
-	const float2 xy = index.xy + (index.z ? 0.5 : l_cbRayGen.Jitter); // jitter from the middle of the pixel.
-	float2 screenPos = xy / dim * 2.0 - 1.0;
+	const float4 norm = g_normal[index];
+	const float depth = g_depth[index];
 
-	// Invert Y for Y-up-style NDC.
-	screenPos.y = -screenPos.y;
+	float2 screenPos = (index + 0.5) / dim * 2.0 - 1.0;
+	screenPos.y = -screenPos.y; // Invert Y for Y-up-style NDC.
 
-	// Unproject the pixel coordinate into a ray.
-	float4 world = mul(float4(screenPos, 0.0, 1.0), l_cbRayGen.ProjToWorld);
-	world.xyz /= world.w;
+	if (norm.w > 0.0)
+	{
+		// Unproject the pixel coordinate into a ray.
+		const float4 world = mul(float4(screenPos, depth, 1.0), l_cbRayGen.ProjToWorld);
 
-	origin = l_cbRayGen.EyePt;
-	direction = normalize(world.xyz - origin);
+		pos = world.xyz / world.w;
+		N = normalize(norm.xyz - 0.5);
+		V = normalize(l_cbRayGen.EyePt - pos);
+
+		return norm.w * 2.0 - 1.0;
+	}
+	else
+	{
+		// Unproject the pixel coordinate into a ray.
+		const float4 world = mul(float4(screenPos, 0.0, 1.0), l_cbRayGen.ProjToWorld);
+
+		pos = world.xyz / world.w;
+		V = normalize(l_cbRayGen.EyePt - pos);
+
+		return 0xffffffff;
+	}
 }
 
 //--------------------------------------------------------------------------------------
