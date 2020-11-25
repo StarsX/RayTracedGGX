@@ -92,11 +92,9 @@ RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uin
 		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
 		const float NoH = saturate(dot(N, H));
 		// pdf = D * NoH / (4 * VoH)
-		//radiance *= NoL * F * vis * (4.0 * VoH / NoH);
+		//payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
 		// pdf = D * NoH
-		const float3 specular = F * NoL * vis / NoH;
-		//payload.Color *= isCentroidSample ? saturate(specular) : specular;
-		payload.Color *= saturate(specular);
+		payload.Color *= F * NoL * vis / NoH;
 	}
 
 	return payload;
