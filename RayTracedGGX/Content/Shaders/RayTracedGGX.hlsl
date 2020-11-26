@@ -8,7 +8,7 @@
 static const float g_roughnesses[] = { 0.4, 0.2 };
 
 // Quasirandom low-discrepancy sequences
-float2 Hammersley(uint i, uint num)
+uint Hammersley(uint i)
 {
 	uint bits = i;
 	bits = (bits << 16) | (bits >> 16);
@@ -17,7 +17,12 @@ float2 Hammersley(uint i, uint num)
 	bits = ((bits & 0x0F0F0F0F) << 4) | ((bits & 0xF0F0F0F0) >> 4);
 	bits = ((bits & 0x00FF00FF) << 8) | ((bits & 0xFF00FF00) >> 8);
 
-	return float2(i / float(num), bits / float(0xffffffff));
+	return bits;
+}
+
+float2 Hammersley(uint i, uint num)
+{
+	return float2(i / float(num), Hammersley(i) / float(0xffffffff));
 }
 
 // Morton order generator
@@ -48,11 +53,11 @@ uint Hash(uint seed)
 
 float2 GetHammersley(uint2 index, uint2 dim)
 {
-	const uint n = 512;
+	const uint n = 256;
 	const uint x = index.y * dim.x + index.x;
 	const uint y = index.x * dim.y + index.y;
 	uint s = MortonIndex(uint2(x, y));
-	s = s ^ g_cb.FrameIndex;
+	s += g_cb.FrameIndex;
 
 	[unroll]
 	for (uint i = 0; i < 1; ++i) s = Hash(s);

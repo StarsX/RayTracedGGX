@@ -172,7 +172,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		angle += isPaused ? 0.0f : 0.025f * XM_PI / 180.0f;
 		const auto rot = XMMatrixRotationY(angle);
 
-		const auto n = 512u;
+		const auto n = 256u;
 		XMStoreFloat3x4(&m_cbRaytracing.Normal, rot);
 		++m_cbRaytracing.FrameIndex;
 		m_cbRaytracing.FrameIndex %= n;
