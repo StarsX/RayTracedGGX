@@ -88,7 +88,7 @@ void RayTracedGGX::LoadPipeline()
 		dxgiAdapter = nullptr;
 		ThrowIfFailed(factory->EnumAdapters1(i, &dxgiAdapter));
 		EnableDirectXRaytracing(dxgiAdapter.get());
-		hr = D3D12CreateDevice(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device.Common));
+		hr = D3D12CreateDevice(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device.Base));
 	}
 
 	dxgiAdapter->GetDesc1(&dxgiAdapterDesc);
@@ -97,7 +97,7 @@ void RayTracedGGX::LoadPipeline()
 	ThrowIfFailed(hr);
 
 	// Create the command queue.
-	N_RETURN(m_device.Common->GetCommandQueue(m_commandQueue, CommandListType::DIRECT, CommandQueueFlag::NONE), ThrowIfFailed(E_FAIL));
+	N_RETURN(m_device.Base->GetCommandQueue(m_commandQueue, CommandListType::DIRECT, CommandQueueFlag::NONE), ThrowIfFailed(E_FAIL));
 
 	// Describe and create the swap chain.
 	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
@@ -130,8 +130,8 @@ void RayTracedGGX::LoadPipeline()
 	for (auto n = 0u; n < FrameCount; ++n)
 	{
 		m_renderTargets[n] = RenderTarget::MakeUnique();
-		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.Common, m_swapChain, n), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Common->GetCommandAllocator(m_commandAllocators[n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.Base, m_swapChain, n), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
 	}
 }
 
@@ -141,7 +141,7 @@ void RayTracedGGX::LoadAssets()
 	// Create the command list.
 	m_commandList = RayTracing::CommandList::MakeUnique();
 	const auto pCommandList = m_commandList.get();
-	N_RETURN(m_device.Common->GetCommandList(pCommandList, 0, CommandListType::DIRECT,
+	N_RETURN(m_device.Base->GetCommandList(pCommandList, 0, CommandListType::DIRECT,
 		m_commandAllocators[m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracing interfaces
@@ -162,7 +162,7 @@ void RayTracedGGX::LoadAssets()
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
-		if (!m_fence) N_RETURN(m_device.Common->GetFence(m_fence, m_fenceValues[m_frameIndex]++, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
+		if (!m_fence) N_RETURN(m_device.Base->GetFence(m_fence, m_fenceValues[m_frameIndex]++, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
 
 		// Create an event handle to use for frame synchronization.
 		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -477,23 +477,12 @@ void RayTracedGGX::EnableDirectXRaytracing(IDXGIAdapter1* adapter)
 			OutputDebugString(L"Could not enable compute based fallback raytracing support (D3D12EnableExperimentalFeatures() failed).\n"\
 				L"Possible reasons: your OS is not in developer mode.\n\n");
 		ThrowIfFailed(isFallbackSupported ? S_OK : E_FAIL);
-		m_device.RaytracingAPI = RayTracing::API::FallbackLayer;
 	}
 }
 
 void RayTracedGGX::CreateRaytracingInterfaces()
 {
-	if (m_device.RaytracingAPI == RayTracing::API::FallbackLayer)
-	{
-		const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
-		ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Common.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Fallback)));
-	}
-	else // DirectX Raytracing
-	{
-		const auto hr = m_device.Common->QueryInterface(IID_PPV_ARGS(&m_device.Native));
-		if (FAILED(hr)) OutputDebugString(L"Couldn't get DirectX Raytracing interface for the device.\n");
-		ThrowIfFailed(hr);
-	}
-
+	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
+	ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Base.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Derived)));
 	m_commandList->CreateInterface(m_device);
 }

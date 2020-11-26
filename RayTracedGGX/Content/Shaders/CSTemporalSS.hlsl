@@ -207,7 +207,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	// Speed to history blur
 	const float2 historyBlurAmp = 4.0 * texSize;
 	const HALF2 historyBlurs = HALF2(abs(velocity.xy) * historyBlurAmp);
-	HALF curHistoryBlur = saturate(historyBlurs.x + historyBlurs.y);
+	HALF curHistoryBlur = historyBlurs.x + historyBlurs.y;
 
 	// Evaluate history weight that indicates the convergence from metadata
 	HALF historyBlur = HALF(1.0 - history.w);
@@ -218,9 +218,13 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	HALF4 neighborMin, neighborMax;
 	const HALF4 currentTM = HALF4(TM(current.xyz), current.w);
 	//const HALF gamma = historyBlur > 0.0 || current.w <= 0.0 ? 1.0 : 16.0;
-	HALF gamma = historyBlur > 0.0 ? 16.0 : 32.0;
+	HALF gamma = clamp(8.0 / historyBlur, 1.0, 32.0);
 	gamma = current.w <= 0.0 ? 1.0 : gamma;
 	HALF4 filtered = NeighborMinMax(neighborMin, neighborMax, currentTM, DTid, gamma);
+
+	// Saturate history blurs
+	curHistoryBlur = saturate(curHistoryBlur);
+	historyBlur = saturate(historyBlur);
 
 	// Clip historical color
 	HALF3 historyTM = TM(history.xyz);
