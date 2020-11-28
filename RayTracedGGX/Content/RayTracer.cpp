@@ -57,18 +57,21 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 
 	// Create output view and build acceleration structures
 	for (auto& texture : m_outputViews) texture = Texture2D::MakeUnique();
-	m_outputViews[UAV_TABLE_RT_OUT]->Create(m_device.Base, width, height,
+	m_outputViews[UAV_RT_OUT]->Create(m_device.Base, width, height,
 		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 		1, 1, MemoryType::DEFAULT, false, L"RayTracingOut");
-	m_outputViews[UAV_TABLE_SPATIAL]->Create(m_device.Base, width, height,
-		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		1, 1, MemoryType::DEFAULT, false, L"SpatialOut0");
-	m_outputViews[UAV_TABLE_SPATIAL1]->Create(m_device.Base, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"SpatialOut1");
-	m_outputViews[UAV_TABLE_TSAMP]->Create(m_device.Base, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"TemporalSSOut0");
-	m_outputViews[UAV_TABLE_TSAMP1]->Create(m_device.Base, width, height, Format::R16G16B16A16_FLOAT,
-		1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"TemporalSSOut1");
+	for (auto i = 0ui8; i < 2; ++i)
+	{
+		m_outputViews[UAV_AVG_H + i]->Create(m_device.Base, width, height,
+			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+			1, 1, MemoryType::DEFAULT, false, (L"Average" + to_wstring(i)).c_str());
+		m_outputViews[UAV_VAR_H + i]->Create(m_device.Base, width, height,
+			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+			1, 1, MemoryType::DEFAULT, false, (L"Variance" + to_wstring(i)).c_str());
+		m_outputViews[UAV_TSS + i]->Create(m_device.Base, width, height, Format::R16G16B16A16_FLOAT,
+			1, ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false,
+			(L"TemporalSSOut" + to_wstring(i)).c_str());
+	}
 
 	m_gbuffers[NORMAL] = RenderTarget::MakeUnique();
 	m_gbuffers[NORMAL]->Create(m_device.Base, width, height, Format::R10G10B10A2_UNORM,
@@ -208,7 +211,7 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 	pCommandList->Barrier(numBarriers, barriers);
 	gbufferPass(pCommandList);
 
-	numBarriers = m_outputViews[UAV_TABLE_RT_OUT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+	numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
 	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
@@ -216,6 +219,7 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 	rayTrace(pCommandList, frameIndex);
+	variancePass(pCommandList);
 
 	temporalSS(pCommandList);
 }
@@ -223,7 +227,7 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 void RayTracer::ToneMap(const RayTracing::CommandList* pCommandList, const Descriptor& rtv,
 	uint32_t numBarriers, ResourceBarrier* pBarriers)
 {
-	numBarriers = m_outputViews[UAV_TABLE_TSAMP + m_frameParity]->SetBarrier(
+	numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(
 		pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE |
 		ResourceState::PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, pBarriers);
@@ -253,14 +257,14 @@ void RayTracer::ClearHistory(const RayTracing::CommandList* pCommandList)
 	ResourceBarrier barriers[FrameCount];
 	auto numBarriers = 0u;
 	for (auto i = 0ui8; i < 2; ++i)
-		numBarriers = m_outputViews[UAV_TABLE_TSAMP + i]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
+		numBarriers = m_outputViews[UAV_TSS + i]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 
 	const float clearColor[4] = {};
 	for (auto i = 0ui8; i < 2; ++i)
 	{
-		const uint8_t j = UAV_TABLE_TSAMP + i;
-		pCommandList->ClearUnorderedAccessViewFloat(m_uavTables[j], m_outputViews[j]->GetUAV(),
+		const uint8_t j = UAV_TSS + i;
+		pCommandList->ClearUnorderedAccessViewFloat(m_uavTables[UAV_TABLE_TSS + i], m_outputViews[j]->GetUAV(),
 			m_outputViews[j]->GetResource(), clearColor);
 	}
 }
@@ -438,13 +442,34 @@ bool RayTracer::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
-		pipelineLayout->SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
-		pipelineLayout->SetShaderStage(SAMPLER, Shader::Stage::CS);
 		X_RETURN(m_pipelineLayouts[RESAMPLE_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"ResamplingPipelineLayout"), false);
+	}
+
+	// This is a pipeline layout for variance horizontal pass
+	{
+		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
+		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
+		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+			PipelineLayoutFlag::NONE, L"VarianceHPipelineLayout"), false);
+	}
+
+	// This is a pipeline layout for variance vertical pass
+	{
+		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
+		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 0, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
+		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+			PipelineLayoutFlag::NONE, L"VarianceVPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for temporal SS
@@ -452,11 +477,9 @@ bool RayTracer::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetShaderStage(OUTPUT_VIEW, Shader::Stage::CS);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0);
-		pipelineLayout->SetShaderStage(SHADER_RESOURCES, Shader::Stage::CS);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 5, 0, 0,
+			DescriptorFlag::DESCRIPTORS_VOLATILE | DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
-		pipelineLayout->SetShaderStage(SAMPLER, Shader::Stage::CS);
 		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"TemporalSSPipelineLayout"), false);
 	}
@@ -525,6 +548,24 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceH.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[VARIANCE_H_PASS], state->GetPipeline(*m_computePipelineCache, L"VarianceHPass"), false);
+	}
+
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceV.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[VARIANCE_V_PASS], state->GetPipeline(*m_computePipelineCache, L"VarianceVPass"), false);
+	}
+
+	{
 		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSTemporalSS.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
@@ -578,24 +619,29 @@ bool RayTracer::createDescriptorTables()
 	// Output UAV
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_RT_OUT]->GetUAV());
+		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_RT_OUT]->GetUAV());
 		X_RETURN(m_uavTables[UAV_TABLE_RT_OUT], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
-	// Spatially resolved UAVs
+	// Spatial variance UAVs
 	for (auto i = 0u; i < 2; ++i)
 	{
+		const Descriptor descriptors[] =
+		{
+			m_outputViews[UAV_AVG_H + i]->GetUAV(),
+			m_outputViews[UAV_VAR_H + i]->GetUAV()
+		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_SPATIAL + i]->GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_SPATIAL + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
+		X_RETURN(m_uavTables[UAV_TABLE_VAR_H + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
 	// Temporal SS output UAVs
 	for (auto i = 0u; i < 2; ++i)
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_TSAMP + i]->GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_TSAMP + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetUAV());
+		X_RETURN(m_uavTables[UAV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
 	// Index buffer SRVs
@@ -628,12 +674,16 @@ bool RayTracer::createDescriptorTables()
 		X_RETURN(m_srvTables[SRV_TABLE_GB], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
-	// Spatially resolving input SRVs
-	for (auto i = 0u; i < 2; ++i)
+	// Spatial variance input SRVs
 	{
+		const Descriptor descriptors[] =
+		{
+			m_outputViews[UAV_AVG_H]->GetSRV(),
+			m_outputViews[UAV_VAR_H]->GetSRV()
+		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_SPATIAL + i]->GetSRV());
-		X_RETURN(m_srvTables[SRV_TABLE_SPATIAL + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
+		X_RETURN(m_srvTables[SRV_TABLE_VAR], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
 	// Temporal SS input SRVs
@@ -641,21 +691,22 @@ bool RayTracer::createDescriptorTables()
 	{
 		const Descriptor descriptors[] =
 		{
-			m_outputViews[UAV_TABLE_RT_OUT]->GetSRV(),
-			m_outputViews[UAV_TABLE_TSAMP + !i]->GetSRV(),
+			m_outputViews[UAV_RT_OUT]->GetSRV(),
+			m_outputViews[UAV_TSS + !i]->GetSRV(),
 			m_gbuffers[VELOCITY]->GetSRV(),
-			m_outputViews[UAV_TABLE_SPATIAL]->GetSRV()
+			m_outputViews[UAV_AVG_V]->GetSRV(),
+			m_outputViews[UAV_VAR_V]->GetSRV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_TS + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
 	// Tone mapping SRVs
 	for (auto i = 0u; i < 2; ++i)
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TABLE_TSAMP + i]->GetSRV());
+		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetSRV());
 		X_RETURN(m_srvTables[SRV_TABLE_TM + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
@@ -856,6 +907,52 @@ void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
 	}
 }
 
+void RayTracer::variancePass(const XUSG::RayTracing::CommandList* pCommandList)
+{
+	// Bind the heaps, acceleration structure and dispatch rays.
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
+	};
+	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
+
+	ResourceBarrier barriers[4];
+
+	// Horizontal pass
+	{
+		auto numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+		numBarriers = m_outputViews[UAV_VAR_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
+		numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, barriers);
+
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TSS]);
+		pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
+
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_PASS]);
+		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+	}
+
+	// Vertical pass
+	{
+		auto numBarriers = m_outputViews[UAV_AVG_V]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+		numBarriers = m_outputViews[UAV_VAR_V]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
+		numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		numBarriers = m_outputViews[UAV_VAR_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, barriers);
+
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_V]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
+		pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
+
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_PASS]);
+		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+	}
+}
+
 void RayTracer::spatialPass(const RayTracing::CommandList* pCommandList, uint8_t dst, uint8_t src, uint8_t srcSRV)
 {
 	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
@@ -877,8 +974,8 @@ void RayTracer::spatialPass(const RayTracing::CommandList* pCommandList, uint8_t
 	pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[srcSRV]);
 	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
-	if (srcSRV != SRV_TABLE_SPATIAL && srcSRV != SRV_TABLE_SPATIAL1)
-		pCommandList->SetPipelineState(m_pipelines[SPATIAL_PASS]);
+	//if (srcSRV != SRV_TABLE_VAR_H && srcSRV != SRV_TABLE_VAR_V)
+		//pCommandList->SetPipelineState(m_pipelines[SPATIAL_PASS]);
 	pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
 }
 
@@ -895,16 +992,16 @@ void RayTracer::temporalSS(const RayTracing::CommandList* pCommandList)
 	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
 	ResourceBarrier barriers[5];
-	auto numBarriers = m_outputViews[UAV_TABLE_TSAMP + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-	numBarriers = m_outputViews[UAV_TABLE_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_outputViews[UAV_TABLE_TSAMP + !m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE |
+	auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+	numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_outputViews[UAV_TSS + !m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE |
 		ResourceState::PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::END_ONLY);
 	pCommandList->Barrier(numBarriers, barriers);
 
-	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSAMP + m_frameParity]);
-	pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TS + m_frameParity]);
+	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSS + m_frameParity]);
+	pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TSS + m_frameParity]);
 	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
 	pCommandList->SetPipelineState(m_pipelines[TEMPORAL_SS]);

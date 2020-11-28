@@ -49,6 +49,8 @@ protected:
 		RAY_GEN_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
 		RESAMPLE_LAYOUT,
+		VARIANCE_H_LAYOUT,
+		VARIANCE_V_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
 		TONE_MAP_LAYOUT,
 
@@ -71,6 +73,8 @@ protected:
 	{
 		GBUFFER_PASS,
 		SPATIAL_PASS,
+		VARIANCE_H_PASS,
+		VARIANCE_V_PASS,
 		TEMPORAL_SS,
 		TONE_MAP,
 
@@ -85,15 +89,27 @@ protected:
 		NUM_GBUFFER
 	};
 
+	enum UAVResource : uint8_t
+	{
+		UAV_RT_OUT,
+		UAV_AVG_H,
+		UAV_AVG_V,
+		UAV_VAR_H,
+		UAV_VAR_V,
+		UAV_TSS,
+		UAV_TSS1,
+
+		NUM_UAV
+	};
+
 	enum SRVTable : uint8_t
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
 		SRV_TABLE_GB,
-		SRV_TABLE_SPATIAL,
-		SRV_TABLE_SPATIAL1,
-		SRV_TABLE_TS,
-		SRV_TABLE_TS1,
+		SRV_TABLE_VAR,
+		SRV_TABLE_TSS,
+		SRV_TABLE_TSS1,
 		SRV_TABLE_TM,
 		SRV_TABLE_TM1,
 
@@ -103,10 +119,10 @@ protected:
 	enum UAVTable : uint8_t
 	{
 		UAV_TABLE_RT_OUT,
-		UAV_TABLE_SPATIAL,
-		UAV_TABLE_SPATIAL1,
-		UAV_TABLE_TSAMP,
-		UAV_TABLE_TSAMP1,
+		UAV_TABLE_VAR_H,
+		UAV_TABLE_VAR_V,
+		UAV_TABLE_TSS,
+		UAV_TABLE_TSS1,
 
 		NUM_UAV_TABLE
 	};
@@ -148,6 +164,7 @@ protected:
 	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
+	void variancePass(const XUSG::RayTracing::CommandList* pCommandList);
 	void spatialPass(const XUSG::RayTracing::CommandList* pCommandList, uint8_t dst, uint8_t src, uint8_t srcSRV);
 	void temporalSS(const XUSG::RayTracing::CommandList* pCommandList);
 
@@ -177,7 +194,7 @@ protected:
 	XUSG::VertexBuffer::uptr	m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D::uptr		m_outputViews[NUM_UAV_TABLE];
+	XUSG::Texture2D::uptr		m_outputViews[NUM_UAV];
 	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
 	XUSG::DepthStencil::uptr	m_depth;
 
