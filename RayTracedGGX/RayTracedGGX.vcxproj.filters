@@ -153,6 +153,9 @@
     <None Include="Content\Shaders\RayTracedGGX.hlsli">
       <Filter>Shaders</Filter>
     </None>
+    <None Include="Content\Shaders\FilterCommon.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="Content\Shaders\RayTracedGGX.hlsl">

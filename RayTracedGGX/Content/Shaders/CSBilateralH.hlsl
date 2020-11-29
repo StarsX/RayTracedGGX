@@ -2,10 +2,11 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#define RADIUS 10
+#include "FilterCommon.hlsli"
+
+#define RADIUS 2
 
 static const uint g_sampleCount = RADIUS * 2 + 1;
-static const float3 g_lumBase = { 0.25, 0.5, 0.25 };
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
@@ -19,34 +20,6 @@ Texture2D<float>	g_txDepth;
 // Samplers
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler;
-
-//--------------------------------------------------------------------------------------
-// A fast invertible tone map that preserves color (Reinhard)
-//--------------------------------------------------------------------------------------
-float3 TM(float3 hdr)
-{
-	const float3 rgb = float3(hdr);
-
-	return rgb / (1.0 + dot(rgb, g_lumBase));
-}
-
-float NormalWeight(float3 normal_p, float3 normal_q, float sigma)
-{
-	return pow(max(dot(normal_p, normal_q), 0.0), sigma);
-}
-
-float RoughnessWeight(float roughness_p, float roughness_q, float sigma_min, float sigma_max)
-{
-	return 1.0 - smoothstep(sigma_min, sigma_max, abs(roughness_p - roughness_q));
-}
-
-float Gaussian(float x, float m, float sigma)
-{
-	const float r = x - m;
-	const float a = dot(r, r) / (sigma * sigma);
-
-	return exp(-0.5 * a);
-}
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)

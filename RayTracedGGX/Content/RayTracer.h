@@ -94,9 +94,7 @@ protected:
 	{
 		UAV_RT_OUT,
 		UAV_AVG_H,
-		UAV_AVG_V,
 		UAV_VAR_H,
-		UAV_VAR_V,
 		UAV_TSS,
 		UAV_TSS1,
 		UAV_FLT,
@@ -123,7 +121,6 @@ protected:
 	{
 		UAV_TABLE_RT_OUT,
 		UAV_TABLE_VAR_H,
-		UAV_TABLE_VAR_V,
 		UAV_TABLE_TSS,
 		UAV_TABLE_TSS1,
 		UAV_TABLE_FLT,
