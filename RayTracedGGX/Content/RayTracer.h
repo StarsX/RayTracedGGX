@@ -48,10 +48,10 @@ protected:
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
-		RESAMPLE_LAYOUT,
 		VARIANCE_H_LAYOUT,
 		VARIANCE_V_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
+		BILATERAL_LAYOUT,
 		TONE_MAP_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
@@ -72,10 +72,11 @@ protected:
 	enum PipelineIndex : uint8_t
 	{
 		GBUFFER_PASS,
-		SPATIAL_PASS,
 		VARIANCE_H_PASS,
 		VARIANCE_V_PASS,
 		TEMPORAL_SS,
+		BILATERAL_H,
+		BILATERAL_V,
 		TONE_MAP,
 
 		NUM_PIPELINE
@@ -98,6 +99,7 @@ protected:
 		UAV_VAR_V,
 		UAV_TSS,
 		UAV_TSS1,
+		UAV_FLT,
 
 		NUM_UAV
 	};
@@ -112,6 +114,7 @@ protected:
 		SRV_TABLE_TSS1,
 		SRV_TABLE_TM,
 		SRV_TABLE_TM1,
+		SRV_TABLE_FLT,
 
 		NUM_SRV_TABLE
 	};
@@ -123,6 +126,7 @@ protected:
 		UAV_TABLE_VAR_V,
 		UAV_TABLE_TSS,
 		UAV_TABLE_TSS1,
+		UAV_TABLE_FLT,
 
 		NUM_UAV_TABLE
 	};
@@ -165,8 +169,8 @@ protected:
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
 	void variancePass(const XUSG::RayTracing::CommandList* pCommandList);
-	void spatialPass(const XUSG::RayTracing::CommandList* pCommandList, uint8_t dst, uint8_t src, uint8_t srcSRV);
 	void temporalSS(const XUSG::RayTracing::CommandList* pCommandList);
+	void bilateralFilter(const XUSG::RayTracing::CommandList* pCommandList);
 
 	XUSG::RayTracing::Device m_device;
 

@@ -133,13 +133,16 @@
     <FxCompile Include="Content\Shaders\CSTemporalSS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CS_SpatialPass.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\CSVarianceH.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\CSVarianceV.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSBilateralV.hlsl">
+      <Filter>Shaders</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSBilateralH.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>

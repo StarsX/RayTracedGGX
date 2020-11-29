@@ -219,9 +219,10 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 	rayTrace(pCommandList, frameIndex);
-	variancePass(pCommandList);
+	//variancePass(pCommandList);
 
 	temporalSS(pCommandList);
+	//bilateralFilter(pCommandList);
 }
 
 void RayTracer::ToneMap(const RayTracing::CommandList* pCommandList, const Descriptor& rtv,
@@ -437,17 +438,6 @@ bool RayTracer::createPipelineLayouts()
 			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout"), false);
 	}
 
-	// This is a pipeline layout for resampling
-	{
-		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
-		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
-		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
-		X_RETURN(m_pipelineLayouts[RESAMPLE_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
-			PipelineLayoutFlag::NONE, L"ResamplingPipelineLayout"), false);
-	}
-
 	// This is a pipeline layout for variance horizontal pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
@@ -482,6 +472,19 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"TemporalSSPipelineLayout"), false);
+	}
+
+	// This is a pipeline layout for bilateral-filter pass
+	{
+		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
+		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 2, 1, 0,
+			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		X_RETURN(m_pipelineLayouts[BILATERAL_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+			PipelineLayoutFlag::NONE, L"BilateralFilterPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for tone mapping
@@ -575,12 +578,21 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CS_SpatialPass.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSBilateralH.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
+		state->SetPipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[SPATIAL_PASS], state->GetPipeline(*m_computePipelineCache, L"SpatialPass"), false);
+		X_RETURN(m_pipelines[BILATERAL_H], state->GetPipeline(*m_computePipelineCache, L"BilateralHPass"), false);
+	}
+
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSBilateralV.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[BILATERAL_V], state->GetPipeline(*m_computePipelineCache, L"BilateralVPass"), false);
 	}
 
 	{
@@ -907,7 +919,7 @@ void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
 	}
 }
 
-void RayTracer::variancePass(const XUSG::RayTracing::CommandList* pCommandList)
+void RayTracer::variancePass(const RayTracing::CommandList* pCommandList)
 {
 	// Bind the heaps, acceleration structure and dispatch rays.
 	const DescriptorPool descriptorPools[] =
@@ -953,32 +965,6 @@ void RayTracer::variancePass(const XUSG::RayTracing::CommandList* pCommandList)
 	}
 }
 
-void RayTracer::spatialPass(const RayTracing::CommandList* pCommandList, uint8_t dst, uint8_t src, uint8_t srcSRV)
-{
-	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[RESAMPLE_LAYOUT]);
-
-	// Bind the heaps, acceleration structure and dispatch rays.
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
-	ResourceBarrier barriers[2];
-	auto numBarriers = m_outputViews[dst]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-	numBarriers = m_outputViews[src]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	pCommandList->Barrier(numBarriers, barriers);
-
-	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[dst]);
-	pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[srcSRV]);
-	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
-
-	//if (srcSRV != SRV_TABLE_VAR_H && srcSRV != SRV_TABLE_VAR_V)
-		//pCommandList->SetPipelineState(m_pipelines[SPATIAL_PASS]);
-	pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
-}
-
 void RayTracer::temporalSS(const RayTracing::CommandList* pCommandList)
 {
 	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
@@ -1006,4 +992,47 @@ void RayTracer::temporalSS(const RayTracing::CommandList* pCommandList)
 
 	pCommandList->SetPipelineState(m_pipelines[TEMPORAL_SS]);
 	pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+}
+
+void RayTracer::bilateralFilter(const RayTracing::CommandList* pCommandList)
+{
+	// Bind the heaps, acceleration structure and dispatch rays.
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
+	};
+	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
+
+	ResourceBarrier barriers[2];
+
+	// Horizontal pass
+	{
+		auto numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, barriers);
+
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_RT_OUT]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TM + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+
+		pCommandList->SetPipelineState(m_pipelines[BILATERAL_H]);
+		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+	}
+
+	// Vertical pass
+	{
+		auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+		numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, barriers);
+
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSS + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TSS]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+
+		pCommandList->SetPipelineState(m_pipelines[BILATERAL_V]);
+		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+	}
 }
