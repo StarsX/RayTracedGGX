@@ -153,7 +153,7 @@ void RayTracedGGX::LoadAssets()
 	vector<Resource> uploaders(0);
 	Geometry geometries[RayTracer::NUM_MESH];
 	if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries,
-		m_meshFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale))
+		m_meshFileName.c_str(), L"Media/rnl_cross.dds", Format::R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.

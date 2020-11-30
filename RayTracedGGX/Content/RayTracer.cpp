@@ -2,8 +2,11 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#include "Optional/XUSGObjLoader.h"
 #include "RayTracer.h"
+#include "Optional/XUSGObjLoader.h"
+#define _INDEPENDENT_DDS_LOADER_
+#include "Advanced/XUSGDDSLoader.h"
+#undef _INDEPENDENT_DDS_LOADER_
 
 using namespace std;
 using namespace DirectX;
@@ -37,7 +40,7 @@ RayTracer::~RayTracer()
 
 bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
 	vector<Resource>& uploaders, Geometry* geometries, const char* fileName,
-	Format rtFormat, const XMFLOAT4& posScale)
+	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale)
 {
 	m_viewport = XMUINT2(width, height);
 	m_posScale = posScale;
@@ -56,22 +59,19 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(createPipelines(rtFormat), false);
 
 	// Create output view and build acceleration structures
-	for (auto& texture : m_outputViews) texture = Texture2D::MakeUnique();
-	m_outputViews[UAV_RT_OUT]->Create(m_device.Base, width, height,
-		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		1, 1, MemoryType::DEFAULT, false, L"RayTracingOut");
-	for (auto i = 0ui8; i < 2; ++i)
+	const wchar_t* namesUAV[] =
 	{
-		m_outputViews[UAV_AVG_H + i]->Create(m_device.Base, width, height,
+		L"RayTracingOut",
+		L"VarianceScratch",
+		L"FilteredOut",
+		L"TemporalSSOut0",
+		L"TemporalSSOut1"
+	};
+	for (auto& texture : m_outputViews) texture = Texture2D::MakeUnique();
+	for (auto i = 0ui8; i < NUM_UAV; ++i)
+		m_outputViews[i]->Create(m_device.Base, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			1, 1, MemoryType::DEFAULT, false, (L"VarianceOut" + to_wstring(i)).c_str());
-		m_outputViews[UAV_TSS + i]->Create(m_device.Base, width, height,
-			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			1, 1, MemoryType::DEFAULT, false, (L"TemporalSSOut" + to_wstring(i)).c_str());
-	}
-	m_outputViews[UAV_FLT]->Create(m_device.Base, width, height,
-		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		1, 1, MemoryType::DEFAULT, false, L"FilteredOut");
+			1, 1, MemoryType::DEFAULT, false, namesUAV[i]);
 
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
 	m_gbuffers[NORMAL]->Create(m_device.Base, width, height, Format::R10G10B10A2_UNORM,
@@ -84,6 +84,16 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	m_depth = DepthStencil::MakeUnique();
 	m_depth->Create(m_device.Base, width, height, Format::D24_UNORM_S8_UINT,
 		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth");
+
+	// Load input image
+	{
+		DDS::Loader textureLoader;
+		DDS::AlphaMode alphaMode;
+
+		uploaders.push_back(nullptr);
+		N_RETURN(textureLoader.CreateTextureFromFile(m_device.Base, pCommandList, envFileName,
+			8192, false, m_lightProbe, uploaders.back(), &alphaMode), false);
+	}
 
 	N_RETURN(buildAccelerationStructures(pCommandList, geometries), false);
 	N_RETURN(buildShaderTables(), false);
@@ -205,15 +215,12 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 {
 	updateAccelerationStructures(pCommandList, frameIndex);
 
-	ResourceBarrier barriers[4];
-	auto numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
-	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::RENDER_TARGET, numBarriers);
-	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_WRITE, numBarriers);
-	pCommandList->Barrier(numBarriers, barriers);
 	gbufferPass(pCommandList);
 
-	numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+	ResourceBarrier barriers[5];
+	auto numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
 	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
 	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ |
@@ -414,7 +421,7 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout->SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		pipelineLayout->SetConstants(CONSTANTS, SizeOfInUint32(GlobalConstants), 0);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 4, 1);
 		X_RETURN(m_pipelineLayouts[GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			m_device, *m_pipelineLayoutCache, PipelineLayoutFlag::NONE,
 			L"RayTracerGlobalPipelineLayout"), false);
@@ -642,15 +649,16 @@ bool RayTracer::createDescriptorTables()
 	}
 
 	// Spatial variance UAVs
+	for (auto i = 0u; i < 2; ++i)
 	{
 		const Descriptor descriptors[] =
 		{
 			m_outputViews[UAV_AVG_H]->GetUAV(),
-			m_outputViews[UAV_VAR_H]->GetUAV()
+			m_outputViews[UAV_TSS + i]->GetUAV() // Reuse it as variance scratch
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_uavTables[UAV_TABLE_VAR_H], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_uavTables[UAV_TABLE_VAR_H + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
@@ -690,7 +698,8 @@ bool RayTracer::createDescriptorTables()
 		{
 			m_gbuffers[NORMAL]->GetSRV(),
 			m_gbuffers[ROUGHNESS]->GetSRV(),
-			m_depth->GetSRV()
+			m_depth->GetSRV(),
+			m_lightProbe->GetSRV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
@@ -698,16 +707,17 @@ bool RayTracer::createDescriptorTables()
 	}
 
 	// Spatial variance input SRVs
+	for (auto i = 0u; i < 2; ++i)
 	{
 		const Descriptor descriptors[] =
 		{
 			m_outputViews[UAV_RT_OUT]->GetSRV(),
 			m_outputViews[UAV_AVG_H]->GetSRV(),
-			m_outputViews[UAV_VAR_H]->GetSRV()
+			m_outputViews[UAV_TSS + i]->GetSRV() // Reuse it as variance scratch
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_VAR], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_VAR + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
 	}
 
 	// Temporal SS input SRVs
@@ -896,6 +906,13 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint32_t f
 
 void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
 {
+	// Set barriers
+	ResourceBarrier barriers[4];
+	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_WRITE);
+	for (auto& gbuffer : m_gbuffers)
+		numBarriers = gbuffer->SetBarrier(barriers, ResourceState::RENDER_TARGET, numBarriers);
+	pCommandList->Barrier(numBarriers, barriers);
+
 	// Set framebuffer
 	pCommandList->OMSetFramebuffer(m_framebuffer);
 
@@ -945,12 +962,12 @@ void RayTracer::variancePass(const RayTracing::CommandList* pCommandList)
 	// Horizontal pass
 	{
 		auto numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_VAR_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
 		numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 		pCommandList->Barrier(numBarriers, barriers);
 
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
 
@@ -962,12 +979,12 @@ void RayTracer::variancePass(const RayTracing::CommandList* pCommandList)
 	{
 		auto numBarriers = m_outputViews[UAV_FLT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
 		numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		numBarriers = m_outputViews[UAV_VAR_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 		pCommandList->Barrier(numBarriers, barriers);
 
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
 
 		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_PASS]);

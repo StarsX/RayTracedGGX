@@ -48,6 +48,7 @@ RaytracingAS				g_scene			: register (t0);
 Texture2D					g_normal		: register (t1);
 Texture2D<float>			g_roughness		: register (t2);
 Texture2D<float>			g_depth			: register (t3);
+TextureCube<float3>			g_txEnv			: register (t4);
 
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register (t0, space1);
@@ -56,7 +57,35 @@ StructuredBuffer<Vertex>	g_vertexBuffers[]	: register (t0, space2);
 //--------------------------------------------------------------------------------------
 // Samplers
 //--------------------------------------------------------------------------------------
-SamplerState g_sampler;
+SamplerState g_sampler : register (s0);
+
+static const uint g_waveXSize = 8;
+
+float3 dFdx(float3 f)
+{
+	const uint laneIdx = WaveGetLaneIndex();
+	const uint2 lanePos = { laneIdx % g_waveXSize, laneIdx / g_waveXSize };
+	const uint quadPosX = lanePos.x >> 1;
+	const float3 f0 = WaveReadLaneAt(f, lanePos.y * g_waveXSize + (quadPosX << 1));
+	const float3 f1 = WaveReadLaneAt(f, lanePos.y * g_waveXSize + (quadPosX << 1) + 1);
+
+	const float3 ddx = f1 - f0;
+
+	return abs(ddx) > 0.5 ? 0.0 : ddx;
+}
+
+float3 dFdy(float3 f)
+{
+	const uint laneIdx = WaveGetLaneIndex();
+	const uint2 lanePos = { laneIdx % g_waveXSize, laneIdx / g_waveXSize };
+	const uint quadPosY = lanePos.y >> 1;
+	const float3 f0 = WaveReadLaneAt(f, (quadPosY << 1) * g_waveXSize + lanePos.x);
+	const float3 f1 = WaveReadLaneAt(f, ((quadPosY << 1) + 1) * g_waveXSize + lanePos.x);
+
+	const float3 ddy = f1 - f0;
+
+	return abs(ddy) > 0.5 ? 0.0 : ddy;
+}
 
 //--------------------------------------------------------------------------------------
 // Compute direction in local space
@@ -98,8 +127,12 @@ float3 computeDirectionGGX(float a, float3 normal, float2 xi)
 //--------------------------------------------------------------------------------------
 // Retrieve hit world position.
 //--------------------------------------------------------------------------------------
-float3 environment(float3 dir)
+float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0)
 {
+#if 1
+	return ((abs(ddx) + abs(ddy) > 0.0 ? g_txEnv.SampleGrad(g_sampler, dir, ddx, ddy) :
+		g_txEnv.SampleLevel(g_sampler, dir, 0.0))) * 1.5;
+#else
 	const float3 sunDir = normalize(float3(-1.0, 1.0, -1.0));
 	const float sumAmt = saturate(dot(dir, sunDir));
 
@@ -107,15 +140,16 @@ float3 environment(float3 dir)
 	const float3 color = lerp(float3(0.0, 0.16, 0.64), 1.0, a);
 
 	return color * 3.0 + (sumAmt > 0.9995 ? 7.0 : 0.0);
+#endif
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
-RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth)
+RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 ddx = 0.0, float3 ddy = 0.0)
 {
 	RayPayload payload;
 
 	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH)
-		payload.Color = environment(ray.Direction);// *0.5;
+		payload.Color = environment(ray.Direction, ddx, ddy);// *0.5;
 	else
 	{
 		// Set TMin to a zero value to avoid aliasing artifacts along contact areas.

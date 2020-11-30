@@ -139,6 +139,7 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
     <ClInclude Include="Content\RayTracer.h" />
     <ClInclude Include="RayTracedGGX.h" />
     <ClInclude Include="stdafx.h" />
+    <ClInclude Include="XUSG\Advanced\XUSGDDSLoader.h" />
     <ClInclude Include="XUSG\Core\XUSG.h" />
     <ClInclude Include="XUSG\Core\XUSG_DX12.h" />
     <ClInclude Include="XUSG\Optional\XUSGObjLoader.h" />
@@ -243,6 +244,7 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
     <None Include="Content\Shaders\BRDFModels.hlsli" />
     <None Include="Content\Shaders\FilterCommon.hlsli" />
     <None Include="Content\Shaders\RayTracedGGX.hlsli" />
+    <None Include="Content\Shaders\Variance.hlsli" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

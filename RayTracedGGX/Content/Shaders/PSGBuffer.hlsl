@@ -11,6 +11,7 @@ struct PSIn
 	float4	CSPos	: POSCURRENT;
 	float4	TSPos 	: POSHISTORY;
 	float3	Norm	: NORMAL;
+	float2	UV		: TEXCOORD;
 };
 
 struct PSOut
@@ -28,7 +29,7 @@ cbuffer cbPerObject
 	uint g_instanceIdx;
 };
 
-static const float g_roughnesses[] = { 0.4, 0.125 };
+static const float g_roughnesses[] = { 0.5, 0.16 };
 
 //--------------------------------------------------------------------------------------
 // Base geometry-buffer pass
@@ -37,11 +38,19 @@ PSOut main(PSIn input)
 {
 	PSOut output;
 
+	min16float roughness = min16float(g_roughnesses[g_instanceIdx]);
+	if (g_instanceIdx == 0)
+	{
+		uint2 uv = input.UV * 5.0;
+		uv &= 0x1;
+		roughness = uv.x ^ uv.y ? roughness * 0.25 : roughness;
+	}
+
 	const float2 csPos = input.CSPos.xy / input.CSPos.w;
 	const float2 tsPos = input.TSPos.xy / input.TSPos.w;
 	const min16float2 velocity = min16float2(csPos - tsPos) * min16float2(0.5, -0.5);
 	output.Normal = min16float4(normalize(input.Norm) * 0.5 + 0.5, (g_instanceIdx + 1) / 2.0);
-	output.Roughness = min16float(g_roughnesses[g_instanceIdx]);
+	output.Roughness = roughness;
 	output.Velocity = velocity;
 
 	return output;

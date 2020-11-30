@@ -71,7 +71,9 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 	const float a = roughness * roughness;
 	const float3 H = computeDirectionGGX(a, N, xi);
 	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
-	RayPayload payload = traceRadianceRay(ray, recursionDepth);
+	const float3 dLdx = dFdx(ray.Direction);
+	const float3 dLdy = dFdy(ray.Direction);
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, dLdx, dLdy);
 
 	const float NoL = saturate(dot(N, ray.Direction));
 

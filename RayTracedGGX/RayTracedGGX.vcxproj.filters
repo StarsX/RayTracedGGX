@@ -37,6 +37,9 @@
     <Filter Include="XUSG\Optional">
       <UniqueIdentifier>{f5f77362-2600-4645-924b-1913b86dc530}</UniqueIdentifier>
     </Filter>
+    <Filter Include="XUSG\Advanced">
+      <UniqueIdentifier>{c593ed88-7b4c-4c7e-bdd2-fea0664a597d}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -113,6 +116,9 @@
     <ClInclude Include="Common\d3d12video.h">
       <Filter>Common\Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="XUSG\Advanced\XUSGDDSLoader.h">
+      <Filter>XUSG\Advanced</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\Shaders\PSGBuffer.hlsl">
@@ -154,6 +160,9 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="Content\Shaders\FilterCommon.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Content\Shaders\Variance.hlsli">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

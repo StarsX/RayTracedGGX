@@ -17,6 +17,7 @@ struct VSOut
 	float4	CSPos	: POSCURRENT;
 	float4	TSPos 	: POSHISTORY;
 	float3	Norm	: NORMAL;
+	float2	UV		: TEXCOORD;
 };
 
 //--------------------------------------------------------------------------------------
@@ -44,6 +45,7 @@ VSOut main(VSIn input)
 
 	output.Pos.xy += g_projBias * output.Pos.w;
 	output.Norm = mul(input.Nrm, (float3x3)g_normal);
+	output.UV = pos.xz * 0.5 + 0.5;
 
 	return output;
 }

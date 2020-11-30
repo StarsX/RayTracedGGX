@@ -31,7 +31,7 @@ public:
 
 	bool Init(XUSG::RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
 		std::vector<XUSG::Resource>& uploaders, XUSG::RayTracing::Geometry* geometries,
-		const char* fileName, XUSG::Format rtFormat,
+		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, bool isPaused);
@@ -95,10 +95,9 @@ protected:
 	{
 		UAV_RT_OUT,
 		UAV_AVG_H,
-		UAV_VAR_H,
+		UAV_FLT,
 		UAV_TSS,
 		UAV_TSS1,
-		UAV_FLT,
 
 		NUM_UAV
 	};
@@ -109,11 +108,11 @@ protected:
 		SRV_TABLE_VB,
 		SRV_TABLE_GB,
 		SRV_TABLE_VAR,
+		SRV_TABLE_VAR1,
 		SRV_TABLE_TSS,
 		SRV_TABLE_TSS1,
 		SRV_TABLE_TM,
 		SRV_TABLE_TM1,
-		SRV_TABLE_FLT,
 
 		NUM_SRV_TABLE
 	};
@@ -122,9 +121,10 @@ protected:
 	{
 		UAV_TABLE_RT_OUT,
 		UAV_TABLE_VAR_H,
+		UAV_TABLE_VAR_H1,
+		UAV_TABLE_FLT,
 		UAV_TABLE_TSS,
 		UAV_TABLE_TSS1,
-		UAV_TABLE_FLT,
 
 		NUM_UAV_TABLE
 	};
@@ -202,6 +202,8 @@ protected:
 
 	XUSG::Resource		m_scratch;
 	XUSG::Resource		m_instances[FrameCount];
+
+	std::shared_ptr<XUSG::ResourceBase> m_lightProbe;
 
 	RayTracingPipeline	m_pipeIndex;
 
