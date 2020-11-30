@@ -21,8 +21,7 @@ const wchar_t* RayTracer::MissShaderName = L"missMain";
 RayTracer::RayTracer(const RayTracing::Device& device) :
 	m_device(device),
 	m_frameParity(0),
-	m_instances(),
-	m_pipeIndex(TEST)
+	m_instances()
 {
 	m_shaderPool = ShaderPool::MakeUnique();
 	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(device);
@@ -101,11 +100,6 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	return true;
 }
 
-void RayTracer::SetPipeline(RayTracingPipeline pipeline)
-{
-	m_pipeIndex = pipeline;
-}
-
 static const XMFLOAT2& IncrementalHalton()
 {
 	static auto haltonBase = XMUINT2(0, 0);
@@ -176,9 +170,9 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 		const auto projToWorld = XMMatrixInverse(nullptr, viewProj);
 		RayGenConstants cbRayGen = { XMMatrixTranspose(projToWorld), eyePt };
 
-		m_rayGenShaderTables[frameIndex][m_pipeIndex]->Reset();
-		m_rayGenShaderTables[frameIndex][m_pipeIndex]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-			m_rayTracingPipelines[m_pipeIndex], RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)));
+		m_rayGenShaderTables[frameIndex]->Reset();
+		m_rayGenShaderTables[frameIndex]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
+			m_rayTracingPipeline, RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)));
 	}
 
 	{
@@ -259,23 +253,6 @@ void RayTracer::ToneMap(const RayTracing::CommandList* pCommandList, const Descr
 
 	pCommandList->IASetPrimitiveTopology(PrimitiveTopology::TRIANGLELIST);
 	pCommandList->Draw(3, 1, 0, 0);
-}
-
-void RayTracer::ClearHistory(const RayTracing::CommandList* pCommandList)
-{
-	ResourceBarrier barriers[FrameCount];
-	auto numBarriers = 0u;
-	for (auto i = 0ui8; i < 2; ++i)
-		numBarriers = m_outputViews[UAV_TSS + i]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
-	pCommandList->Barrier(numBarriers, barriers);
-
-	const float clearColor[4] = {};
-	for (auto i = 0ui8; i < 2; ++i)
-	{
-		const uint8_t j = UAV_TSS + i;
-		pCommandList->ClearUnorderedAccessViewFloat(m_uavTables[UAV_TABLE_TSS + i], m_outputViews[j]->GetUAV(),
-			m_outputViews[j]->GetResource(), clearColor);
-	}
 }
 
 bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert,
@@ -474,7 +451,7 @@ bool RayTracer::createPipelineLayouts()
 			PipelineLayoutFlag::NONE, L"VarianceVPipelineLayout"), false);
 	}
 
-	// This is a pipeline layout for temporal SS
+	// This is a pipeline layout for temporal super sampling
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
@@ -484,19 +461,6 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"TemporalSSPipelineLayout"), false);
-	}
-
-	// This is a pipeline layout for bilateral-filter pass
-	{
-		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
-		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 3, 1, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		X_RETURN(m_pipelineLayouts[BILATERAL_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
-			PipelineLayoutFlag::NONE, L"BilateralFilterPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for tone mapping
@@ -518,7 +482,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 	auto csIndex = 0u;
 
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"RayTracedTest.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"RayTracing.cso"), false);
 		
 		const auto state = RayTracing::State::MakeUnique();
 		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
@@ -528,21 +492,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state->SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
 		state->SetMaxRecursionDepth(1);
-		X_RETURN(m_rayTracingPipelines[TEST], state->GetPipeline(*m_rayTracingPipelineCache, L"RaytracingTest"), false);
-	}
-
-	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"RayTracedGGX.cso"), false);
-		
-		const auto state = RayTracing::State::MakeUnique();
-		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		state->SetHitGroup(0, HitGroupName, ClosestHitShaderName);
-		state->SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
-		state->SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
-			1, reinterpret_cast<const void**>(&RaygenShaderName));
-		state->SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
-		state->SetMaxRecursionDepth(1);
-		X_RETURN(m_rayTracingPipelines[GGX], state->GetPipeline(*m_rayTracingPipelineCache, L"RaytracingGGX"), false);
+		X_RETURN(m_rayTracingPipeline, state->GetPipeline(*m_rayTracingPipelineCache, L"Raytracing"), false);
 	}
 
 	{
@@ -588,24 +538,6 @@ bool RayTracer::createPipelines(Format rtFormat)
 		state->SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
 		X_RETURN(m_pipelines[TEMPORAL_SS], state->GetPipeline(*m_computePipelineCache, L"TemporalSS"), false);
-	}
-
-	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSBilateralH.cso"), false);
-
-		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
-		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[BILATERAL_H], state->GetPipeline(*m_computePipelineCache, L"BilateralHPass"), false);
-	}
-
-	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSBilateralV.cso"), false);
-
-		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
-		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[BILATERAL_V], state->GetPipeline(*m_computePipelineCache, L"BilateralVPass"), false);
 	}
 
 	{
@@ -833,30 +765,27 @@ bool RayTracer::buildShaderTables()
 	// Get shader identifiers.
 	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
 
-	for (auto k = 0ui8; k < NUM_RAYTRACE_PIPELINE; ++k)
+	for (auto i = 0ui8; i < FrameCount; ++i)
 	{
-		for (auto i = 0ui8; i < FrameCount; ++i)
-		{
-			// Ray gen shader table
-			m_rayGenShaderTables[i][k] = ShaderTable::MakeUnique();
-			N_RETURN(m_rayGenShaderTables[i][k]->Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
-				(L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
-			N_RETURN(m_rayGenShaderTables[i][k]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-				m_rayTracingPipelines[k], RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants))), false);
-
-			// Hit group shader table
-			m_hitGroupShaderTables[i][k] = ShaderTable::MakeUnique();
-			N_RETURN(m_hitGroupShaderTables[i][k]->Create(m_device, 1, shaderIDSize, L"HitGroupShaderTable"), false);
-			N_RETURN(m_hitGroupShaderTables[i][k]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-				m_rayTracingPipelines[k], HitGroupName)), false);
-		}
-
-		// Miss shader table
-		m_missShaderTables[k] = ShaderTable::MakeUnique();
-		N_RETURN(m_missShaderTables[k]->Create(m_device, 1, shaderIDSize, L"MissShaderTable"), false);
-		N_RETURN(m_missShaderTables[k]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-			m_rayTracingPipelines[k], MissShaderName)), false);
+		// Ray gen shader table
+		m_rayGenShaderTables[i] = ShaderTable::MakeUnique();
+		N_RETURN(m_rayGenShaderTables[i]->Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
+			(L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
+		N_RETURN(m_rayGenShaderTables[i]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
+			m_rayTracingPipeline, RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants))), false);
 	}
+
+	// Hit group shader table
+	m_hitGroupShaderTable = ShaderTable::MakeUnique();
+	N_RETURN(m_hitGroupShaderTable->Create(m_device, 1, shaderIDSize, L"HitGroupShaderTable"), false);
+	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
+		m_rayTracingPipeline, HitGroupName)), false);
+
+	// Miss shader table
+	m_missShaderTable = ShaderTable::MakeUnique();
+	N_RETURN(m_missShaderTable->Create(m_device, 1, shaderIDSize, L"MissShaderTable"), false);
+	N_RETURN(m_missShaderTable->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
+		m_rayTracingPipeline, MissShaderName)), false);
 
 	return true;
 }
@@ -899,9 +828,8 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint32_t f
 	pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 	// Fallback layer has no depth
-	pCommandList->DispatchRays(m_rayTracingPipelines[m_pipeIndex], m_viewport.x,
-		m_viewport.y, 1, *m_hitGroupShaderTables[frameIndex][m_pipeIndex],
-		*m_missShaderTables[m_pipeIndex], *m_rayGenShaderTables[frameIndex][m_pipeIndex]);
+	pCommandList->DispatchRays(m_rayTracingPipeline, m_viewport.x, m_viewport.y, 1,
+		*m_hitGroupShaderTable, *m_missShaderTable, *m_rayGenShaderTables[frameIndex]);
 }
 
 void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
@@ -1019,47 +947,4 @@ void RayTracer::temporalSS(const RayTracing::CommandList* pCommandList)
 
 	pCommandList->SetPipelineState(m_pipelines[TEMPORAL_SS]);
 	pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
-}
-
-void RayTracer::bilateralFilter(const RayTracing::CommandList* pCommandList)
-{
-	// Bind the heaps, acceleration structure and dispatch rays.
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
-	ResourceBarrier barriers[2];
-
-	// Horizontal pass
-	{
-		auto numBarriers = m_outputViews[UAV_FLT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		pCommandList->Barrier(numBarriers, barriers);
-
-		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TM + m_frameParity]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
-
-		pCommandList->SetPipelineState(m_pipelines[BILATERAL_H]);
-		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
-	}
-
-	// Vertical pass
-	{
-		auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		pCommandList->Barrier(numBarriers, barriers);
-
-		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[BILATERAL_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSS + m_frameParity]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TSS]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
-
-		pCommandList->SetPipelineState(m_pipelines[BILATERAL_V]);
-		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
-	}
 }

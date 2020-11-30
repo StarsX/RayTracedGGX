@@ -18,14 +18,6 @@ public:
 		NUM_MESH
 	};
 
-	enum RayTracingPipeline : uint8_t
-	{
-		TEST,
-		GGX,
-
-		NUM_RAYTRACE_PIPELINE
-	};
-
 	RayTracer(const XUSG::RayTracing::Device& device);
 	virtual ~RayTracer();
 
@@ -33,12 +25,10 @@ public:
 		std::vector<XUSG::Resource>& uploaders, XUSG::RayTracing::Geometry* geometries,
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
-	void SetPipeline(RayTracingPipeline pipeline);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
 	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void ToneMap(const XUSG::RayTracing::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
-	void ClearHistory(const XUSG::RayTracing::CommandList* pCommandList);
 
 	static const uint32_t FrameCount = 3;
 
@@ -51,7 +41,6 @@ protected:
 		VARIANCE_H_LAYOUT,
 		VARIANCE_V_LAYOUT,
 		TEMPORAL_SS_LAYOUT,
-		BILATERAL_LAYOUT,
 		TONE_MAP_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
@@ -75,8 +64,6 @@ protected:
 		VARIANCE_H_PASS,
 		VARIANCE_V_PASS,
 		TEMPORAL_SS,
-		BILATERAL_H,
-		BILATERAL_V,
 		TONE_MAP,
 
 		NUM_PIPELINE
@@ -168,7 +155,6 @@ protected:
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
 	void variancePass(const XUSG::RayTracing::CommandList* pCommandList);
 	void temporalSS(const XUSG::RayTracing::CommandList* pCommandList);
-	void bilateralFilter(const XUSG::RayTracing::CommandList* pCommandList);
 
 	XUSG::RayTracing::Device m_device;
 
@@ -185,7 +171,7 @@ protected:
 
 	XUSG::InputLayout			m_inputLayout;
 	XUSG::PipelineLayout		m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
-	XUSG::RayTracing::Pipeline	m_rayTracingPipelines[NUM_RAYTRACE_PIPELINE];
+	XUSG::RayTracing::Pipeline	m_rayTracingPipeline;
 	XUSG::Pipeline				m_pipelines[NUM_PIPELINE];
 
 	XUSG::DescriptorTable		m_srvTables[NUM_SRV_TABLE];
@@ -205,16 +191,14 @@ protected:
 
 	std::shared_ptr<XUSG::ResourceBase> m_lightProbe;
 
-	RayTracingPipeline	m_pipeIndex;
-
 	// Shader tables
 	static const wchar_t* HitGroupName;
 	static const wchar_t* RaygenShaderName;
 	static const wchar_t* ClosestHitShaderName;
 	static const wchar_t* MissShaderName;
-	XUSG::RayTracing::ShaderTable::uptr	m_missShaderTables[NUM_RAYTRACE_PIPELINE];
-	XUSG::RayTracing::ShaderTable::uptr	m_hitGroupShaderTables[FrameCount][NUM_RAYTRACE_PIPELINE];
-	XUSG::RayTracing::ShaderTable::uptr	m_rayGenShaderTables[FrameCount][NUM_RAYTRACE_PIPELINE];
+	XUSG::RayTracing::ShaderTable::uptr	m_missShaderTable;
+	XUSG::RayTracing::ShaderTable::uptr	m_hitGroupShaderTable;
+	XUSG::RayTracing::ShaderTable::uptr	m_rayGenShaderTables[FrameCount];
 
 	XUSG::ShaderPool::uptr					m_shaderPool;
 	XUSG::RayTracing::PipelineCache::uptr	m_rayTracingPipelineCache;

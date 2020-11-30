@@ -27,8 +27,6 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
-	m_isTesting(false),
-	m_isPipeChanged(true),
 	m_isPaused(false),
 	m_tracking(false),
 	m_meshFileName("Media/bunny.obj"),
@@ -200,9 +198,6 @@ void RayTracedGGX::OnUpdate()
 	pauseTime = m_isPaused ? totalTime - time : pauseTime;
 	time = totalTime - pauseTime;
 
-	if (m_isPipeChanged)
-		m_rayTracer->SetPipeline(m_isTesting ? RayTracer::TEST : RayTracer::GGX);
-
 	// View
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMLoadFloat4x4(&m_view);
@@ -241,10 +236,6 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	{
 	case 0x20:	// case VK_SPACE:
 		m_isPaused = !m_isPaused;
-		break;
-	case 'T':
-		m_isTesting = !m_isTesting;
-		m_isPipeChanged = true;
 		break;
 	}
 }
@@ -347,12 +338,6 @@ void RayTracedGGX::PopulateCommandList()
 	// re-recording.
 	const auto pCommandList = m_commandList.get();
 	ThrowIfFailed(pCommandList->Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
-
-	if (m_isPipeChanged)
-	{
-		m_rayTracer->ClearHistory(pCommandList);
-		m_isPipeChanged = false;
-	}
 
 	// Record commands.
 	m_rayTracer->Render(pCommandList, m_frameIndex);

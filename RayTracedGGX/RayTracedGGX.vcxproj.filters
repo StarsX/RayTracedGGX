@@ -133,9 +133,6 @@
     <FxCompile Include="Content\Shaders\VSScreenQuad.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSTemporalAA.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\CSTemporalSS.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
@@ -145,18 +142,9 @@
     <FxCompile Include="Content\Shaders\CSVarianceV.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSBilateralV.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Content\Shaders\CSBilateralH.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Content\Shaders\BRDFModels.hlsli">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="Content\Shaders\RayTracedGGX.hlsli">
       <Filter>Shaders</Filter>
     </None>
     <None Include="Content\Shaders\FilterCommon.hlsli">
@@ -167,10 +155,7 @@
     </None>
   </ItemGroup>
   <ItemGroup>
-    <CustomBuild Include="Content\Shaders\RayTracedGGX.hlsl">
-      <Filter>Shaders</Filter>
-    </CustomBuild>
-    <CustomBuild Include="Content\Shaders\RayTracedTest.hlsl">
+    <CustomBuild Include="Content\Shaders\RayTracing.hlsl">
       <Filter>Shaders</Filter>
     </CustomBuild>
   </ItemGroup>
