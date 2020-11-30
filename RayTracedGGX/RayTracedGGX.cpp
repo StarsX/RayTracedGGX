@@ -29,7 +29,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
 	m_isPaused(false),
 	m_tracking(false),
-	m_meshFileName("Media/bunny.obj"),
+	m_meshFileName("Media/dragon.obj"),
+	m_envFileName(L"Media/rnl_cross.dds"),
 	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f)
 {
 #if defined (_DEBUG)
@@ -151,7 +152,7 @@ void RayTracedGGX::LoadAssets()
 	vector<Resource> uploaders(0);
 	Geometry geometries[RayTracer::NUM_MESH];
 	if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries,
-		m_meshFileName.c_str(), L"Media/rnl_cross.dds", Format::R8G8B8A8_UNORM, m_meshPosScale))
+		m_meshFileName.c_str(), m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale))
 		ThrowIfFailed(E_FAIL);
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -197,6 +198,7 @@ void RayTracedGGX::OnUpdate()
 	const auto totalTime = CalculateFrameStats(&timeStep);
 	pauseTime = m_isPaused ? totalTime - time : pauseTime;
 	time = totalTime - pauseTime;
+	timeStep = m_isPaused ? 0.0f : timeStep;
 
 	// View
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
@@ -323,6 +325,9 @@ void RayTracedGGX::ParseCommandLineArgs(wchar_t* argv[], int argc)
 			m_meshPosScale.w = i + 5 < argc ? static_cast<float>(_wtof(argv[i + 5])) : m_meshPosScale.w;
 			break;
 		}
+		else if (_wcsnicmp(argv[i], L"-env", wcslen(argv[i])) == 0 ||
+			_wcsnicmp(argv[i], L"/env", wcslen(argv[i])) == 0)
+			if (i + 1 < argc) m_envFileName = argv[i + 1];
 	}
 }
 

@@ -133,7 +133,7 @@ float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0)
 {
 #if 1
 	return ((abs(ddx) + abs(ddy) > 0.0 ? g_txEnv.SampleGrad(g_sampler, dir, ddx, ddy) :
-		g_txEnv.SampleLevel(g_sampler, dir, 0.0))) * 1.5;
+		g_txEnv.SampleLevel(g_sampler, dir, 0.0)));// *1.5;
 #else
 	const float3 sunDir = normalize(float3(-1.0, 1.0, -1.0));
 	const float sumAmt = saturate(dot(dir, sunDir));
@@ -334,9 +334,9 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
 		const float NoH = saturate(dot(N, H));
 		// pdf = D * NoH / (4 * VoH)
-		//payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
+		payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
 		// pdf = D * NoH
-		payload.Color *= F * NoL * vis / NoH;
+		//payload.Color *= F * NoL * vis / NoH;
 	}
 
 	return payload;

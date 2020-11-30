@@ -82,6 +82,7 @@ private:
 	XMFLOAT2 m_mousePt;
 
 	// User external settings
+	std::wstring m_envFileName;
 	std::string m_meshFileName;
 	XMFLOAT4 m_meshPosScale;
 
