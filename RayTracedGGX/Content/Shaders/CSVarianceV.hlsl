@@ -4,9 +4,8 @@
 
 #include "FilterCommon.hlsli"
 
-#define RADIUS 20
-
-static const uint g_sampleCount = RADIUS * 2 + 1;
+#define RADIUS 48
+#define SAMPLE_COUNT (RADIUS * 2 + 1)
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
@@ -16,7 +15,8 @@ Texture2D			g_txSource;
 Texture2D<float3>	g_txAverage;
 Texture2D<float3>	g_txVariance;
 Texture2D<float3>	g_txNormal;
-Texture2D<float>	g_txDepth;
+Texture2D<float>	g_txRoughness;
+Texture2D<float>	g_txDepth : register (t5);
 
 //--------------------------------------------------------------------------------------
 // Samplers
@@ -26,33 +26,30 @@ SamplerState g_sampler;
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
-	float3 avgs[g_sampleCount], vars[g_sampleCount];
-	float3 norms[g_sampleCount];
-	float depths[g_sampleCount];
+	float3 avgs[SAMPLE_COUNT], vars[SAMPLE_COUNT];
+	float3 norms[SAMPLE_COUNT];
+	float depths[SAMPLE_COUNT];
 
 	const float4 src = g_txSource[DTid];
-	[unroll]
-	for (uint i = 0; i < g_sampleCount; ++i)
-		avgs[i] = g_txAverage[uint2(DTid.x, DTid.y + i - RADIUS)];
-	[unroll]
-	for (i = 0; i < g_sampleCount; ++i)
-		vars[i] = g_txVariance[uint2(DTid.x, DTid.y + i - RADIUS)];
-	for (i = 0; i < g_sampleCount; ++i)
-		norms[i] = g_txNormal[uint2(DTid.x, DTid.y + i - RADIUS)].xyz;
-	for (i = 0; i < g_sampleCount; ++i)
-		depths[i] = g_txDepth[uint2(DTid.x, DTid.y + i - RADIUS)];
-
-	for (i = 0; i < g_sampleCount; ++i)
-		norms[i] = norms[i] * 2.0 - 1.0;
+	const float roughness = g_txRoughness[DTid];
+	const uint radius = min(RADIUS * roughness, 20);
+	const uint sampleCount = radius * 2 + 1;
+	for (uint i = 0; i < sampleCount; ++i)
+	{
+		avgs[i] = g_txAverage[uint2(DTid.x, DTid.y + i - radius)];
+		vars[i] = g_txVariance[uint2(DTid.x, DTid.y + i - radius)];
+		norms[i] = g_txNormal[uint2(DTid.x, DTid.y + i - radius)].xyz;
+		depths[i] = g_txDepth[uint2(DTid.x, DTid.y + i - radius)];
+	}
 
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
-	[unroll]
-	for (i = 0; i < g_sampleCount; ++i)
+	for (i = 0; i < sampleCount; ++i)
 	{
+		norms[i] = norms[i] * 2.0 - 1.0;
 		const float w =
-			NormalWeight(norms[RADIUS], norms[i], 16.0) *
-			Gaussian(depths[RADIUS], depths[i], 0.01);
+			NormalWeight(norms[radius], norms[i], 16.0) *
+			Gaussian(depths[radius], depths[i], 0.01);
 		mu += avgs[i] * w;
 		m2 += vars[i] * w;
 		wsum += w;

@@ -46,7 +46,8 @@ ConstantBuffer<RayGenConstants> l_cbRayGen : register (b1);
 RWTexture2D<float4>			RenderTarget	: register (u0);
 RaytracingAS				g_scene			: register (t0);
 Texture2D					g_normal		: register (t1);
-Texture2D<float>			g_depth			: register (t2);
+Texture2D<float>			g_roughness		: register (t2);
+Texture2D<float>			g_depth			: register (t3);
 
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register (t0, space1);

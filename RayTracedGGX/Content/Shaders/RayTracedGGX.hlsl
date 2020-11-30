@@ -5,8 +5,6 @@
 #include "BRDFModels.hlsli"
 #include "RayTracedGGX.hlsli"
 
-static const float g_roughnesses[] = { 0.4, 0.2 };
-
 // Quasirandom low-discrepancy sequences
 uint Hammersley(uint i)
 {
@@ -66,11 +64,10 @@ float2 GetHammersley(uint2 index, uint2 dim)
 	return Hammersley(s, n);
 }
 
-RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
+RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {
 	// Trace a reflection ray.
 	const float2 xi = GetHammersley(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
-	const float roughness = g_roughnesses[instanceIdx];
 	const float a = roughness * roughness;
 	const float3 H = computeDirectionGGX(a, N, xi);
 	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
@@ -121,7 +118,8 @@ void raygenMain()
 	RayPayload payload;
 	if (instanceIdx != 0xffffffff)
 	{
-		const RayPayload payload = computeLighting(instanceIdx, N, V, pos);
+		const float roughness = g_roughness[index];
+		const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
 		RenderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
 	}
 	else RenderTarget[index] = float4(environment(-V), 0.0);
@@ -136,6 +134,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	Vertex input = getInput(attr.barycentrics);
 
 	// Trace a reflection ray.
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
-	payload = computeLighting(InstanceIndex(), N, -WorldRayDirection(), hitWorldPosition(), 1);
+	const uint instanceIdx = InstanceIndex();
+	const float3 N = normalize(instanceIdx ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
+	payload = computeLighting(instanceIdx, 0.0, N, -WorldRayDirection(), hitWorldPosition(), 1);
 }

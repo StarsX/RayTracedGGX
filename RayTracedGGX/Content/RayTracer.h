@@ -85,6 +85,7 @@ protected:
 	enum GBuffer : uint8_t
 	{
 		NORMAL,
+		ROUGHNESS,
 		VELOCITY,
 
 		NUM_GBUFFER
@@ -187,10 +188,10 @@ protected:
 	XUSG::RayTracing::Pipeline	m_rayTracingPipelines[NUM_RAYTRACE_PIPELINE];
 	XUSG::Pipeline				m_pipelines[NUM_PIPELINE];
 
-	XUSG::DescriptorTable	m_srvTables[NUM_SRV_TABLE];
-	XUSG::DescriptorTable	m_uavTables[NUM_UAV_TABLE];
-	XUSG::DescriptorTable	m_samplerTable;
-	XUSG::Framebuffer		m_framebuffer;
+	XUSG::DescriptorTable		m_srvTables[NUM_SRV_TABLE];
+	XUSG::DescriptorTable		m_uavTables[NUM_UAV_TABLE];
+	XUSG::DescriptorTable		m_samplerTable;
+	XUSG::Framebuffer			m_framebuffer;
 
 	XUSG::VertexBuffer::uptr	m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];

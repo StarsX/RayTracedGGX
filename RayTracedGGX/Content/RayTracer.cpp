@@ -73,10 +73,11 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 		1, 1, MemoryType::DEFAULT, false, L"FilteredOut");
 
-	m_gbuffers[NORMAL] = RenderTarget::MakeUnique();
+	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
 	m_gbuffers[NORMAL]->Create(m_device.Base, width, height, Format::R10G10B10A2_UNORM,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Normal");
-	m_gbuffers[VELOCITY] = RenderTarget::MakeUnique();
+	m_gbuffers[ROUGHNESS]->Create(m_device.Base, width, height, Format::R8_UNORM,
+		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Roughness");
 	m_gbuffers[VELOCITY]->Create(m_device.Base, width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity");
 
@@ -413,7 +414,7 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout->SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		pipelineLayout->SetConstants(CONSTANTS, SizeOfInUint32(GlobalConstants), 0);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 2, 1);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1);
 		X_RETURN(m_pipelineLayouts[GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			m_device, *m_pipelineLayoutCache, PipelineLayoutFlag::NONE,
 			L"RayTracerGlobalPipelineLayout"), false);
@@ -445,7 +446,7 @@ bool RayTracer::createPipelineLayouts()
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 2, 1, 0,
+		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 3, 1, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		//pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
@@ -459,7 +460,7 @@ bool RayTracer::createPipelineLayouts()
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 2, 3, 0,
+		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 3, 3, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		//pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
@@ -485,7 +486,7 @@ bool RayTracer::createPipelineLayouts()
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 2, 1, 0,
+		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 3, 1, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		X_RETURN(m_pipelineLayouts[BILATERAL_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"BilateralFilterPipelineLayout"), false);
@@ -547,9 +548,10 @@ bool RayTracer::createPipelines(Format rtFormat)
 		state->SetShader(Shader::Stage::VS, m_shaderPool->GetShader(Shader::Stage::VS, vsIndex++));
 		state->SetShader(Shader::Stage::PS, m_shaderPool->GetShader(Shader::Stage::PS, psIndex++));
 		state->IASetPrimitiveTopologyType(PrimitiveTopologyType::TRIANGLE);
-		state->OMSetNumRenderTargets(2);
+		state->OMSetNumRenderTargets(3);
 		state->OMSetRTVFormat(0, Format::R10G10B10A2_UNORM);
-		state->OMSetRTVFormat(1, Format::R16G16_FLOAT);
+		state->OMSetRTVFormat(1, Format::R8_UNORM);
+		state->OMSetRTVFormat(2, Format::R16G16_FLOAT);
 		state->OMSetDSVFormat(Format::D24_UNORM_S8_UINT);
 		X_RETURN(m_pipelines[GBUFFER_PASS], state->GetPipeline(*m_graphicsPipelineCache, L"GBufferPass"), false);
 	}
@@ -687,6 +689,7 @@ bool RayTracer::createDescriptorTables()
 		const Descriptor descriptors[] =
 		{
 			m_gbuffers[NORMAL]->GetSRV(),
+			m_gbuffers[ROUGHNESS]->GetSRV(),
 			m_depth->GetSRV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
@@ -734,6 +737,7 @@ bool RayTracer::createDescriptorTables()
 		const Descriptor descriptors[] =
 		{
 			m_gbuffers[NORMAL]->GetRTV(),
+			m_gbuffers[ROUGHNESS]->GetRTV(),
 			m_gbuffers[VELOCITY]->GetRTV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();

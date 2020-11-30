@@ -5,12 +5,10 @@
 #include "BRDFModels.hlsli"
 #include "RayTracedGGX.hlsli"
 
-#define ROUGHNESS 0.0
-
-RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
+RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {
 	// Trace a reflection ray.
-	const float a = ROUGHNESS * ROUGHNESS;
+	const float a = roughness * roughness;
 	const float3 H = computeDirectionGGX(a, N, 0.0);
 	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
 	RayPayload payload = traceRadianceRay(ray, recursionDepth);
@@ -30,7 +28,7 @@ RayPayload computeLighting(uint instanceIdx, float3 N, float3 V, float3 pos, uin
 
 		// Visibility factor
 		const float NoV = saturate(dot(N, V));
-		const float vis = Vis_Schlick(ROUGHNESS, NoV, NoL);
+		const float vis = Vis_Schlick(roughness, NoV, NoL);
 
 		// BRDF
 		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
@@ -64,7 +62,8 @@ void raygenMain()
 	RayPayload payload;
 	if (instanceIdx != 0xffffffff)
 	{
-		const RayPayload payload = computeLighting(instanceIdx, N, V, pos);
+		const float roughness = g_roughness[index];
+		const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
 		RenderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
 	}	
 	else RenderTarget[index] = float4(environment(-V), 0.0);
@@ -79,6 +78,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	Vertex input = getInput(attr.barycentrics);
 
 	// Trace a reflection ray.
-	const float3 N = normalize(InstanceIndex() ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
-	payload = computeLighting(InstanceIndex(), N, -WorldRayDirection(), hitWorldPosition(), 1);
+	const uint instanceIdx = InstanceIndex();
+	const float3 N = normalize(instanceIdx ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
+	payload = computeLighting(instanceIdx, 0.0, N, -WorldRayDirection(), hitWorldPosition(), 1);
 }
