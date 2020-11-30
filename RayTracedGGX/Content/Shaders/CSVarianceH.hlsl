@@ -8,13 +8,15 @@
 // Texture and buffers
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	g_variance;
-Texture2D<float3>	g_txNormal;
+Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 Texture2D<float>	g_txDepth : register (t3);
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
+	if (g_txNormal[DTid].w <= 0.0) return;
+
 	float4 srcs[SAMPLE_COUNT];
 	float3 norms[SAMPLE_COUNT];
 	float depths[SAMPLE_COUNT];

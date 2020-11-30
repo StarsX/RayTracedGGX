@@ -9,18 +9,24 @@
 //--------------------------------------------------------------------------------------
 Texture2D<float3>	g_txAverage;
 Texture2D<float3>	g_txVariance;
-Texture2D<float3>	g_txNormal;
+Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 Texture2D<float>	g_txDepth : register (t5);
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
+	const float4 src = g_txSource[DTid];
+	if (g_txNormal[DTid].w <= 0.0)
+	{
+		g_renderTarget[DTid] = src;
+		return;
+	}
+
 	float3 avgs[SAMPLE_COUNT], vars[SAMPLE_COUNT];
 	float3 norms[SAMPLE_COUNT];
 	float depths[SAMPLE_COUNT];
 
-	const float4 src = g_txSource[DTid];
 	const float roughness = g_txRoughness[DTid];
 	const uint radius = RADIUS;
 	const uint sampleCount = radius * 2 + 1;
