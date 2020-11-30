@@ -371,12 +371,13 @@ void raygenMain()
 [shader("closesthit")]
 void closestHitMain(inout RayPayload payload, TriAttributes attr)
 {
+	const float roughness[] = { 0.3125, 0.16 }; // Average roughness per object
 	Vertex input = getInput(attr.barycentrics);
 
 	// Trace a reflection ray.
 	const uint instanceIdx = InstanceIndex();
 	const float3 N = normalize(instanceIdx ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
-	payload = computeLighting(instanceIdx, 0.0, N, -WorldRayDirection(), hitWorldPosition(), 1);
+	payload = computeLighting(instanceIdx, roughness[instanceIdx], N, -WorldRayDirection(), hitWorldPosition(), 1);
 }
 
 //--------------------------------------------------------------------------------------
