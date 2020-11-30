@@ -163,7 +163,7 @@ static const XMFLOAT2& IncrementalHalton()
 	return halton;
 }
 
-void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj, bool isPaused)
+void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj, float timeStep)
 {
 	const auto halton = IncrementalHalton();
 	XMFLOAT2 projBias =
@@ -183,7 +183,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 
 	{
 		static auto angle = 0.0f;
-		angle += isPaused ? 0.0f : 0.025f * XM_PI / 180.0f;
+		angle += 16.0f * timeStep * XM_PI / 180.0f;
 		const auto rot = XMMatrixRotationY(angle);
 
 		const auto n = 256u;

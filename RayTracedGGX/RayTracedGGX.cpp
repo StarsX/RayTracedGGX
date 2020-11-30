@@ -195,7 +195,8 @@ void RayTracedGGX::OnUpdate()
 	static auto time = 0.0, pauseTime = 0.0;
 
 	m_timer.Tick();
-	const auto totalTime = CalculateFrameStats();
+	float timeStep;
+	const auto totalTime = CalculateFrameStats(&timeStep);
 	pauseTime = m_isPaused ? totalTime - time : pauseTime;
 	time = totalTime - pauseTime;
 
@@ -206,7 +207,7 @@ void RayTracedGGX::OnUpdate()
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMLoadFloat4x4(&m_view);
 	const auto proj = XMLoadFloat4x4(&m_proj);
-	m_rayTracer->UpdateFrame(m_frameIndex, eyePt, view * proj, m_isPaused);
+	m_rayTracer->UpdateFrame(m_frameIndex, eyePt, view * proj, timeStep);
 }
 
 // Render the scene.

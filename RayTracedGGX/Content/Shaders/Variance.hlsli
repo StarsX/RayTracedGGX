@@ -4,7 +4,7 @@
 
 #include "FilterCommon.hlsli"
 
-#define RADIUS 16
+#define RADIUS 20
 #define SAMPLE_COUNT (RADIUS * 2 + 1)
 
 //--------------------------------------------------------------------------------------
