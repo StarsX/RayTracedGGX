@@ -28,7 +28,7 @@ cbuffer cbPerObject
 	uint g_instanceIdx;
 };
 
-static const float g_roughnesses[] = { 0.4, 0.1 };
+static const float g_roughnesses[] = { 0.4, 0.125 };
 
 //--------------------------------------------------------------------------------------
 // Base geometry-buffer pass

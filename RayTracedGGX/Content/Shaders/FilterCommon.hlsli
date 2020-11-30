@@ -35,7 +35,7 @@ float RoughnessWeight(float roughness_p, float roughness_q, float sigma_min, flo
 float Gaussian(float x, float m, float sigma)
 {
 	const float r = x - m;
-	const float a = dot(r, r) / (sigma * sigma);
+	const float a = r * r / (sigma * sigma);
 
 	return exp(-0.5 * a);
 }

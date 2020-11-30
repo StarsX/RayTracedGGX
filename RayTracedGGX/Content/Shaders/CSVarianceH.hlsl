@@ -4,7 +4,7 @@
 
 #include "FilterCommon.hlsli"
 
-#define RADIUS 48
+#define RADIUS 20
 #define SAMPLE_COUNT (RADIUS * 2 + 1)
 
 //--------------------------------------------------------------------------------------
@@ -30,7 +30,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	float depths[SAMPLE_COUNT];
 
 	const float roughness = g_txRoughness[DTid];
-	const uint radius = min(RADIUS * roughness, 20);
+	const uint radius = RADIUS;
 	const uint sampleCount = radius * 2 + 1;
 
 	for (uint i = 0; i < sampleCount; ++i)
@@ -40,13 +40,14 @@ void main(uint2 DTid : SV_DispatchThreadID)
 		depths[i] = g_txDepth[uint2(DTid.x + i - radius, DTid.y)];
 	}
 	
+	const float a = 128.0 * roughness * roughness;
 	float4 m1 = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 	for (i = 0; i < sampleCount; ++i)
 	{
 		srcs[i].xyz = TM(srcs[i].xyz);
 		norms[i] = norms[i] * 2.0 - 1.0;
-		const float w =
+		const float w = Gaussian(radius, i, a) *
 			NormalWeight(norms[radius], norms[i], 16.0) *
 			Gaussian(depths[radius], depths[i], 0.01);
 		const float4 src = srcs[i];
