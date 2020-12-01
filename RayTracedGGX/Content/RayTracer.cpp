@@ -224,7 +224,6 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 	variancePass(pCommandList);
 
 	temporalSS(pCommandList);
-	//bilateralFilter(pCommandList);
 }
 
 void RayTracer::ToneMap(const RayTracing::CommandList* pCommandList, const Descriptor& rtv,
@@ -529,6 +528,24 @@ bool RayTracer::createPipelines(Format rtFormat)
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
 		X_RETURN(m_pipelines[VARIANCE_V_PASS], state->GetPipeline(*m_computePipelineCache, L"VarianceVPass"), false);
+	}
+
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceHF.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[VARIANCE_H_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceHFast"), false);
+	}
+
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceVF.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[VARIANCE_V_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceVFast"), false);
 	}
 
 	{
@@ -917,6 +934,51 @@ void RayTracer::variancePass(const RayTracing::CommandList* pCommandList)
 
 		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_PASS]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+	}
+}
+
+void RayTracer::variancePassFast(const RayTracing::CommandList* pCommandList)
+{
+	// Bind the heaps, acceleration structure and dispatch rays.
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
+	};
+	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
+
+	ResourceBarrier barriers[3];
+
+	// Horizontal pass
+	{
+		auto numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
+		numBarriers = m_outputViews[UAV_RT_OUT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, barriers);
+
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_FAST]);
+		pCommandList->Dispatch(DIV_UP(m_viewport.x, 32), m_viewport.y, 1);
+	}
+
+	// Vertical pass
+	{
+		auto numBarriers = m_outputViews[UAV_FLT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+		numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, barriers);
+
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_FAST]);
+		pCommandList->Dispatch(m_viewport.x, DIV_UP(m_viewport.y, 32), 1);
 	}
 }
 

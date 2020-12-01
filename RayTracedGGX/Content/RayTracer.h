@@ -63,6 +63,8 @@ protected:
 		GBUFFER_PASS,
 		VARIANCE_H_PASS,
 		VARIANCE_V_PASS,
+		VARIANCE_H_FAST,
+		VARIANCE_V_FAST,
 		TEMPORAL_SS,
 		TONE_MAP,
 
@@ -154,6 +156,7 @@ protected:
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
 	void variancePass(const XUSG::RayTracing::CommandList* pCommandList);
+	void variancePassFast(const XUSG::RayTracing::CommandList* pCommandList);
 	void temporalSS(const XUSG::RayTracing::CommandList* pCommandList);
 
 	XUSG::RayTracing::Device m_device;
