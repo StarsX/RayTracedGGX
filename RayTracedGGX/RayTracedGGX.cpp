@@ -27,6 +27,7 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
+	m_useSharedMemVariance(false),
 	m_isPaused(false),
 	m_tracking(false),
 	m_meshFileName("Media/dragon.obj"),
@@ -239,6 +240,9 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	case 0x20:	// case VK_SPACE:
 		m_isPaused = !m_isPaused;
 		break;
+	case 'V':
+		m_useSharedMemVariance = !m_useSharedMemVariance;
+		break;
 	}
 }
 
@@ -345,7 +349,7 @@ void RayTracedGGX::PopulateCommandList()
 	ThrowIfFailed(pCommandList->Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
 
 	// Record commands.
-	m_rayTracer->Render(pCommandList, m_frameIndex);
+	m_rayTracer->Render(pCommandList, m_frameIndex, m_useSharedMemVariance);
 
 	ResourceBarrier barriers[2];
 	auto numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
@@ -410,6 +414,7 @@ double RayTracedGGX::CalculateFrameStats(float* pTimeStep)
 
 		wstringstream windowText;
 		windowText << setprecision(2) << fixed << L"    fps: " << fps;
+		windowText << L"    [V] " << (m_useSharedMemVariance ? L"Shared memory" : L"Direct access");
 		SetCustomWindowText(windowText.str().c_str());
 	}
 

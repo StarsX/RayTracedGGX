@@ -26,7 +26,7 @@ public:
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
-	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
+	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex, bool sharedMemVariance = false);
 	void ToneMap(const XUSG::RayTracing::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
@@ -155,8 +155,8 @@ protected:
 	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
-	void variancePass(const XUSG::RayTracing::CommandList* pCommandList);
-	void variancePassFast(const XUSG::RayTracing::CommandList* pCommandList);
+	void varianceDirect(const XUSG::RayTracing::CommandList* pCommandList);
+	void varianceSharedMem(const XUSG::RayTracing::CommandList* pCommandList);
 	void temporalSS(const XUSG::RayTracing::CommandList* pCommandList);
 
 	XUSG::RayTracing::Device m_device;

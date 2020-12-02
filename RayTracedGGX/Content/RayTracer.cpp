@@ -205,7 +205,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 	m_frameParity = !m_frameParity;
 }
 
-void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t frameIndex)
+void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t frameIndex, bool sharedMemVariance)
 {
 	updateAccelerationStructures(pCommandList, frameIndex);
 
@@ -221,7 +221,8 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 	rayTrace(pCommandList, frameIndex);
-	variancePass(pCommandList);
+	if (sharedMemVariance) varianceSharedMem(pCommandList);
+	else varianceDirect(pCommandList);
 
 	temporalSS(pCommandList);
 }
@@ -531,21 +532,21 @@ bool RayTracer::createPipelines(Format rtFormat)
 	}
 
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceHF.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceH_S.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceHFast"), false);
+		X_RETURN(m_pipelines[VARIANCE_H_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceHSharedMem"), false);
 	}
 
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceVF.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceV_S.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceVFast"), false);
+		X_RETURN(m_pipelines[VARIANCE_V_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceVSharedMem"), false);
 	}
 
 	{
@@ -892,7 +893,7 @@ void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
 	}
 }
 
-void RayTracer::variancePass(const RayTracing::CommandList* pCommandList)
+void RayTracer::varianceDirect(const RayTracing::CommandList* pCommandList)
 {
 	// Bind the heaps, acceleration structure and dispatch rays.
 	const DescriptorPool descriptorPools[] =
@@ -937,7 +938,7 @@ void RayTracer::variancePass(const RayTracing::CommandList* pCommandList)
 	}
 }
 
-void RayTracer::variancePassFast(const RayTracing::CommandList* pCommandList)
+void RayTracer::varianceSharedMem(const RayTracing::CommandList* pCommandList)
 {
 	// Bind the heaps, acceleration structure and dispatch rays.
 	const DescriptorPool descriptorPools[] =

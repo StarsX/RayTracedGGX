@@ -142,10 +142,10 @@
     <FxCompile Include="Content\Shaders\CSVarianceV.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceHF.hlsl">
+    <FxCompile Include="Content\Shaders\CSVarianceV_S.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceVF.hlsl">
+    <FxCompile Include="Content\Shaders\CSVarianceH_S.hlsl">
       <Filter>Shaders</Filter>
     </FxCompile>
   </ItemGroup>
@@ -157,6 +157,9 @@
       <Filter>Shaders</Filter>
     </None>
     <None Include="Content\Shaders\Variance.hlsli">
+      <Filter>Shaders</Filter>
+    </None>
+    <None Include="Content\Shaders\Material.hlsli">
       <Filter>Shaders</Filter>
     </None>
   </ItemGroup>

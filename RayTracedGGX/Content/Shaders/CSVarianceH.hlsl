@@ -10,45 +10,38 @@
 RWTexture2D<float4>	g_variance;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
-Texture2D<float>	g_txDepth : register (t3);
+//Texture2D<float>	g_txDepth : register (t3);
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
-	if (g_txNormal[DTid].w <= 0.0) return;
-
-	float4 srcs[SAMPLE_COUNT];
-	float3 norms[SAMPLE_COUNT];
-	float depths[SAMPLE_COUNT];
+	float4 normC = g_txNormal[DTid];
+	if (normC.w <= 0.0) return;
 
 	const float roughness = g_txRoughness[DTid];
 	const uint radius = RADIUS;
 	const uint sampleCount = radius * 2 + 1;
 
-	[unroll]
-	for (uint i = 0; i < sampleCount; ++i)
-	{
-		srcs[i] = g_txSource[uint2(DTid.x + i - radius, DTid.y)];
-		norms[i] = g_txNormal[uint2(DTid.x + i - radius, DTid.y)].xyz;
-		depths[i] = g_txDepth[uint2(DTid.x + i - radius, DTid.y)];
-	}
-
-	[unroll]
-	for (i = 0; i < sampleCount; ++i)
-		norms[i] = norms[i] * 2.0 - 1.0;
+	//const float depthC = g_txDepth[DTid];
+	normC.xyz = normC.xyz * 2.0 - 1.0;
 	
 	const float a = 128.0 * roughness * roughness;
 	float4 m1 = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
 	[unroll]
-	for (i = 0; i < sampleCount; ++i)
+	for (uint i = 0; i < sampleCount; ++i)
 	{
-		srcs[i].xyz = TM(srcs[i].xyz);
-		const float w = Gaussian(radius, i, a) *
-			NormalWeight(norms[radius], norms[i], 16.0) *
-			Gaussian(depths[radius], depths[i], 0.01);
-		const float4 src = srcs[i];
+		float4 norm = g_txNormal[uint2(DTid.x + i - radius, DTid.y)];
+		float4 src = g_txSource[uint2(DTid.x + i - radius, DTid.y)];
+		//const float depth = g_txDepth[uint2(DTid.x + i - radius, DTid.y)];
+
+		norm.xyz = norm.xyz * 2.0 - 1.0;
+		src.xyz = TM(src.xyz);
+		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
+			* Gaussian(radius, i, a)
+			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
+			//* Gaussian(depthC, depth, SIGMA_Z);
 		const float4 wsrc = src * w;
 		m1 += wsrc;
 		m2 += wsrc * src;

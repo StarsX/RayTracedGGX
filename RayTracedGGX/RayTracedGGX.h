@@ -74,6 +74,7 @@ private:
 	uint64_t	m_fenceValues[FrameCount];
 
 	// Application state
+	bool		m_useSharedMemVariance;
 	bool		m_isPaused;
 	StepTimer	m_timer;
 

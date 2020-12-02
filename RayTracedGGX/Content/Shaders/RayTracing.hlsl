@@ -3,6 +3,7 @@
 //--------------------------------------------------------------------------------------
 
 #include "BRDFModels.hlsli"
+#include "Material.hlsli"
 
 #define MAX_RECURSION_DEPTH	1
 
@@ -45,11 +46,11 @@ ConstantBuffer<RayGenConstants> l_cbRayGen : register (b1);
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float4>			RenderTarget	: register (u0);
+RWTexture2D<float4>			g_renderTarget	: register (u0);
 RaytracingAS				g_scene			: register (t0);
-Texture2D					g_normal		: register (t1);
-Texture2D<float>			g_roughness		: register (t2);
-Texture2D<float>			g_depth			: register (t3);
+Texture2D					g_txNormal		: register (t1);
+Texture2D<float>			g_txRoughness	: register (t2);
+Texture2D<float>			g_txDepth		: register (t3);
 TextureCube<float3>			g_txEnv			: register (t4);
 
 // IA buffers
@@ -172,8 +173,8 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 d
 //--------------------------------------------------------------------------------------
 uint getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out float3 pos)
 {
-	const float4 norm = g_normal[index];
-	const float depth = g_depth[index];
+	const float4 norm = g_txNormal[index];
+	const float depth = g_txDepth[index];
 
 	float2 screenPos = (index + 0.5) / dim * 2.0 - 1.0;
 	screenPos.y = -screenPos.y; // Invert Y for Y-up-style NDC.
@@ -358,11 +359,11 @@ void raygenMain()
 	RayPayload payload;
 	if (instanceIdx != 0xffffffff)
 	{
-		const float roughness = g_roughness[index];
+		const float roughness = g_txRoughness[index];
 		const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
-		RenderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
+		g_renderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
 	}
-	else RenderTarget[index] = float4(environment(-V), 0.0);
+	else g_renderTarget[index] = float4(environment(-V), 0.0);
 }
 
 //--------------------------------------------------------------------------------------
@@ -371,13 +372,14 @@ void raygenMain()
 [shader("closesthit")]
 void closestHitMain(inout RayPayload payload, TriAttributes attr)
 {
-	const float roughness[] = { 0.3125, 0.16 }; // Average roughness per object
 	Vertex input = getInput(attr.barycentrics);
 
-	// Trace a reflection ray.
 	const uint instanceIdx = InstanceIndex();
+	const float roughness = getRoughness(instanceIdx, input.Pos.xz * 0.5 + 0.5);
+
+	// Trace a reflection ray.
 	const float3 N = normalize(instanceIdx ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
-	payload = computeLighting(instanceIdx, roughness[instanceIdx], N, -WorldRayDirection(), hitWorldPosition(), 1);
+	payload = computeLighting(instanceIdx, roughness, N, -WorldRayDirection(), hitWorldPosition(), 1);
 }
 
 //--------------------------------------------------------------------------------------

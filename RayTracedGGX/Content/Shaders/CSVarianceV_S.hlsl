@@ -13,43 +13,72 @@ Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t5);
 
-[numthreads(8, 8, 1)]
-void main(uint2 DTid : SV_DispatchThreadID)
+groupshared float3 g_avgs[SHARED_MEM_SIZE];
+groupshared float3 g_vars[SHARED_MEM_SIZE];
+groupshared float4 g_norms[SHARED_MEM_SIZE];
+//groupshared float g_depths[SHARED_MEM_SIZE];
+
+void loadSamples(uint2 dTid, uint gTid, uint radius)
+{
+	const uint offset = radius * 2;
+	dTid.y -= radius;
+
+	[unroll]
+	for (uint i = 0; i < 2; ++i, dTid.y += offset, gTid += offset)
+	{
+		float4 norm = g_txNormal[dTid];
+		g_avgs[gTid] = g_txAverage[dTid];
+		g_vars[gTid] = g_txVariance[dTid];
+		//g_depths[gTid] = g_txDepth[dTid];
+
+		norm.xyz = norm.xyz * 2.0 - 1.0;
+		g_norms[gTid] = norm;
+	}
+
+	GroupMemoryBarrierWithGroupSync();
+}
+
+[numthreads(1, THREADS_PER_WAVE, 1)]
+void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 {
 	const float4 src = g_txSource[DTid];
-	float4 normC = g_txNormal[DTid];
-	if (normC.w <= 0.0)
+	const bool vis = g_txNormal[DTid].w > 0.0;
+	if (WaveActiveAllTrue(!vis))
+	{
+		g_renderTarget[DTid] = src;
+		return;
+	}
+	const uint radius = RADIUS;
+	loadSamples(DTid, GTid.y, radius);
+	if (!vis)
 	{
 		g_renderTarget[DTid] = src;
 		return;
 	}
 
-	const float roughness = g_txRoughness[DTid];
-	const uint radius = RADIUS;
-	const uint sampleCount = radius * 2 + 1;
+	const uint c = GTid.y + radius;
+	const float3 normC = g_norms[c].xyz;
 
-	//const float depthC = g_txDepth[DTid];
-	normC.xyz = normC.xyz * 2.0 - 1.0;
+	const float roughness = g_txRoughness[DTid];
+	const uint sampleCount = radius * 2 + 1;
 
 	const float a = 128.0 * roughness * roughness;
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
+	//const float depthC = g_depths[c];
+
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
-		float4 norm = g_txNormal[uint2(DTid.x, DTid.y + i - radius)];
-		float3 avg = g_txAverage[uint2(DTid.x, DTid.y + i - radius)];
-		float3 var = g_txVariance[uint2(DTid.x, DTid.y + i - radius)];
-		//const float depth = g_txDepth[uint2(DTid.x, DTid.y + i - radius)];
-
-		norm.xyz = norm.xyz * 2.0 - 1.0;
+		const uint j = GTid.y + i;
+		const float4 norm = g_norms[j];
 		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
 			* Gaussian(radius, i, a)
 			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
-			//* Gaussian(depthC, depth, SIGMA_Z);
-		mu += avg * w;
-		m2 += var * w;
+			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
+		mu += g_avgs[j] * w;
+		m2 += g_vars[j] * w;
 		wsum += w;
 	}
 
