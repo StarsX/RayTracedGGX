@@ -130,7 +130,7 @@ void RayTracedGGX::LoadPipeline()
 	for (auto n = 0u; n < FrameCount; ++n)
 	{
 		m_renderTargets[n] = RenderTarget::MakeUnique();
-		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.Base, m_swapChain, n), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device, m_swapChain, n), ThrowIfFailed(E_FAIL));
 		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
 	}
 }
@@ -479,6 +479,7 @@ void RayTracedGGX::EnableDirectXRaytracing(IDXGIAdapter1* adapter)
 void RayTracedGGX::CreateRaytracingInterfaces()
 {
 	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
-	ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Base.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Derived)));
-	m_commandList->CreateInterface(m_device);
+	V_RETURN(D3D12CreateRaytracingFallbackDevice(m_device.Base.get(), createDeviceFlags,
+		0, IID_PPV_ARGS(&m_device.Derived)), cerr, VOID_RETURN);
+	N_RETURN(m_commandList->CreateInterface(m_device), ThrowIfFailed(E_FAIL));
 }

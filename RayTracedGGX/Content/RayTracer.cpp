@@ -25,10 +25,10 @@ RayTracer::RayTracer(const RayTracing::Device& device) :
 {
 	m_shaderPool = ShaderPool::MakeUnique();
 	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(device);
-	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device.Base);
-	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device.Base);
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device.Base, L"RayTracerDescriptorTableCache");
-	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device.Base);
+	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device);
+	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device);
+	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device, L"RayTracerDescriptorTableCache");
+	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device);
 
 	AccelerationStructure::SetUAVCount(NUM_MESH + 1);
 }
@@ -68,20 +68,20 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	};
 	for (auto& texture : m_outputViews) texture = Texture2D::MakeUnique();
 	for (auto i = 0ui8; i < NUM_UAV; ++i)
-		m_outputViews[i]->Create(m_device.Base, width, height,
+		m_outputViews[i]->Create(m_device, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 			1, 1, MemoryType::DEFAULT, false, namesUAV[i]);
 
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
-	m_gbuffers[NORMAL]->Create(m_device.Base, width, height, Format::R10G10B10A2_UNORM,
+	m_gbuffers[NORMAL]->Create(m_device, width, height, Format::R10G10B10A2_UNORM,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Normal");
-	m_gbuffers[ROUGHNESS]->Create(m_device.Base, width, height, Format::R8_UNORM,
+	m_gbuffers[ROUGHNESS]->Create(m_device, width, height, Format::R8_UNORM,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Roughness");
-	m_gbuffers[VELOCITY]->Create(m_device.Base, width, height, Format::R16G16_FLOAT,
+	m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity");
 
 	m_depth = DepthStencil::MakeUnique();
-	m_depth->Create(m_device.Base, width, height, Format::D24_UNORM_S8_UINT,
+	m_depth->Create(m_device, width, height, Format::D24_UNORM_S8_UINT,
 		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth");
 
 	// Load input image
@@ -90,7 +90,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		DDS::AlphaMode alphaMode;
 
 		uploaders.push_back(nullptr);
-		N_RETURN(textureLoader.CreateTextureFromFile(m_device.Base, pCommandList, envFileName,
+		N_RETURN(textureLoader.CreateTextureFromFile(m_device, pCommandList, envFileName,
 			8192, false, m_lightProbe, uploaders.back(), &alphaMode), false);
 	}
 
@@ -260,7 +260,7 @@ bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert
 {
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	vertexBuffer = VertexBuffer::MakeUnique();
-	N_RETURN(vertexBuffer->Create(m_device.Base, numVert, stride,
+	N_RETURN(vertexBuffer->Create(m_device, numVert, stride,
 		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
 		nullptr, 1, nullptr, L"MeshVB"), false);
 	uploaders.push_back(nullptr);
@@ -277,7 +277,7 @@ bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndi
 	auto& indexBuffers = m_indexBuffers[MODEL_OBJ];
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	indexBuffers = IndexBuffer::MakeUnique();
-	N_RETURN(indexBuffers->Create(m_device.Base, byteWidth, Format::R32_UINT, ResourceFlag::NONE,
+	N_RETURN(indexBuffers->Create(m_device, byteWidth, Format::R32_UINT, ResourceFlag::NONE,
 		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
 	uploaders.push_back(nullptr);
 
@@ -325,7 +325,7 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		vertexBuffer = VertexBuffer::MakeUnique();
-		N_RETURN(vertexBuffer->Create(m_device.Base, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
+		N_RETURN(vertexBuffer->Create(m_device, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
 			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
 		uploaders.push_back(nullptr);
 
@@ -361,7 +361,7 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 
 		auto& indexBuffers = m_indexBuffers[GROUND];
 		indexBuffers = IndexBuffer::MakeUnique();
-		N_RETURN(indexBuffers->Create(m_device.Base, sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
+		N_RETURN(indexBuffers->Create(m_device, sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
 			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
 		uploaders.push_back(nullptr);
 
