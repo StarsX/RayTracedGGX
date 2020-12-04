@@ -7,4 +7,6 @@ Hot keys:
 
 [Space] pause/play animation
 
+[V] switch spatial denoiser paths
+
 Prerequisite: https://github.com/StarsX/XUSG

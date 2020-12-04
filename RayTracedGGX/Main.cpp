@@ -14,7 +14,7 @@
 _Use_decl_annotations_
 int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE, LPSTR, int nCmdShow)
 {
-	RayTracedGGX rayTracedGGX(1280, 720, L"DirectX 12 Test (ray-tracing framework)");
+	RayTracedGGX rayTracedGGX(1280, 720, L"DirectX 12 ray-tracing)");
 
 	return Win32Application::Run(&rayTracedGGX, hInstance, nCmdShow);
 }
