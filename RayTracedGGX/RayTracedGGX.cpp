@@ -479,7 +479,6 @@ void RayTracedGGX::EnableDirectXRaytracing(IDXGIAdapter1* adapter)
 void RayTracedGGX::CreateRaytracingInterfaces()
 {
 	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
-	V_RETURN(D3D12CreateRaytracingFallbackDevice(m_device.Base.get(), createDeviceFlags,
-		0, IID_PPV_ARGS(&m_device.Derived)), cerr, VOID_RETURN);
+	ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Base.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Derived)));
 	N_RETURN(m_commandList->CreateInterface(m_device), ThrowIfFailed(E_FAIL));
 }
