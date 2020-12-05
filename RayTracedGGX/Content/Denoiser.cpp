@@ -31,7 +31,7 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	m_pGbuffers = pGbuffers;
 	m_depth = depth;
 
-	// Create output view and build acceleration structures
+	// Create output views
 	const wchar_t* namesUAV[] =
 	{
 		L"VarianceScratch",
@@ -55,7 +55,7 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	return true;
 }
 
-void Denoiser::Denoise(const CommandList* pCommandList, uint32_t frameIndex, bool sharedMemVariance)
+void Denoiser::Denoise(const CommandList* pCommandList, bool sharedMemVariance)
 {
 	m_frameParity = !m_frameParity;
 
@@ -110,7 +110,7 @@ bool Denoiser::createPipelineLayouts()
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 3, 1, 0,
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		//pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
@@ -124,9 +124,8 @@ bool Denoiser::createPipelineLayouts()
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES + 1, DescriptorType::SRV, 3, 3, 0,
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		//pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"VarianceVPipelineLayout"), false);
 	}
@@ -304,7 +303,7 @@ bool Denoiser::createDescriptorTables()
 	// Create the sampler
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		const auto samplerAnisoWrap = SamplerPreset::ANISOTROPIC_WRAP;
+		const auto samplerAnisoWrap = SamplerPreset::LINEAR_CLAMP;
 		descriptorTable->SetSamplers(0, 1, &samplerAnisoWrap, *m_descriptorTableCache);
 		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(*m_descriptorTableCache), false);
 	}
@@ -326,7 +325,7 @@ void Denoiser::varianceDirect(const CommandList* pCommandList)
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_PASS]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
@@ -342,7 +341,7 @@ void Denoiser::varianceDirect(const CommandList* pCommandList)
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_PASS]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
@@ -363,7 +362,7 @@ void Denoiser::varianceSharedMem(const CommandList* pCommandList)
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_FAST]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 32), m_viewport.y, 1);
@@ -379,7 +378,7 @@ void Denoiser::varianceSharedMem(const CommandList* pCommandList)
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES + 1, m_srvTables[SRV_TABLE_GB]);
+		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_FAST]);
 		pCommandList->Dispatch(m_viewport.x, DIV_UP(m_viewport.y, 32), 1);

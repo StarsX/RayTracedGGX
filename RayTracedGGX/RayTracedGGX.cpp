@@ -361,8 +361,8 @@ void RayTracedGGX::PopulateCommandList()
 	ThrowIfFailed(pCommandList->Reset(m_commandAllocators[m_frameIndex].get(), nullptr));
 
 	// Record commands.
-	m_rayTracer->Render(pCommandList, m_frameIndex, m_useSharedMemVariance);
-	m_denoiser->Denoise(pCommandList, m_frameIndex, m_useSharedMemVariance);
+	m_rayTracer->Render(pCommandList, m_frameIndex);
+	m_denoiser->Denoise(pCommandList, m_useSharedMemVariance);
 
 	ResourceBarrier barriers[2];
 	auto numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);

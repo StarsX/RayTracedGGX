@@ -26,9 +26,7 @@ public:
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
-	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex, bool sharedMemVariance = false);
-	void ToneMap(const XUSG::RayTracing::CommandList* pCommandList, const XUSG::Descriptor& rtv,
-		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
+	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 
 	const XUSG::Texture2D::sptr& GetRayTracingOutput() const;
 	const XUSG::RenderTarget::uptr* GetGBuffers() const;
@@ -42,10 +40,6 @@ protected:
 		GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
-		VARIANCE_H_LAYOUT,
-		VARIANCE_V_LAYOUT,
-		TEMPORAL_SS_LAYOUT,
-		TONE_MAP_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
 	};
@@ -62,19 +56,6 @@ protected:
 		G_BUFFERS
 	};
 
-	enum PipelineIndex : uint8_t
-	{
-		GBUFFER_PASS,
-		VARIANCE_H_PASS,
-		VARIANCE_V_PASS,
-		VARIANCE_H_FAST,
-		VARIANCE_V_FAST,
-		TEMPORAL_SS,
-		TONE_MAP,
-
-		NUM_PIPELINE
-	};
-
 	enum GBuffer : uint8_t
 	{
 		NORMAL,
@@ -84,42 +65,13 @@ protected:
 		NUM_GBUFFER
 	};
 
-	enum UAVResource : uint8_t
-	{
-		UAV_RT_OUT,
-		UAV_AVG_H,
-		UAV_FLT,
-		UAV_TSS,
-		UAV_TSS1,
-
-		NUM_UAV
-	};
-
 	enum SRVTable : uint8_t
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
 		SRV_TABLE_GB,
-		SRV_TABLE_VAR,
-		SRV_TABLE_VAR1,
-		SRV_TABLE_TSS,
-		SRV_TABLE_TSS1,
-		SRV_TABLE_TM,
-		SRV_TABLE_TM1,
 
 		NUM_SRV_TABLE
-	};
-
-	enum UAVTable : uint8_t
-	{
-		UAV_TABLE_RT_OUT,
-		UAV_TABLE_VAR_H,
-		UAV_TABLE_VAR_H1,
-		UAV_TABLE_FLT,
-		UAV_TABLE_TSS,
-		UAV_TABLE_TSS1,
-
-		NUM_UAV_TABLE
 	};
 
 	struct RayGenConstants
@@ -157,11 +109,8 @@ protected:
 	bool buildShaderTables();
 
 	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
-	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
-	void varianceDirect(const XUSG::RayTracing::CommandList* pCommandList);
-	void varianceSharedMem(const XUSG::RayTracing::CommandList* pCommandList);
-	void temporalSS(const XUSG::RayTracing::CommandList* pCommandList);
+	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
 
@@ -179,17 +128,17 @@ protected:
 	XUSG::InputLayout			m_inputLayout;
 	XUSG::PipelineLayout		m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
 	XUSG::RayTracing::Pipeline	m_rayTracingPipeline;
-	XUSG::Pipeline				m_pipelines[NUM_PIPELINE];
+	XUSG::Pipeline				m_pipeline;
 
 	XUSG::DescriptorTable		m_srvTables[NUM_SRV_TABLE];
-	XUSG::DescriptorTable		m_uavTables[NUM_UAV_TABLE];
+	XUSG::DescriptorTable		m_uavTable;
 	XUSG::DescriptorTable		m_samplerTable;
 	XUSG::Framebuffer			m_framebuffer;
 
 	XUSG::VertexBuffer::uptr	m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D::sptr		m_outputViews[NUM_UAV];
+	XUSG::Texture2D::sptr		m_outputView;
 	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
 	XUSG::DepthStencil::sptr	m_depth;
 

@@ -17,7 +17,7 @@ public:
 		std::vector<XUSG::Resource>& uploaders, XUSG::Format rtFormat,
 		const XUSG::Texture2D::sptr& rtOut, const XUSG::RenderTarget::uptr* pGbuffers,
 		const XUSG::DepthStencil::sptr& depth);
-	void Denoise(const XUSG::CommandList* pCommandList, uint32_t frameIndex, bool sharedMemVariance = false);
+	void Denoise(const XUSG::CommandList* pCommandList, bool sharedMemVariance = false);
 	void ToneMap(const XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
@@ -34,15 +34,12 @@ protected:
 		NUM_PIPELINE_LAYOUT
 	};
 
-	enum GlobalPipelineLayoutSlot : uint8_t
+	enum PipelineLayoutSlot : uint8_t
 	{
 		OUTPUT_VIEW,
 		SHADER_RESOURCES,
-		SAMPLER,
-		INDEX_BUFFERS,
-		VERTEX_BUFFERS,
-		CONSTANTS,
-		G_BUFFERS
+		G_BUFFERS,
+		SAMPLER = G_BUFFERS
 	};
 
 	enum PipelineIndex : uint8_t
