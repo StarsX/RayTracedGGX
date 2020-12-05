@@ -63,6 +63,9 @@
     <ClCompile Include="XUSG\Optional\XUSGObjLoader.cpp">
       <Filter>XUSG\Optional</Filter>
     </ClCompile>
+    <ClCompile Include="Content\Denoiser.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="stdafx.h">
@@ -118,6 +121,9 @@
     </ClInclude>
     <ClInclude Include="XUSG\Advanced\XUSGDDSLoader.h">
       <Filter>XUSG\Advanced</Filter>
+    </ClInclude>
+    <ClInclude Include="Content\Denoiser.h">
+      <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>

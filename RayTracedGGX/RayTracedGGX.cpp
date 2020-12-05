@@ -147,14 +147,26 @@ void RayTracedGGX::LoadAssets()
 	// Create ray tracing interfaces
 	CreateRaytracingInterfaces();
 
-	m_rayTracer = make_unique<RayTracer>(m_device);
-	if (!m_rayTracer) ThrowIfFailed(E_FAIL);
-
+	// Create ray tracer
 	vector<Resource> uploaders(0);
-	Geometry geometries[RayTracer::NUM_MESH];
-	if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries,
-		m_meshFileName.c_str(), m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale))
-		ThrowIfFailed(E_FAIL);
+	{
+		m_rayTracer = make_unique<RayTracer>(m_device);
+		if (!m_rayTracer) ThrowIfFailed(E_FAIL);
+
+		Geometry geometries[RayTracer::NUM_MESH];
+		if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries, m_meshFileName.c_str(),
+			m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale)) ThrowIfFailed(E_FAIL);
+	}
+
+	// Create denoiser
+	{
+		m_denoiser = make_unique<Denoiser>(m_device);
+		if (!m_denoiser) ThrowIfFailed(E_FAIL);
+
+		if (!m_denoiser->Init(pCommandList, m_width, m_height, uploaders, Format::R8G8B8A8_UNORM,
+			m_rayTracer->GetRayTracingOutput(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()))
+			ThrowIfFailed(E_FAIL);
+	}
 
 	// Close the command list and execute it to begin the initial GPU setup.
 	ThrowIfFailed(pCommandList->Close());
@@ -350,10 +362,11 @@ void RayTracedGGX::PopulateCommandList()
 
 	// Record commands.
 	m_rayTracer->Render(pCommandList, m_frameIndex, m_useSharedMemVariance);
+	m_denoiser->Denoise(pCommandList, m_frameIndex, m_useSharedMemVariance);
 
 	ResourceBarrier barriers[2];
 	auto numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
-	m_rayTracer->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
+	m_denoiser->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
 	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::PRESENT);

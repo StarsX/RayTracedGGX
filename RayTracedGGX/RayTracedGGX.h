@@ -14,6 +14,7 @@
 #include "DXFramework.h"
 #include "StepTimer.h"
 #include "RayTracer.h"
+#include "Denoiser.h"
 
 using namespace DirectX;
 
@@ -61,7 +62,8 @@ private:
 	XUSG::RayTracing::CommandList::uptr m_commandList;
 
 	// App resources.
-	std::unique_ptr<RayTracer> m_rayTracer;
+	std::unique_ptr<RayTracer>	m_rayTracer;
+	std::unique_ptr<Denoiser>	m_denoiser;
 	XMFLOAT4X4	m_proj;
 	XMFLOAT4X4	m_view;
 	XMFLOAT3	m_focusPt;

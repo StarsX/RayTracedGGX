@@ -30,6 +30,10 @@ public:
 	void ToneMap(const XUSG::RayTracing::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
+	const XUSG::Texture2D::sptr& GetRayTracingOutput() const;
+	const XUSG::RenderTarget::uptr* GetGBuffers() const;
+	const XUSG::DepthStencil::sptr GetDepth() const;
+
 	static const uint32_t FrameCount = 3;
 
 protected:
@@ -161,8 +165,8 @@ protected:
 
 	XUSG::RayTracing::Device m_device;
 
-	uint32_t	m_numIndices[NUM_MESH];
-	uint8_t		m_frameParity;
+	uint32_t			m_numIndices[NUM_MESH];
+	uint8_t				m_frameParity;
 
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
@@ -185,9 +189,9 @@ protected:
 	XUSG::VertexBuffer::uptr	m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D::uptr		m_outputViews[NUM_UAV];
+	XUSG::Texture2D::sptr		m_outputViews[NUM_UAV];
 	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
-	XUSG::DepthStencil::uptr	m_depth;
+	XUSG::DepthStencil::sptr	m_depth;
 
 	XUSG::Resource		m_scratch;
 	XUSG::Resource		m_instances[FrameCount];
@@ -210,5 +214,5 @@ protected:
 	XUSG::PipelineLayoutCache::uptr			m_pipelineLayoutCache;
 	XUSG::DescriptorTableCache::uptr		m_descriptorTableCache;
 
-	GlobalConstants		m_cbRaytracing;
+	GlobalConstants m_cbRaytracing;
 };

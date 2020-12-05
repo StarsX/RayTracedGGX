@@ -27,8 +27,8 @@ RayTracer::RayTracer(const RayTracing::Device& device) :
 	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(device);
 	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device);
 	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device);
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device, L"RayTracerDescriptorTableCache");
 	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device);
+	m_descriptorTableCache = DescriptorTableCache::MakeUnique(m_device, L"RayTracerDescriptorTableCache");
 
 	AccelerationStructure::SetUAVCount(NUM_MESH + 1);
 }
@@ -52,11 +52,6 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 
 	N_RETURN(createGroundMesh(pCommandList, uploaders), false);
 
-	// Create raytracing pipelines
-	N_RETURN(createInputLayout(), false);
-	N_RETURN(createPipelineLayouts(), false);
-	N_RETURN(createPipelines(rtFormat), false);
-
 	// Create output view and build acceleration structures
 	const wchar_t* namesUAV[] =
 	{
@@ -66,7 +61,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		L"TemporalSSOut0",
 		L"TemporalSSOut1"
 	};
-	for (auto& texture : m_outputViews) texture = Texture2D::MakeUnique();
+	for (auto& texture : m_outputViews) texture = Texture2D::MakeShared();
 	for (auto i = 0ui8; i < NUM_UAV; ++i)
 		m_outputViews[i]->Create(m_device, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
@@ -80,7 +75,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity");
 
-	m_depth = DepthStencil::MakeUnique();
+	m_depth = DepthStencil::MakeShared();
 	m_depth->Create(m_device, width, height, Format::D24_UNORM_S8_UINT,
 		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth");
 
@@ -93,6 +88,11 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		N_RETURN(textureLoader.CreateTextureFromFile(m_device, pCommandList, envFileName,
 			8192, false, m_lightProbe, uploaders.back(), &alphaMode), false);
 	}
+
+	// Create raytracing pipelines
+	N_RETURN(createInputLayout(), false);
+	N_RETURN(createPipelineLayouts(), false);
+	N_RETURN(createPipelines(rtFormat), false);
 
 	N_RETURN(buildAccelerationStructures(pCommandList, geometries), false);
 	N_RETURN(buildShaderTables(), false);
@@ -221,10 +221,6 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 	rayTrace(pCommandList, frameIndex);
-	if (sharedMemVariance) varianceSharedMem(pCommandList);
-	else varianceDirect(pCommandList);
-
-	temporalSS(pCommandList);
 }
 
 void RayTracer::ToneMap(const RayTracing::CommandList* pCommandList, const Descriptor& rtv,
@@ -253,6 +249,21 @@ void RayTracer::ToneMap(const RayTracing::CommandList* pCommandList, const Descr
 
 	pCommandList->IASetPrimitiveTopology(PrimitiveTopology::TRIANGLELIST);
 	pCommandList->Draw(3, 1, 0, 0);
+}
+
+const Texture2D::sptr& RayTracer::GetRayTracingOutput() const
+{
+	return m_outputViews[UAV_RT_OUT];
+}
+
+const RenderTarget::uptr* RayTracer::GetGBuffers() const
+{
+	return m_gbuffers;
+}
+
+const DepthStencil::sptr RayTracer::GetDepth() const
+{
+	return m_depth;
 }
 
 bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert,

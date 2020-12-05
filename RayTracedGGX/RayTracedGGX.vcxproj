@@ -105,6 +105,10 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
     </ClCompile>
+    <ClCompile Include="Content\Denoiser.cpp">
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
+      <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
+    </ClCompile>
     <ClCompile Include="Content\RayTracer.cpp">
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">stdafx.h</ForcedIncludeFiles>
       <ForcedIncludeFiles Condition="'$(Configuration)|$(Platform)'=='Release|x64'">stdafx.h</ForcedIncludeFiles>
@@ -136,6 +140,7 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
     <ClInclude Include="Common\DXFrameworkHelper.h" />
     <ClInclude Include="Common\StepTimer.h" />
     <ClInclude Include="Common\Win32Application.h" />
+    <ClInclude Include="Content\Denoiser.h" />
     <ClInclude Include="Content\RayTracer.h" />
     <ClInclude Include="RayTracedGGX.h" />
     <ClInclude Include="stdafx.h" />
