@@ -42,9 +42,9 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	for (auto i = 0ui8; i < NUM_UAV; ++i)
 	{
 		m_outputViews[i] = Texture2D::MakeUnique();
-		m_outputViews[i]->Create(m_device, width, height,
+		N_RETURN(m_outputViews[i]->Create(m_device, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			1, 1, MemoryType::DEFAULT, false, namesUAV[i]);
+			1, 1, MemoryType::DEFAULT, false, namesUAV[i]), false);
 	}
 
 	// Create pipelines

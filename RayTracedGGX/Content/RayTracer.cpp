@@ -54,20 +54,20 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 
 	// Create output views
 	m_outputView = Texture2D::MakeShared();
-	m_outputView->Create(m_device, width, height, Format::R16G16B16A16_FLOAT, 1,
-		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"RayTracingOut");
+	N_RETURN(m_outputView->Create(m_device, width, height, Format::R16G16B16A16_FLOAT, 1,
+		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"RayTracingOut"), false);
 
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
-	m_gbuffers[NORMAL]->Create(m_device, width, height, Format::R10G10B10A2_UNORM,
-		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Normal");
-	m_gbuffers[ROUGHNESS]->Create(m_device, width, height, Format::R8_UNORM,
-		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Roughness");
-	m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
-		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity");
+	N_RETURN(m_gbuffers[NORMAL]->Create(m_device, width, height, Format::R10G10B10A2_UNORM,
+		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Normal"), false);
+	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device, width, height, Format::R8_UNORM,
+		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Roughness"), false);
+	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
+		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
 
 	m_depth = DepthStencil::MakeShared();
-	m_depth->Create(m_device, width, height, Format::D24_UNORM_S8_UINT,
-		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth");
+	N_RETURN(m_depth->Create(m_device, width, height, Format::D24_UNORM_S8_UINT,
+		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth"), false);
 
 	// Load input image
 	{
