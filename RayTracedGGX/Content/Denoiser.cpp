@@ -166,7 +166,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H_PASS], state->GetPipeline(*m_computePipelineCache, L"VarianceHPass"), false);
+		X_RETURN(m_pipelines[VARIANCE_H], state->GetPipeline(*m_computePipelineCache, L"VarianceHPass"), false);
 	}
 
 	{
@@ -175,7 +175,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V_PASS], state->GetPipeline(*m_computePipelineCache, L"VarianceVPass"), false);
+		X_RETURN(m_pipelines[VARIANCE_V], state->GetPipeline(*m_computePipelineCache, L"VarianceVPass"), false);
 	}
 
 	{
@@ -184,7 +184,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceHSharedMem"), false);
+		X_RETURN(m_pipelines[VARIANCE_H_S], state->GetPipeline(*m_computePipelineCache, L"VarianceHSharedMem"), false);
 	}
 
 	{
@@ -193,7 +193,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V_FAST], state->GetPipeline(*m_computePipelineCache, L"VarianceVSharedMem"), false);
+		X_RETURN(m_pipelines[VARIANCE_V_S], state->GetPipeline(*m_computePipelineCache, L"VarianceVSharedMem"), false);
 	}
 
 	{
@@ -327,7 +327,7 @@ void Denoiser::varianceDirect(const CommandList* pCommandList)
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_PASS]);
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
 	}
 
@@ -343,7 +343,7 @@ void Denoiser::varianceDirect(const CommandList* pCommandList)
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_PASS]);
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
 	}
 }
@@ -364,7 +364,7 @@ void Denoiser::varianceSharedMem(const CommandList* pCommandList)
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_FAST]);
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_S]);
 		pCommandList->Dispatch(DIV_UP(m_viewport.x, 32), m_viewport.y, 1);
 	}
 
@@ -380,7 +380,7 @@ void Denoiser::varianceSharedMem(const CommandList* pCommandList)
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_FAST]);
+		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_S]);
 		pCommandList->Dispatch(m_viewport.x, DIV_UP(m_viewport.y, 32), 1);
 	}
 }

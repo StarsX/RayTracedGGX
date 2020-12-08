@@ -44,10 +44,10 @@ protected:
 
 	enum PipelineIndex : uint8_t
 	{
-		VARIANCE_H_PASS,
-		VARIANCE_V_PASS,
-		VARIANCE_H_FAST,
-		VARIANCE_V_FAST,
+		VARIANCE_H,
+		VARIANCE_V,
+		VARIANCE_H_S,
+		VARIANCE_V_S,
 		TEMPORAL_SS,
 		TONE_MAP,
 

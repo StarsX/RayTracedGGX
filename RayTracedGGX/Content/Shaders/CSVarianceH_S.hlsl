@@ -7,7 +7,7 @@
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float4>	g_variance;
+RWTexture2D<float4>	g_squareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t3);
@@ -75,5 +75,5 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	}
 
 	g_renderTarget[DTid] = m1 / wsum;
-	g_variance[DTid] = m2 / wsum;
+	g_squareAvg[DTid] = m2 / wsum;
 }

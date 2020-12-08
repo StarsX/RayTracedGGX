@@ -8,13 +8,13 @@
 // Texture and buffers
 //--------------------------------------------------------------------------------------
 Texture2D<float3>	g_txAverage;
-Texture2D<float3>	g_txVariance;
+Texture2D<float3>	g_txSquareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t5);
 
 groupshared float3 g_avgs[SHARED_MEM_SIZE];
-groupshared float3 g_vars[SHARED_MEM_SIZE];
+groupshared float3 g_sqas[SHARED_MEM_SIZE];
 groupshared float4 g_norms[SHARED_MEM_SIZE];
 //groupshared float g_depths[SHARED_MEM_SIZE];
 
@@ -28,7 +28,7 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 	{
 		float4 norm = g_txNormal[dTid];
 		g_avgs[gTid] = g_txAverage[dTid];
-		g_vars[gTid] = g_txVariance[dTid];
+		g_sqas[gTid] = g_txSquareAvg[dTid];
 		//g_depths[gTid] = g_txDepth[dTid];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
@@ -78,7 +78,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
 			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
 		mu += g_avgs[j] * w;
-		m2 += g_vars[j] * w;
+		m2 += g_sqas[j] * w;
 		wsum += w;
 	}
 

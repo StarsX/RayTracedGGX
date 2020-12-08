@@ -8,7 +8,7 @@
 // Texture and buffers
 //--------------------------------------------------------------------------------------
 Texture2D<float3>	g_txAverage;
-Texture2D<float3>	g_txVariance;
+Texture2D<float3>	g_txSquareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t5);
@@ -40,7 +40,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	{
 		float4 norm = g_txNormal[uint2(DTid.x, DTid.y + i - radius)];
 		float3 avg = g_txAverage[uint2(DTid.x, DTid.y + i - radius)];
-		float3 var = g_txVariance[uint2(DTid.x, DTid.y + i - radius)];
+		float3 sqa = g_txSquareAvg[uint2(DTid.x, DTid.y + i - radius)];
 		//const float depth = g_txDepth[uint2(DTid.x, DTid.y + i - radius)];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
@@ -49,7 +49,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
 			//* Gaussian(depthC, depth, SIGMA_Z);
 		mu += avg * w;
-		m2 += var * w;
+		m2 += sqa * w;
 		wsum += w;
 	}
 
