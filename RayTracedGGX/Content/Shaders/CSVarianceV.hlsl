@@ -5,8 +5,9 @@
 #include "Variance.hlsli"
 
 //--------------------------------------------------------------------------------------
-// Texture and buffers
+// Textures
 //--------------------------------------------------------------------------------------
+RWTexture2D<float4>	g_renderTarget;
 Texture2D<float3>	g_txAverage;
 Texture2D<float3>	g_txSquareAvg;
 Texture2D			g_txNormal;
@@ -16,11 +17,11 @@ Texture2D<float>	g_txRoughness;
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
 {
-	const float4 src = g_txSource[DTid];
+	const float3 src = g_txSource[DTid];
 	float4 normC = g_txNormal[DTid];
 	if (normC.w <= 0.0)
 	{
-		g_renderTarget[DTid] = src;
+		g_renderTarget[DTid] = float4(src, 0.0);
 		return;
 	}
 
@@ -61,7 +62,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const float3 neighborMin = mu - gsigma;
 	const float3 neighborMax = mu + gsigma;
 
-	const float3 result = clipColor(TM(src.xyz), neighborMin, neighborMax);
+	const float3 result = clipColor(TM(src), neighborMin, neighborMax);
 
-	g_renderTarget[DTid] = float4(ITM(result), src.w);
+	g_renderTarget[DTid] = float4(ITM(result), 1.0);
 }

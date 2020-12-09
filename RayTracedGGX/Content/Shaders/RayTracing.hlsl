@@ -46,7 +46,7 @@ ConstantBuffer<RayGenConstants> l_cbRayGen : register (b1);
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float4>			g_renderTarget	: register (u0);
+RWTexture2D<float3>			g_renderTarget	: register (u0);
 RaytracingAS				g_scene			: register (t0);
 Texture2D					g_txNormal		: register (t1);
 Texture2D<float>			g_txRoughness	: register (t2);
@@ -361,9 +361,9 @@ void raygenMain()
 	{
 		const float roughness = g_txRoughness[index];
 		const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
-		g_renderTarget[index] = float4(payload.Color, 1.0); // Write the raytraced color to the output texture.
+		g_renderTarget[index] = payload.Color; // Write the raytraced color to the output texture.
 	}
-	else g_renderTarget[index] = float4(environment(-V), 0.0);
+	else g_renderTarget[index] = environment(-V);
 }
 
 //--------------------------------------------------------------------------------------

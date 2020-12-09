@@ -5,8 +5,9 @@
 #include "Variance.hlsli"
 
 //--------------------------------------------------------------------------------------
-// Texture and buffers
+// Textures
 //--------------------------------------------------------------------------------------
+RWTexture2D<float4>	g_renderTarget;
 Texture2D<float3>	g_txAverage;
 Texture2D<float3>	g_txSquareAvg;
 Texture2D			g_txNormal;
@@ -41,18 +42,18 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 [numthreads(1, THREADS_PER_WAVE, 1)]
 void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 {
-	const float4 src = g_txSource[DTid];
+	const float3 src = g_txSource[DTid];
 	const bool vis = g_txNormal[DTid].w > 0.0;
 	if (WaveActiveAllTrue(!vis))
 	{
-		g_renderTarget[DTid] = src;
+		g_renderTarget[DTid] = float4(src, 0.0);
 		return;
 	}
 	const uint radius = RADIUS;
 	loadSamples(DTid, GTid.y, radius);
 	if (!vis)
 	{
-		g_renderTarget[DTid] = src;
+		g_renderTarget[DTid] = float4(src, 0.0);
 		return;
 	}
 
@@ -92,5 +93,5 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 
 	const float3 result = clipColor(TM(src.xyz), neighborMin, neighborMax);
 
-	g_renderTarget[DTid] = float4(ITM(result), src.w);
+	g_renderTarget[DTid] = float4(ITM(result), 1.0);
 }
