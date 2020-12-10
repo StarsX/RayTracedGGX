@@ -596,6 +596,7 @@ bool RayTracer::buildShaderTables()
 {
 	// Get shader identifiers.
 	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
+	const auto cbRayGen = RayGenConstants();
 
 	for (auto i = 0ui8; i < FrameCount; ++i)
 	{
@@ -604,7 +605,7 @@ bool RayTracer::buildShaderTables()
 		N_RETURN(m_rayGenShaderTables[i]->Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
 			(L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
 		N_RETURN(m_rayGenShaderTables[i]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-			m_rayTracingPipeline, RaygenShaderName, &RayGenConstants(), sizeof(RayGenConstants))), false);
+			m_rayTracingPipeline, RaygenShaderName, &cbRayGen, sizeof(RayGenConstants))), false);
 	}
 
 	// Hit group shader table
