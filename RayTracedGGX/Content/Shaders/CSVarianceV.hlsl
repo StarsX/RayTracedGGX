@@ -32,23 +32,26 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	//const float depthC = g_txDepth[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
-	const float a = 128.0 * roughness * roughness;
+	const float a = RoughnessSigma(roughness);
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
-		float4 norm = g_txNormal[uint2(DTid.x, DTid.y + i - radius)];
-		float3 avg = g_txAverage[uint2(DTid.x, DTid.y + i - radius)];
-		float3 sqa = g_txSquareAvg[uint2(DTid.x, DTid.y + i - radius)];
-		//const float depth = g_txDepth[uint2(DTid.x, DTid.y + i - radius)];
+		const uint2 index = uint2(DTid.x, DTid.y + i - radius);
+		float4 norm = g_txNormal[index];
+		float3 avg = g_txAverage[index];
+		float3 sqa = g_txSquareAvg[index];
+		//const float depth = g_txDepth[index];
+		const float rgh = g_txRoughness[index];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
 			* Gaussian(radius, i, a)
-			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
+			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N)
 			//* Gaussian(depthC, depth, SIGMA_Z);
+			* RoughnessWeight(roughness, rgh, 0.0, 0.5);
 		mu += avg * w;
 		m2 += sqa * w;
 		wsum += w;

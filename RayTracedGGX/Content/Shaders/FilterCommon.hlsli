@@ -22,14 +22,14 @@ float3 ITM(float3 rgb)
 	return rgb / max(1.0 - dot(rgb, g_lumBase), 1e-4);
 }
 
-float NormalWeight(float3 normal_p, float3 normal_q, float sigma)
+float NormalWeight(float3 normC, float3 norm, float sigma)
 {
-	return pow(max(dot(normal_p, normal_q), 0.0), sigma);
+	return pow(max(dot(normC, norm), 0.0), sigma);
 }
 
-float RoughnessWeight(float roughness_p, float roughness_q, float sigma_min, float sigma_max)
+float RoughnessWeight(float roughC, float rough, float sigmaMin, float sigmaMax)
 {
-	return 1.0 - smoothstep(sigma_min, sigma_max, abs(roughness_p - roughness_q));
+	return 1.0 - smoothstep(sigmaMin, sigmaMax, abs(rough - roughC));
 }
 
 float Gaussian(float x, float m, float sigma)
@@ -38,6 +38,11 @@ float Gaussian(float x, float m, float sigma)
 	const float a = r * r / (sigma * sigma);
 
 	return exp(-0.5 * a);
+}
+
+float RoughnessSigma(float roughness)
+{
+	return 160.0 * roughness * roughness;
 }
 
 //--------------------------------------------------------------------------------------

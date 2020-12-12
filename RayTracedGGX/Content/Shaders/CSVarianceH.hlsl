@@ -26,23 +26,26 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	//const float depthC = g_txDepth[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 	
-	const float a = 128.0 * roughness * roughness;
+	const float a = RoughnessSigma(roughness);
 	float3 m1 = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
-		float4 norm = g_txNormal[uint2(DTid.x + i - radius, DTid.y)];
-		float3 src = g_txSource[uint2(DTid.x + i - radius, DTid.y)];
-		//const float depth = g_txDepth[uint2(DTid.x + i - radius, DTid.y)];
+		const uint2 index = uint2(DTid.x + i - radius, DTid.y);
+		float4 norm = g_txNormal[index];
+		float3 src = g_txSource[index];
+		//const float depth = g_txDepth[index];
+		const float rgh = g_txRoughness[index];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		src = TM(src);
 		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
 			* Gaussian(radius, i, a)
-			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
+			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N)
 			//* Gaussian(depthC, depth, SIGMA_Z);
+			* RoughnessWeight(roughness, rgh, 0.0, 0.5);
 		const float3 wsrc = src * w;
 		m1 += wsrc;
 		m2 += wsrc * src;

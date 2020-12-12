@@ -16,6 +16,7 @@ Texture2D<float>	g_txRoughness;
 groupshared float3 g_srcs[SHARED_MEM_SIZE];
 groupshared float4 g_norms[SHARED_MEM_SIZE];
 //groupshared float g_depths[SHARED_MEM_SIZE];
+groupshared float g_rghs[SHARED_MEM_SIZE];
 
 void loadSamples(uint2 dTid, uint gTid, uint radius)
 {
@@ -28,6 +29,7 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 		const float3 src = g_txSource[dTid];
 		float4 norm = g_txNormal[dTid];
 		//g_depths[gTid] = g_txDepth[dTid];
+		g_rghs[gTid] = g_txRoughness[dTid];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		g_srcs[gTid] = TM(src);
@@ -52,7 +54,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	const float roughness = g_txRoughness[DTid];
 	const uint sampleCount = radius * 2 + 1;
 
-	const float a = 128.0 * roughness * roughness;
+	const float a = RoughnessSigma(roughness);
 	float3 m1 = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
@@ -63,10 +65,11 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	{
 		const uint j = GTid.x + i;
 		const float4 norm = g_norms[j];
-		const float w = (norm.w > 0.0 ? 1.0 : 0.0) *
-			Gaussian(radius, i, a) *
-			NormalWeight(normC, norm.xyz, SIGMA_N);//*
-			//Gaussian(depthC, g_depths[j], SIGMA_Z);
+		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
+			* Gaussian(radius, i, a)
+			* NormalWeight(normC, norm.xyz, SIGMA_N)
+			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
+			* RoughnessWeight(roughness, g_rghs[j], 0.0, 0.5);
 		const float3 src = g_srcs[j];
 		const float3 wsrc = src * w;
 		m1 += wsrc;
