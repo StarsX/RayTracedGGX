@@ -40,6 +40,15 @@
     <Filter Include="XUSG\Advanced">
       <UniqueIdentifier>{c593ed88-7b4c-4c7e-bdd2-fea0664a597d}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Shaders\Denoiser">
+      <UniqueIdentifier>{459ae949-f6f1-483b-bfc0-7fc83ef5572d}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\Renderer">
+      <UniqueIdentifier>{80ef64d9-0d59-4edb-97fe-7f72cb8aafb0}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Shaders\Postprocess">
+      <UniqueIdentifier>{574dc46a-7acf-457b-a063-078a7a0c553e}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -128,50 +137,50 @@
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\Shaders\PSGBuffer.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Renderer</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\VSBasePass.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Renderer</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\PSToneMap.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Postprocess</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\VSScreenQuad.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Postprocess</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\CSTemporalSS.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\CSVarianceH.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceV.hlsl">
-      <Filter>Shaders</Filter>
-    </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceV_S.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\CSVarianceH_S.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Denoiser</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSVarianceV.hlsl">
+      <Filter>Shaders\Denoiser</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSVarianceV_S.hlsl">
+      <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Content\Shaders\BRDFModels.hlsli">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="Content\Shaders\FilterCommon.hlsli">
-      <Filter>Shaders</Filter>
-    </None>
-    <None Include="Content\Shaders\Variance.hlsli">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Renderer</Filter>
     </None>
     <None Include="Content\Shaders\Material.hlsli">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Renderer</Filter>
+    </None>
+    <None Include="Content\Shaders\FilterCommon.hlsli">
+      <Filter>Shaders\Denoiser</Filter>
+    </None>
+    <None Include="Content\Shaders\Variance.hlsli">
+      <Filter>Shaders\Denoiser</Filter>
     </None>
   </ItemGroup>
   <ItemGroup>
     <CustomBuild Include="Content\Shaders\RayTracing.hlsl">
-      <Filter>Shaders</Filter>
+      <Filter>Shaders\Renderer</Filter>
     </CustomBuild>
   </ItemGroup>
 </Project>
