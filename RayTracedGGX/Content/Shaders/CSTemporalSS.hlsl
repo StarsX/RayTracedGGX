@@ -42,20 +42,10 @@ static const int2 g_texOffsets[] =
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-#ifdef _R11G11B10_
-RWTexture2D<float3>	g_rwRenderTarget;
-RWTexture2D<float>	g_rwMetaData;
-Texture2D<float3>	g_txCurrent;
-Texture2D<float3>	g_txHistory;
-Texture2D<float2>	g_txVelocity;
-Texture2D<float>	g_txMasks;
-Texture2D<float>	g_txHistMeta;
-#else
 RWTexture2D<float4>	g_rwRenderTarget;
 Texture2D			g_txCurrent;
 Texture2D			g_txHistory;
 Texture2D<float2>	g_txVelocity;
-#endif
 
 //--------------------------------------------------------------------------------------
 // Sampler
@@ -255,10 +245,5 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	result = any(isnan(result)) ? filtered.xyz : result;
 	history.w = min(history.w / g_historyMax, 1.0 - curHistoryBlur);
 
-#ifdef _R11G11B10_
-	g_rwRenderTarget[DTid] = result;
-	g_rwMetaData[DTid] = history.w;
-#else
 	g_rwRenderTarget[DTid] = float4(result, history.w);
-#endif
 }
