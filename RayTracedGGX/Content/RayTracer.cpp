@@ -60,11 +60,12 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 
 	uint8_t mipCount = (max)(Log2((max)(width, height)), 0ui8) + 1;
 	mipCount = (min)(mipCount, maxGBufferMips);
+	const auto resourceFlags = mipCount > 1 ? ResourceFlag::ALLOW_UNORDERED_ACCESS : ResourceFlag::NONE;
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
 	N_RETURN(m_gbuffers[NORMAL]->Create(m_device, width, height, Format::R10G10B10A2_UNORM,
-		1, ResourceFlag::NONE, mipCount, 1, nullptr, false, L"Normal"), false);
+		1, resourceFlags, mipCount, 1, nullptr, false, L"Normal"), false);
 	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device, width, height, Format::R8_UNORM,
-		1, ResourceFlag::NONE, mipCount, 1, nullptr, false, L"Roughness"), false);
+		1, resourceFlags, mipCount, 1, nullptr, false, L"Roughness"), false);
 	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
 
