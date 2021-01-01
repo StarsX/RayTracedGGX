@@ -24,7 +24,8 @@ public:
 	bool Init(XUSG::RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
 		std::vector<XUSG::Resource>& uploaders, XUSG::RayTracing::Geometry* geometries,
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
-		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
+		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f),
+		uint8_t maxGBufferMips = 1);
 	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
 	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
 

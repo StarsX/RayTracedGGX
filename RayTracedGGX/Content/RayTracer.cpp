@@ -39,7 +39,8 @@ RayTracer::~RayTracer()
 
 bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
 	vector<Resource>& uploaders, Geometry* geometries, const char* fileName,
-	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale)
+	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale,
+	uint8_t maxGBufferMips)
 {
 	m_viewport = XMUINT2(width, height);
 	m_posScale = posScale;
@@ -57,11 +58,13 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(m_outputView->Create(m_device, width, height, Format::R11G11B10_FLOAT, 1,
 		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"RayTracingOut"), false);
 
+	uint8_t mipCount = (max)(Log2((max)(width, height)), 0ui8) + 1;
+	mipCount = (min)(mipCount, maxGBufferMips);
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
 	N_RETURN(m_gbuffers[NORMAL]->Create(m_device, width, height, Format::R10G10B10A2_UNORM,
-		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Normal"), false);
+		1, ResourceFlag::NONE, mipCount, 1, nullptr, false, L"Normal"), false);
 	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device, width, height, Format::R8_UNORM,
-		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Roughness"), false);
+		1, ResourceFlag::NONE, mipCount, 1, nullptr, false, L"Roughness"), false);
 	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
 
