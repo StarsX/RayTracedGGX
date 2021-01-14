@@ -265,6 +265,9 @@ float2 Hammersley(uint i, uint num)
 // Morton order generator
 uint MortonCode(uint x)
 {
+	//x &= 0x0000ffff;
+	x = (x ^ (x << 8)) & 0x00ff00ff;
+	x = (x ^ (x << 4)) & 0x0f0f0f0f;
 	x = (x ^ (x << 2)) & 0x33333333;
 	x = (x ^ (x << 1)) & 0x55555555;
 
