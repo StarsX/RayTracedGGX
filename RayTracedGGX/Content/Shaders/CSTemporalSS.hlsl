@@ -242,7 +242,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
 	//HALF3 result = HALF3(current.xyz);
 	HALF3 result = ITM(lerp(historyTM, currentTM.xyz, blend));
-	result = any(isnan(result)) ? filtered.xyz : result;
+	result = any(isnan(result)) ? ITM(filtered.xyz) : result;
 	history.w = min(history.w / g_historyMax, 1.0 - curHistoryBlur);
 
 	g_rwRenderTarget[DTid] = float4(result, history.w);
