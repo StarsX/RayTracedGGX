@@ -249,7 +249,7 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 {
 	switch (key)
 	{
-	case 0x20:	// case VK_SPACE:
+	case VK_SPACE:
 		m_isPaused = !m_isPaused;
 		break;
 	case 'V':
