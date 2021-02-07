@@ -310,3 +310,4 @@ $RECYCLE.BIN/
 !XUSG.dll
 !XUSG.lib
 !XUSG.pdb
+!Bin/*.obj
