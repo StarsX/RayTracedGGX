@@ -307,7 +307,4 @@ $RECYCLE.BIN/
 # Windows shortcuts
 *.lnk
 
-!XUSG.dll
-!XUSG.lib
-!XUSG.pdb
 !Bin/*.obj
