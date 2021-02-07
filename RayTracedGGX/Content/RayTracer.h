@@ -126,7 +126,7 @@ protected:
 	XUSG::RayTracing::BottomLevelAS::uptr m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS::uptr m_topLevelAS;
 
-	XUSG::InputLayout			m_inputLayout;
+	const XUSG::InputLayout*	m_pInputLayout;
 	XUSG::PipelineLayout		m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
 	XUSG::RayTracing::Pipeline	m_rayTracingPipeline;
 	XUSG::Pipeline				m_pipeline;

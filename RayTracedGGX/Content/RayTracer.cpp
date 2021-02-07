@@ -362,13 +362,13 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 bool RayTracer::createInputLayout()
 {
 	// Define the vertex input layout.
-	InputElementTable inputElementDescs =
+	const InputElement inputElements[] =
 	{
 		{ "POSITION",	0, Format::R32G32B32_FLOAT, 0, 0,								InputClassification::PER_VERTEX_DATA, 0 },
 		{ "NORMAL",		0, Format::R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
 	};
 
-	X_RETURN(m_inputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElementDescs), false);
+	X_RETURN(m_pInputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
 
 	return true;
 }
@@ -425,7 +425,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::PS, psIndex, L"PSGBuffer.cso"), false);
 
 		const auto state = Graphics::State::MakeUnique();
-		state->IASetInputLayout(m_inputLayout);
+		state->IASetInputLayout(m_pInputLayout);
 		state->SetPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);
 		state->SetShader(Shader::Stage::VS, m_shaderPool->GetShader(Shader::Stage::VS, vsIndex++));
 		state->SetShader(Shader::Stage::PS, m_shaderPool->GetShader(Shader::Stage::PS, psIndex++));
