@@ -224,14 +224,22 @@ Vertex getInput(float2 barycentrics)
 		g_vertexBuffers[NonUniformResourceIndex(meshIdx)][indices[2]]
 	};
 
-	Vertex input;
-	input.Pos = vertices[0].Pos +
-		barycentrics.x * (vertices[1].Pos - vertices[0].Pos) +
-		barycentrics.y * (vertices[2].Pos - vertices[0].Pos);
+	const float3 baryWeights =
+	{
+		1.0 - (barycentrics.x + barycentrics.y),
+		barycentrics.xy
+	};
 
-	input.Nrm = vertices[0].Nrm +
-		barycentrics.x * (vertices[1].Nrm - vertices[0].Nrm) +
-		barycentrics.y * (vertices[2].Nrm - vertices[0].Nrm);
+	Vertex input;
+	input.Pos =
+		baryWeights.x * vertices[0].Pos +
+		baryWeights.y * vertices[1].Pos +
+		baryWeights.z * vertices[2].Pos;
+
+	input.Nrm =
+		baryWeights.x * vertices[0].Nrm +
+		baryWeights.y * vertices[1].Nrm +
+		baryWeights.z * vertices[2].Nrm;
 
 	return input;
 }
