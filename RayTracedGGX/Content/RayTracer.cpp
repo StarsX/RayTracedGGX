@@ -389,7 +389,7 @@ bool RayTracer::createPipelineLayouts()
 	{
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
-		pipelineLayout->SetRootSRV(ACCELERATION_STRUCTURE, 0);
+		pipelineLayout->SetRootSRV(ACCELERATION_STRUCTURE, 0, 0, DescriptorFlag::DATA_STATIC);
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout->SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);

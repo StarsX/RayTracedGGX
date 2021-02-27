@@ -109,10 +109,8 @@ bool Denoiser::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1);
 		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"VarianceHPipelineLayout"), false);
 	}
@@ -122,10 +120,8 @@ bool Denoiser::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3, 0,
-			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3);
 		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"VarianceVPipelineLayout"), false);
 	}
@@ -135,8 +131,7 @@ bool Denoiser::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0,
 			DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0, 0,
-			DescriptorFlag::DESCRIPTORS_VOLATILE | DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::NONE, L"TemporalSSPipelineLayout"), false);
