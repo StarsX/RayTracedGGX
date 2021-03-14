@@ -216,8 +216,8 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t fra
 
 	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
 	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ |
@@ -667,7 +667,7 @@ void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
 	ResourceBarrier barriers[4];
 	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_WRITE);
 	for (auto& gbuffer : m_gbuffers)
-		numBarriers = gbuffer->SetBarrier(barriers, ResourceState::RENDER_TARGET, numBarriers);
+		numBarriers = gbuffer->SetBarrier(barriers, ResourceState::RENDER_TARGET, numBarriers, 0);
 	pCommandList->Barrier(numBarriers, barriers);
 
 	// Set framebuffer

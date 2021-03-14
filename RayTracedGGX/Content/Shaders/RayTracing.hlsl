@@ -288,38 +288,42 @@ uint MortonIndex(uint2 pos)
 	return MortonCode(pos.x) | (MortonCode(pos.y) << 1);
 }
 
-uint WangHash(uint seed)
+uint RNG(uint seed)
 {
-	seed = (seed ^ 61) ^ (seed >> 16);
-	seed *= 9;
-	seed = seed ^ (seed >> 4);
-	seed *= 0x27d4eb2d;
-	seed = seed ^ (seed >> 15);
-	
+	// Condensed version of pcg_output_rxs_m_xs_32_32
+	seed = seed * 747796405 + 1;
+	seed = ((seed >> ((seed >> 28) + 4)) ^ seed) * 277803737;
+	seed = (seed >> 22) ^ seed;
+
 	return seed;
 }
 
-float2 getHammersley(uint2 index, uint2 dim)
+float2 RNG(uint i, uint num)
 {
-	const uint n = 256;
-	const uint x = index.y * dim.x + index.x;
-	const uint y = index.x * dim.y + index.y;
-	uint s = MortonIndex(uint2(x, y));
+	return float2(i / float(num), RNG(i) / float(0xffffffff));
+}
+
+float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
+{
+	uint s = index.y * dim.x + index.x;
+	//uint s = MortonIndex(index);
+
+	s = RNG(s);
 	s += g_cb.FrameIndex;
+	s = RNG(s);
+	s %= numSamples;
 
-	[unroll]
-	for (uint i = 0; i < 1; ++i) s = WangHash(s);
-	s %= n;
-
-	return Hammersley(s, n);
+	return RNG(s, numSamples);
+	//return Hammersley(s, numSamples);
 }
 
 RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {
 	// Trace a reflection ray.
-	const float2 xi = getHammersley(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
+	const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
 	const float a = roughness * roughness;
 	const float3 H = computeDirectionGGX(a, N, xi);
+
 	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
 	const float3 dLdx = dFdx(ray.Direction);
 	const float3 dLdy = dFdy(ray.Direction);
