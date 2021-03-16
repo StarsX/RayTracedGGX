@@ -152,14 +152,12 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 d
 	RayPayload payload;
 
 	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH)
-		payload.Color = environment(ray.Direction, ddx, ddy);// *0.5;
+		payload.Color = environment(ray.Direction, ddx, ddy);
 	else
 	{
 		// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
 		// Note: make sure to enable face culling so as to avoid surface face fighting.
-		ray.TMin = 0.0;
-		ray.TMax = 10000.0;
-		payload.Color = 0.0.xxx;
+		payload.Color = 0.0;
 		payload.RecursionDepth = currentRayRecursionDepth;
 		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
 	}
@@ -327,33 +325,31 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
 	const float3 dLdx = dFdx(ray.Direction);
 	const float3 dLdy = dFdy(ray.Direction);
+	const float NoL = saturate(dot(N, ray.Direction));
+	if (NoL <= 0.0) return (RayPayload)0;
+
 	RayPayload payload = traceRadianceRay(ray, recursionDepth, dLdx, dLdy);
 
-	const float NoL = saturate(dot(N, ray.Direction));
-
-	if (NoL > 0.0)
+	// Calculate fresnel
+	const float3 specColors[] =
 	{
-		// Calculate fresnel
-		const float3 specColors[] =
-		{
-			float3(0.95, 0.93, 0.88),	// Silver
-			float3(1.00, 0.71, 0.29)	// Gold
-		};
-		const float VoH = saturate(dot(V, H));
-		const float3 F = F_Schlick(specColors[instanceIdx], VoH);
+		float3(0.95, 0.93, 0.88),	// Silver
+		float3(1.00, 0.71, 0.29)	// Gold
+	};
+	const float VoH = saturate(dot(V, H));
+	const float3 F = F_Schlick(specColors[instanceIdx], VoH);
 
-		// Visibility factor
-		const float NoV = saturate(dot(N, V));
-		const float vis = Vis_Schlick(roughness, NoV, NoL);
+	// Visibility factor
+	const float NoV = saturate(dot(N, V));
+	const float vis = Vis_Schlick(roughness, NoV, NoL);
 
-		// BRDF
-		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-		const float NoH = saturate(dot(N, H));
-		// pdf = D * NoH / (4 * VoH)
-		payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
-		// pdf = D * NoH
-		//payload.Color *= F * NoL * vis / NoH;
-	}
+	// BRDF
+	// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
+	const float NoH = saturate(dot(N, H));
+	// pdf = D * NoH / (4 * VoH)
+	payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
+	// pdf = D * NoH
+	//payload.Color *= F * NoL * vis / NoH;
 
 	return payload;
 }
