@@ -341,7 +341,7 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 
 	// Visibility factor
 	const float NoV = saturate(dot(N, V));
-	const float vis = Vis_Schlick(roughness, NoV, NoL);
+	const float vis = Vis_Smith(roughness, NoV, NoL);
 
 	// BRDF
 	// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
