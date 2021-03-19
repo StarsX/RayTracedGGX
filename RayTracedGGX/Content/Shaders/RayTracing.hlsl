@@ -265,7 +265,7 @@ uint Hammersley(uint i)
 
 float2 Hammersley(uint i, uint num)
 {
-	return float2(i / float(num), Hammersley(i) / float(0xffffffff));
+	return float2(i / float(num), Hammersley(i) / float(0x10000));
 }
 
 // Morton order generator
@@ -298,7 +298,7 @@ uint RNG(uint seed)
 
 float2 RNG(uint i, uint num)
 {
-	return float2(i / float(num), RNG(i) / float(0xffffffff));
+	return float2(i / float(num), (RNG(i) & 0xffff) / float(0x10000));
 }
 
 float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
