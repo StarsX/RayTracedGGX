@@ -43,7 +43,7 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	N_RETURN(m_outputViews[UAV_AVG_H]->Create(m_device, width, height,
 		Format::R11G11B10_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 		1, 1, MemoryType::DEFAULT, false, namesUAV[UAV_AVG_H]), false);
-	for (auto i = 1ui8; i < NUM_UAV; ++i)
+	for (uint8_t i = 1; i < NUM_UAV; ++i)
 		N_RETURN(m_outputViews[i]->Create(m_device, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 			1, 1, MemoryType::DEFAULT, false, namesUAV[i]), false);

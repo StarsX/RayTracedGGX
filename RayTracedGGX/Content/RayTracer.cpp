@@ -58,7 +58,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(m_outputView->Create(m_device, width, height, Format::R11G11B10_FLOAT, 1,
 		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"RayTracingOut"), false);
 
-	uint8_t mipCount = (max)(Log2((max)(width, height)), 0ui8) + 1;
+	uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
 	mipCount = (min)(mipCount, maxGBufferMips);
 	const auto resourceFlags = mipCount > 1 ? ResourceFlag::ALLOW_UNORDERED_ACCESS : ResourceFlag::NONE;
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
@@ -602,7 +602,7 @@ bool RayTracer::buildShaderTables()
 	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
 	const auto cbRayGen = RayGenConstants();
 
-	for (auto i = 0ui8; i < FrameCount; ++i)
+	for (uint8_t i = 0; i < FrameCount; ++i)
 	{
 		// Ray gen shader table
 		m_rayGenShaderTables[i] = ShaderTable::MakeUnique();
@@ -691,7 +691,7 @@ void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList)
 
 	pCommandList->IASetPrimitiveTopology(PrimitiveTopology::TRIANGLELIST);
 
-	for (auto i = 0ui8; i < NUM_MESH; ++i)
+	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		// Set descriptor tables
 		pCommandList->SetGraphics32BitConstants(0, SizeOfInUint32(BasePassConstants), &m_cbBasePass[i]);

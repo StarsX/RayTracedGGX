@@ -33,7 +33,7 @@ public:
 	const XUSG::RenderTarget::uptr* GetGBuffers() const;
 	const XUSG::DepthStencil::sptr GetDepth() const;
 
-	static const uint32_t FrameCount = 3;
+	static const uint8_t FrameCount = 3;
 
 protected:
 	enum PipelineLayoutIndex : uint8_t
