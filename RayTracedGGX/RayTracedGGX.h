@@ -45,7 +45,7 @@ public:
 	virtual void ParseCommandLineArgs(wchar_t* argv[], int argc);
 
 private:
-	static const uint32_t FrameCount = RayTracer::FrameCount;
+	static const auto FrameCount = RayTracer::FrameCount;
 
 	// Pipeline objects.
 	XUSG::Viewport			m_viewport;

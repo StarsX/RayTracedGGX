@@ -21,8 +21,6 @@ public:
 	void ToneMap(const XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
-	static const uint32_t FrameCount = 3;
-
 protected:
 	enum PipelineLayoutIndex : uint8_t
 	{
