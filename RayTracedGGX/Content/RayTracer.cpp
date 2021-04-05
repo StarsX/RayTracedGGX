@@ -152,7 +152,7 @@ static const XMFLOAT2& IncrementalHalton()
 	return halton;
 }
 
-void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj, float timeStep)
+void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewProj, float timeStep)
 {
 	const auto halton = IncrementalHalton();
 	XMFLOAT2 projBias =
@@ -200,7 +200,7 @@ void RayTracer::UpdateFrame(uint32_t frameIndex, CXMVECTOR eyePt, CXMMATRIX view
 	m_frameParity = !m_frameParity;
 }
 
-void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint32_t frameIndex)
+void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	updateAccelerationStructures(pCommandList, frameIndex);
 
@@ -627,7 +627,7 @@ bool RayTracer::buildShaderTables()
 	return true;
 }
 
-void RayTracer::updateAccelerationStructures(const RayTracing::CommandList* pCommandList, uint32_t frameIndex)
+void RayTracer::updateAccelerationStructures(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Set instance
 	float* const transforms[] =
@@ -644,7 +644,7 @@ void RayTracer::updateAccelerationStructures(const RayTracing::CommandList* pCom
 	m_topLevelAS->Build(pCommandList, m_scratch, m_instances[frameIndex], descriptorPool, true);
 }
 
-void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint32_t frameIndex)
+void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Bind the acceleration structure and dispatch rays.
 	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);

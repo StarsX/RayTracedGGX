@@ -26,8 +26,8 @@ public:
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f),
 		uint8_t maxGBufferMips = 1);
-	void UpdateFrame(uint32_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
-	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
+	void UpdateFrame(uint8_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
+	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	const XUSG::Texture2D::sptr& GetRayTracingOutput() const;
 	const XUSG::RenderTarget::uptr* GetGBuffers() const;
@@ -109,9 +109,9 @@ protected:
 		XUSG::RayTracing::Geometry* geometries);
 	bool buildShaderTables();
 
-	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
+	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
-	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint32_t frameIndex);
+	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
 

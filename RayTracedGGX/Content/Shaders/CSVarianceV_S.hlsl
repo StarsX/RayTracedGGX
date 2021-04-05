@@ -86,7 +86,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		wsum += w;
 	}
 
-	const float gamma = 0.25;
+	const float gamma = 0.125;
 
 	mu /= wsum;
 	const float3 sigma = sqrt(abs(m2 / wsum - mu * mu));

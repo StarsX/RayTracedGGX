@@ -42,7 +42,7 @@ float Gaussian(float x, float m, float sigma)
 
 float RoughnessSigma(float roughness)
 {
-	return 160.0 * roughness * roughness;
+	return 320.0 * roughness * roughness * roughness;
 }
 
 //--------------------------------------------------------------------------------------
