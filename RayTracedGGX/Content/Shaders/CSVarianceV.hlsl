@@ -57,11 +57,9 @@ void main(uint2 DTid : SV_DispatchThreadID)
 		wsum += w;
 	}
 
-	const float gamma = 0.125;
-
 	mu /= wsum;
 	const float3 sigma = sqrt(abs(m2 / wsum - mu * mu));
-	const float3 gsigma = gamma * sigma;
+	const float3 gsigma = g_gamma * sigma;
 	const float3 neighborMin = mu - gsigma;
 	const float3 neighborMax = mu + gsigma;
 
