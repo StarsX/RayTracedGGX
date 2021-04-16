@@ -155,11 +155,11 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 d
 		payload.Color = environment(ray.Direction, ddx, ddy);
 	else
 	{
-		// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
-		// Note: make sure to enable face culling so as to avoid surface face fighting.
 		payload.Color = 0.0;
 		payload.RecursionDepth = currentRayRecursionDepth;
-		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
+		TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
+		// Note: make sure to enable face culling so as to avoid surface face fighting.
+		//TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
 	}
 
 	return payload;
@@ -317,18 +317,41 @@ float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
 
 RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
 {
-	// Trace a reflection ray.
-	const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
-	const float a = roughness * roughness;
-	const float3 H = computeDirectionGGX(a, N, xi);
+	RayDesc ray;
+	ray.Origin = pos;
+	ray.TMin = ray.TMax = 0.0;
 
-	const RayDesc ray = { pos, 0.0, reflect(-V, H), 10000.0 };
+	float3 H;
+	float NoL, VoH;
+
+	if (instanceIdx != 0xffffffff)
+	{
+		// Trace a reflection ray.
+		const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
+		const float a = roughness * roughness;
+		H = computeDirectionGGX(a, N, xi);
+
+		ray.Direction = reflect(-V, H);
+		NoL = dot(N, ray.Direction);
+		if (NoL > 0.0)
+		{
+			// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
+			VoH = dot(V, H);
+			float t = (1.0 - VoH);
+			t *= t;
+			t *= t;
+			ray.TMin = max(t * t, 0.1);
+			ray.TMax = 10000.0;
+		}
+	}
+	else ray.Direction = -V;
+
 	const float3 dLdx = dFdx(ray.Direction);
 	const float3 dLdy = dFdy(ray.Direction);
-	const float NoL = dot(N, ray.Direction);
-	if (NoL <= 0.0) return (RayPayload)0;
-
 	RayPayload payload = traceRadianceRay(ray, recursionDepth, dLdx, dLdy);
+
+	if (instanceIdx == 0xffffffff) return payload;
+	else if (NoL <= 0.0) return (RayPayload)0;
 
 	// Calculate fresnel
 	const float3 specColors[] =
@@ -336,7 +359,7 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 		float3(0.95, 0.93, 0.88),	// Silver
 		float3(1.00, 0.71, 0.29)	// Gold
 	};
-	const float VoH = saturate(dot(V, H));
+	VoH = saturate(VoH);
 	const float3 F = F_Schlick(specColors[instanceIdx], VoH);
 
 	// Visibility factor
@@ -367,14 +390,9 @@ void raygenMain()
 	float3 N, V, pos;
 	const uint instanceIdx = getPrimarySurface(index, dim, N, V, pos);
 
-	RayPayload payload;
-	if (instanceIdx != 0xffffffff)
-	{
-		const float roughness = g_txRoughness[index];
-		const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
-		g_renderTarget[index] = payload.Color; // Write the raytraced color to the output texture.
-	}
-	else g_renderTarget[index] = environment(-V);
+	const float roughness = instanceIdx != 0xffffffff ? g_txRoughness[index] : 0.0;
+	const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
+	g_renderTarget[index] = payload.Color; // Write the raytraced color to the output texture.
 }
 
 //--------------------------------------------------------------------------------------
