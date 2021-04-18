@@ -295,8 +295,8 @@ bool Denoiser::createDescriptorTables()
 	// Create the sampler
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		const auto samplerAnisoWrap = SamplerPreset::LINEAR_CLAMP;
-		descriptorTable->SetSamplers(0, 1, &samplerAnisoWrap, *m_descriptorTableCache);
+		const auto samplerLinearClamp = SamplerPreset::LINEAR_CLAMP;
+		descriptorTable->SetSamplers(0, 1, &samplerLinearClamp, *m_descriptorTableCache);
 		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(*m_descriptorTableCache), false);
 	}
 
