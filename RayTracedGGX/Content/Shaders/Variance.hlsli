@@ -21,3 +21,22 @@ Texture2D<float3>	g_txSource;
 // Sampler
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler;
+
+uint2 pack(float3 f)
+{
+	const uint3 u = f32tof16(f);
+
+	return uint2(u.x | (u.y << 16), u.z);
+}
+
+uint2 pack(float4 f)
+{
+	const uint4 u = f32tof16(f);
+
+	return uint2(u.x | (u.y << 16), u.z | (u.w << 16));
+}
+
+float4 unpack(uint2 u)
+{
+	return f16tof32(uint4(u.x & 0xffff, u.x >> 16, u.y & 0xffff, u.y >> 16));
+}
