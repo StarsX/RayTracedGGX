@@ -75,26 +75,6 @@ protected:
 		NUM_SRV_TABLE
 	};
 
-	struct RayGenConstants
-	{
-		DirectX::XMMATRIX	ProjToWorld;
-		DirectX::XMVECTOR	EyePt;
-	};
-
-	struct GlobalConstants
-	{
-		DirectX::XMFLOAT3X4	Normal;
-		uint32_t			FrameIndex;
-	};
-
-	struct BasePassConstants
-	{
-		DirectX::XMFLOAT4X4	WorldViewProj;
-		DirectX::XMFLOAT4X4	WorldViewProjPrev;
-		DirectX::XMFLOAT3X4	Normal;
-		DirectX::XMFLOAT2	ProjBias;
-	};
-
 	bool createVB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numVert,
 		uint32_t stride, const uint8_t* pData, std::vector<XUSG::Resource>& uploaders);
 	bool createIB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numIndices,
@@ -110,7 +90,7 @@ protected:
 	bool buildShaderTables();
 
 	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList);
+	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
@@ -121,7 +101,7 @@ protected:
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
 	DirectX::XMFLOAT4X4 m_worlds[NUM_MESH];
-	BasePassConstants	m_cbBasePass[NUM_MESH];
+	DirectX::XMFLOAT4X4 m_worldViewProjs[NUM_MESH];
 
 	XUSG::RayTracing::BottomLevelAS::uptr m_bottomLevelASs[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS::uptr m_topLevelAS;
@@ -143,8 +123,13 @@ protected:
 	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
 	XUSG::DepthStencil::sptr	m_depth;
 
-	XUSG::Resource		m_scratch;
-	XUSG::Resource		m_instances[FrameCount];
+	XUSG::ConstantBuffer::uptr	m_cbBasePass[NUM_MESH];
+	XUSG::ConstantBuffer::uptr	m_cbRaytracing;
+	uint32_t					m_cbvBaseStride;
+	uint32_t					m_cbvGlobalStride;
+
+	XUSG::Resource				m_scratch;
+	XUSG::Resource				m_instances[FrameCount];
 
 	std::shared_ptr<XUSG::ResourceBase> m_lightProbe;
 
@@ -163,6 +148,4 @@ protected:
 	XUSG::Compute::PipelineCache::uptr		m_computePipelineCache;
 	XUSG::PipelineLayoutCache::uptr			m_pipelineLayoutCache;
 	XUSG::DescriptorTableCache::uptr		m_descriptorTableCache;
-
-	GlobalConstants m_cbRaytracing;
 };
