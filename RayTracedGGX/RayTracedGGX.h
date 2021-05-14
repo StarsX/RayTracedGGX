@@ -64,12 +64,6 @@ private:
 		COMMAND_ALLOCATOR_COUNT
 	};
 
-	struct ComputeFallback
-	{
-		XUSG::CommandListType commandListType;
-		RayTracedGGX::CommandType commandType;
-	} m_computeFallback;
-
 	static const auto FrameCount = RayTracer::FrameCount;
 
 	// Pipeline objects.
@@ -100,8 +94,8 @@ private:
 	XUSG::Fence	m_fence;
 	uint64_t	m_fenceValues[FrameCount];
 
-	XUSG::Fence	m_semaphores[FrameCount];
-	uint64_t	m_semaphoreValues[FrameCount];
+	XUSG::Fence	m_semaphore;
+	uint64_t	m_semaphoreValue;
 
 	// Application state
 	bool		m_useSharedMemVariance;

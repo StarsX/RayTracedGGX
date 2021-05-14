@@ -127,24 +127,16 @@ void RayTracedGGX::LoadPipeline()
 	ThrowIfFailed(swapChain->QueryInterface(IID_PPV_ARGS(&m_swapChain)));
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
-	// Compute fallback
-	ComputeFallback computeFallbacks[] =
-	{
-		{ CommandListType::DIRECT, UNIVERSAL },
-		{ CommandListType::COMPUTE, COMPUTE }
-	};
-	m_computeFallback = m_isDxrSupported ? computeFallbacks[COMPUTE] : computeFallbacks[UNIVERSAL];
-
 	// Create frame resources.
 	// Create a RTV and a command allocator for each frame.
 	for (uint8_t n = 0; n < FrameCount; ++n)
 	{
 		m_renderTargets[n] = RenderTarget::MakeUnique();
 		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device, m_swapChain, n), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_UPDATE_AS][n], m_computeFallback.commandListType), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_UPDATE_AS][n], CommandListType::COMPUTE), ThrowIfFailed(E_FAIL));
 		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_GEOMETRY][n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
 		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_RAY_TRACE][n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_COMPUTE][n], m_computeFallback.commandListType), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_COMPUTE][n], CommandListType::COMPUTE), ThrowIfFailed(E_FAIL));
 		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_IMAGE][n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
 		m_commandAllocators[ALLOCATOR_UPDATE_AS][n]->SetName((L"UpdateASAllocator" + to_wstring(n)).c_str());
 		m_commandAllocators[ALLOCATOR_GEOMETRY][n]->SetName((L"GeometryAllocator" + to_wstring(n)).c_str());
@@ -166,7 +158,7 @@ void RayTracedGGX::LoadAssets()
 	{
 		m_commandLists[COMPUTE] = RayTracing::CommandList::MakeUnique();
 		const auto pCommandList = m_commandLists[COMPUTE].get();
-		N_RETURN(m_device.Base->GetCommandList(pCommandList, 0, m_computeFallback.commandListType,
+		N_RETURN(m_device.Base->GetCommandList(pCommandList, 0, CommandListType::COMPUTE,
 			m_commandAllocators[ALLOCATOR_COMPUTE][m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
 		ThrowIfFailed(pCommandList->Close());
 	}
@@ -213,11 +205,7 @@ void RayTracedGGX::LoadAssets()
 		WaitForGpu();
 	}
 
-	for (uint8_t n = 0; n < FrameCount; ++n)
-	{
-		auto& semaphore = m_semaphores[n];
-		if (!semaphore) N_RETURN(m_device.Base->GetFence(semaphore, m_semaphoreValues[m_frameIndex], FenceFlag::NONE), ThrowIfFailed(E_FAIL));
-	}
+	if (!m_semaphore) N_RETURN(m_device.Base->GetFence(m_semaphore, m_semaphoreValue, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
 
 	// Projection
 	const auto aspectRatio = m_width / static_cast<float>(m_height);
@@ -258,16 +246,14 @@ void RayTracedGGX::OnRender()
 {
 	if (m_asyncCompute)
 	{
-		auto& semaphoreValue = m_semaphoreValues[m_frameIndex];
-		const auto& semaphore = m_semaphores[m_frameIndex];
-
 		// Record all the commands we need to render the scene into the command list.
 		{
-			const auto commandType = m_computeFallback.commandType;
+			const auto commandType = COMPUTE;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateUpdateASCommandList(commandType);
+			commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++);
 			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
-			if (m_computeFallback.commandType == COMPUTE) ThrowIfFailed(commandQueue->Signal(semaphore.get(), semaphoreValue));
+			ThrowIfFailed(commandQueue->Signal(m_semaphore.get(), m_semaphoreValue));
 		}
 
 		// Record all the commands we need to render the scene into the command list.
@@ -283,8 +269,9 @@ void RayTracedGGX::OnRender()
 			const auto commandType = UNIVERSAL;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateRayTraceCommandList(commandType);
-			if (m_computeFallback.commandType == COMPUTE) commandQueue->Wait(semaphore.get(), semaphoreValue++);
+			commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++);
 			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
+			ThrowIfFailed(commandQueue->Signal(m_semaphore.get(), m_semaphoreValue));
 		}
 
 		// Record all the commands we need to render the scene into the command list.
