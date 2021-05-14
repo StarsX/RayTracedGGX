@@ -240,8 +240,6 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 
 void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
-	updateAccelerationStructures(pCommandList, frameIndex);
-
 	// Bind the heaps
 	const DescriptorPool descriptorPools[] =
 	{
@@ -261,6 +259,59 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t fram
 	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ |
 		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
+
+	rayTrace(pCommandList, frameIndex);
+}
+
+void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+{
+	// Set instance
+	float* const transforms[] =
+	{
+		reinterpret_cast<float*>(&m_worlds[GROUND]),
+		reinterpret_cast<float*>(&m_worlds[MODEL_OBJ])
+	};
+	const BottomLevelAS* pBottomLevelASs[NUM_MESH];
+	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASs[i].get();
+	TopLevelAS::SetInstances(m_device, m_instances[frameIndex], NUM_MESH, pBottomLevelASs, transforms);
+
+	// Update top level AS
+	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	m_topLevelAS->Build(pCommandList, m_scratch, m_instances[frameIndex], descriptorPool, true);
+}
+
+void RayTracer::RenderGeometry(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+{
+	// Bind the heaps
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
+	};
+	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
+
+	gbufferPass(pCommandList, frameIndex);
+
+	ResourceBarrier barriers[5];
+	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
+		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
+	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ |
+		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	pCommandList->Barrier(numBarriers, barriers);
+}
+
+void RayTracer::RayTrace(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+{
+	// Bind the heaps
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
+	};
+	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
 	rayTrace(pCommandList, frameIndex);
 }
@@ -665,24 +716,7 @@ bool RayTracer::buildShaderTables()
 	return true;
 }
 
-void RayTracer::updateAccelerationStructures(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
-{
-	// Set instance
-	float* const transforms[] =
-	{
-		reinterpret_cast<float*>(&m_worlds[GROUND]),
-		reinterpret_cast<float*>(&m_worlds[MODEL_OBJ])
-	};
-	const BottomLevelAS* pBottomLevelASs[NUM_MESH];
-	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASs[i].get();
-	TopLevelAS::SetInstances(m_device, m_instances[frameIndex], NUM_MESH, pBottomLevelASs, transforms);
-
-	// Update top level AS
-	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	m_topLevelAS->Build(pCommandList, m_scratch, m_instances[frameIndex], descriptorPool, true);
-}
-
-void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Set barriers
 	ResourceBarrier barriers[4];

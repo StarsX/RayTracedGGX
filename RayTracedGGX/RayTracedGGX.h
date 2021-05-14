@@ -45,6 +45,31 @@ public:
 	virtual void ParseCommandLineArgs(wchar_t* argv[], int argc);
 
 private:
+	enum CommandType : uint8_t
+	{
+		UNIVERSAL,
+		COMPUTE,
+
+		COMMAND_TYPE_COUNT
+	};
+
+	enum CommandAllocatorIndex : uint8_t
+	{
+		ALLOCATOR_UPDATE_AS,
+		ALLOCATOR_GEOMETRY,
+		ALLOCATOR_RAY_TRACE,
+		ALLOCATOR_COMPUTE,
+		ALLOCATOR_IMAGE,
+
+		COMMAND_ALLOCATOR_COUNT
+	};
+
+	struct ComputeFallback
+	{
+		XUSG::CommandListType commandListType;
+		RayTracedGGX::CommandType commandType;
+	} m_computeFallback;
+
 	static const auto FrameCount = RayTracer::FrameCount;
 
 	// Pipeline objects.
@@ -52,14 +77,14 @@ private:
 	XUSG::RectRange			m_scissorRect;
 
 	XUSG::SwapChain			m_swapChain;
-	XUSG::CommandAllocator	m_commandAllocators[FrameCount];
-	XUSG::CommandQueue		m_commandQueue;
+	XUSG::CommandAllocator	m_commandAllocators[COMMAND_ALLOCATOR_COUNT][FrameCount];
+	XUSG::CommandQueue		m_commandQueues[COMMAND_TYPE_COUNT];
 
 	bool m_isDxrSupported;
 
 	XUSG::RayTracing::Device m_device;
 	XUSG::RenderTarget::uptr m_renderTargets[FrameCount];
-	XUSG::RayTracing::CommandList::uptr m_commandList;
+	XUSG::RayTracing::CommandList::uptr m_commandLists[COMMAND_TYPE_COUNT];
 
 	// App resources.
 	std::unique_ptr<RayTracer>	m_rayTracer;
@@ -75,8 +100,12 @@ private:
 	XUSG::Fence	m_fence;
 	uint64_t	m_fenceValues[FrameCount];
 
+	XUSG::Fence	m_semaphores[FrameCount];
+	uint64_t	m_semaphoreValues[FrameCount];
+
 	// Application state
 	bool		m_useSharedMemVariance;
+	bool		m_asyncCompute;
 	bool		m_isPaused;
 	StepTimer	m_timer;
 
@@ -92,6 +121,10 @@ private:
 	void LoadPipeline();
 	void LoadAssets();
 	void PopulateCommandList();
+	void PopulateUpdateASCommandList(CommandType commandType);
+	void PopulateGeometryCommandList(CommandType commandType);
+	void PopulateRayTraceCommandList(CommandType commandType);
+	void PopulateDenoiseCommandList(CommandType commandType);
 	void WaitForGpu();
 	void MoveToNextFrame();
 	double CalculateFrameStats(float* fTimeStep = nullptr);

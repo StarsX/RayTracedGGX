@@ -28,6 +28,9 @@ public:
 		uint8_t maxGBufferMips = 1);
 	void UpdateFrame(uint8_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
 	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void UpdateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void RenderGeometry(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void RayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	const XUSG::Texture2D::sptr& GetRayTracingOutput() const;
 	const XUSG::RenderTarget::uptr* GetGBuffers() const;
@@ -89,8 +92,7 @@ protected:
 		XUSG::RayTracing::Geometry* geometries);
 	bool buildShaderTables();
 
-	void updateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-	void gbufferPass(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	XUSG::RayTracing::Device m_device;
