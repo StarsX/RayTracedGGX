@@ -4,8 +4,6 @@
 
 #include "Variance.hlsli"
 
-#define HALF_SHARED_MEM_SIZE (SHARED_MEM_SIZE >> 1)
-
 //--------------------------------------------------------------------------------------
 // Textures
 //--------------------------------------------------------------------------------------
@@ -17,15 +15,12 @@ Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t5);
 
 groupshared uint4 g_avgRghs[SHARED_MEM_SIZE];
-groupshared uint4 g_norms[HALF_SHARED_MEM_SIZE];
+groupshared uint2 g_norms[SHARED_MEM_SIZE];
 
 void loadSamples(uint2 dTid, uint gTid, uint radius)
 {
 	const uint offset = radius * 2;
 	dTid.y -= radius;
-
-	const uint nTid = gTid;
-	uint2 norms[2];
 
 	[unroll]
 	for (uint i = 0; i < 2; ++i, dTid.y += offset, gTid += offset)
@@ -40,10 +35,8 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 		//const uint4 avgRgh = uint4(pack(float4(avg, rgh)), pack(float4(sqa, depth)));
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		g_avgRghs[gTid] = avgRgh;
-		norms[i] = pack(norm);
+		g_norms[gTid] = pack(norm);
 	}
-
-	g_norms[nTid] = uint4(norms[0], norms[1]);
 
 	GroupMemoryBarrierWithGroupSync();
 }
@@ -81,10 +74,9 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	for (uint i = 0; i < sampleCount; ++i)
 	{
 		const uint j = GTid.y + i;
-		const uint k = j % HALF_SHARED_MEM_SIZE;
 		const float4 avgRgh = unpack(g_avgRghs[j].xy);
 		const float3 sqa = unpack(g_avgRghs[j].zw).xyz;
-		const float4 norm = unpack(j < HALF_SHARED_MEM_SIZE ? g_norms[k].xy : g_norms[k].zw);
+		const float4 norm = unpack(g_norms[j]);
 
 		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
 			* Gaussian(radius, i, a)

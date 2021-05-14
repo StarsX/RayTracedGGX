@@ -101,11 +101,9 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		N_RETURN(cbBasePass->Create(m_device, sizeof(BasePassConstants[FrameCount]), FrameCount,
 			nullptr, MemoryType::UPLOAD, (L"CBBasePass" + to_wstring(i)).c_str()), false);
 	}
-	m_cbvBaseStride = static_cast<uint32_t>(reinterpret_cast<uint8_t*>(m_cbBasePass[0]->Map(1)) - reinterpret_cast<uint8_t*>(m_cbBasePass[0]->Map()));
 
 	m_cbRaytracing = ConstantBuffer::MakeUnique();
 	N_RETURN(m_cbRaytracing->Create(m_device, sizeof(GlobalConstants[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
-	m_cbvGlobalStride = static_cast<uint32_t>(reinterpret_cast<uint8_t*>(m_cbRaytracing->Map(1)) - reinterpret_cast<uint8_t*>(m_cbRaytracing->Map()));
 
 	// Load input image
 	{
@@ -418,7 +416,7 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for g-buffer pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
-		pipelineLayout->SetRootCBV(0, 0, 0, DescriptorFlag::DATA_STATIC, Shader::Stage::VS);
+		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::VS);
 		pipelineLayout->SetConstants(1, SizeOfInUint32(uint32_t), 0, 0, Shader::Stage::PS);
 		X_RETURN(m_pipelineLayouts[GBUFFER_PASS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
 			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout"), false);
@@ -717,7 +715,7 @@ void RayTracer::gbufferPass(const RayTracing::CommandList* pCommandList, uint8_t
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		// Set descriptor tables
-		pCommandList->SetGraphicsRootConstantBufferView(0, m_cbBasePass[i]->GetResource(), m_cbvBaseStride * frameIndex);
+		pCommandList->SetGraphicsRootConstantBufferView(0, m_cbBasePass[i]->GetResource(), m_cbBasePass[i]->GetCBVOffset(frameIndex));
 		pCommandList->SetGraphics32BitConstant(1, i);
 
 		pCommandList->IASetVertexBuffers(0, 1, &m_vertexBuffers[i]->GetVBV());
@@ -736,7 +734,7 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t fr
 	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	pCommandList->SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	pCommandList->SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
-	pCommandList->SetComputeRootConstantBufferView(CONSTANTS, m_cbRaytracing->GetResource(), m_cbvGlobalStride * frameIndex);
+	pCommandList->SetComputeRootConstantBufferView(CONSTANTS, m_cbRaytracing->GetResource(), m_cbRaytracing->GetCBVOffset(frameIndex));
 	pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 	// Fallback layer has no depth

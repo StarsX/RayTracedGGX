@@ -125,8 +125,6 @@ protected:
 
 	XUSG::ConstantBuffer::uptr	m_cbBasePass[NUM_MESH];
 	XUSG::ConstantBuffer::uptr	m_cbRaytracing;
-	uint32_t					m_cbvBaseStride;
-	uint32_t					m_cbvGlobalStride;
 
 	XUSG::Resource				m_scratch;
 	XUSG::Resource				m_instances[FrameCount];
