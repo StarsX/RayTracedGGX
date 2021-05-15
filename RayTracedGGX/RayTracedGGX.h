@@ -98,8 +98,8 @@ private:
 	uint64_t	m_semaphoreValue;
 
 	// Application state
+	uint8_t		m_asyncCompute;
 	bool		m_useSharedMemVariance;
-	bool		m_asyncCompute;
 	bool		m_isPaused;
 	StepTimer	m_timer;
 

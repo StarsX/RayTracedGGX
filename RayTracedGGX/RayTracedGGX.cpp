@@ -27,8 +27,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
-	m_useSharedMemVariance(false),
 	m_asyncCompute(true),
+	m_useSharedMemVariance(false),
 	m_isPaused(false),
 	m_tracking(false),
 	m_meshFileName("Media/dragon.obj"),
@@ -251,7 +251,7 @@ void RayTracedGGX::OnRender()
 			const auto commandType = COMPUTE;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateUpdateASCommandList(commandType);
-			commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++);
+			ThrowIfFailed(commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++));
 			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
 			ThrowIfFailed(commandQueue->Signal(m_semaphore.get(), m_semaphoreValue));
 		}
@@ -269,7 +269,7 @@ void RayTracedGGX::OnRender()
 			const auto commandType = UNIVERSAL;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateRayTraceCommandList(commandType);
-			commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++);
+			ThrowIfFailed(commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++));
 			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
 			ThrowIfFailed(commandQueue->Signal(m_semaphore.get(), m_semaphoreValue));
 		}
