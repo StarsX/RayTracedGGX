@@ -19,17 +19,17 @@ struct RayGenConstants
 	XMVECTOR	EyePt;
 };
 
-struct GlobalConstants
+struct CBGlobal
 {
-	XMFLOAT3X4	Normal;
+	XMFLOAT3X4	WorldIT;
 	uint32_t	FrameIndex;
 };
 
-struct BasePassConstants
+struct CBBasePass
 {
 	XMFLOAT4X4	WorldViewProj;
 	XMFLOAT4X4	WorldViewProjPrev;
-	XMFLOAT3X4	Normal;
+	XMFLOAT3X4	WorldIT;
 	XMFLOAT2	ProjBias;
 };
 
@@ -98,12 +98,12 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	{
 		auto& cbBasePass = m_cbBasePass[i];
 		cbBasePass = ConstantBuffer::MakeUnique();
-		N_RETURN(cbBasePass->Create(m_device, sizeof(BasePassConstants[FrameCount]), FrameCount,
+		N_RETURN(cbBasePass->Create(m_device, sizeof(CBBasePass[FrameCount]), FrameCount,
 			nullptr, MemoryType::UPLOAD, (L"CBBasePass" + to_wstring(i)).c_str()), false);
 	}
 
 	m_cbRaytracing = ConstantBuffer::MakeUnique();
-	N_RETURN(m_cbRaytracing->Create(m_device, sizeof(GlobalConstants[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
+	N_RETURN(m_cbRaytracing->Create(m_device, sizeof(CBGlobal[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
 
 	// Load input image
 	{
@@ -209,9 +209,9 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 
 		{
 			static auto s_frameIndex = 0u;
-			const auto pCbData = reinterpret_cast<GlobalConstants*>(m_cbRaytracing->Map(frameIndex));
+			const auto pCbData = reinterpret_cast<CBGlobal*>(m_cbRaytracing->Map(frameIndex));
 			const auto n = 256u;
-			XMStoreFloat3x4(&pCbData->Normal, rot);
+			XMStoreFloat3x4(&pCbData->WorldIT, rot);
 			pCbData->FrameIndex = s_frameIndex++;
 			s_frameIndex %= n;
 		}
@@ -225,12 +225,12 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 
 		for (auto i = 0; i < NUM_MESH; ++i)
 		{
-			const auto pCbData = reinterpret_cast<BasePassConstants*>(m_cbBasePass[i]->Map(frameIndex));
+			const auto pCbData = reinterpret_cast<CBBasePass*>(m_cbBasePass[i]->Map(frameIndex));
 			pCbData->ProjBias = projBias;
 			pCbData->WorldViewProjPrev = m_worldViewProjs[i];
 			XMStoreFloat4x4(&m_worlds[i], XMMatrixTranspose(worlds[i]));
 			XMStoreFloat4x4(&pCbData->WorldViewProj, XMMatrixTranspose(worlds[i] * viewProj));
-			XMStoreFloat3x4(&pCbData->Normal, i ? rot : XMMatrixIdentity());
+			XMStoreFloat3x4(&pCbData->WorldIT, i ? rot : XMMatrixIdentity());
 			m_worldViewProjs[i] = pCbData->WorldViewProj;
 		}
 	}

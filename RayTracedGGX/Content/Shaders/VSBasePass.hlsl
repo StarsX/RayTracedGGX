@@ -27,7 +27,7 @@ cbuffer cbPerObject
 {
 	matrix	g_worldViewProj;
 	matrix	g_worldViewProjPrev;
-	float4x3 g_normal;
+	float3x3 g_worldIT;
 	float2	g_projBias;
 };
 
@@ -44,7 +44,7 @@ VSOut main(VSIn input)
 	output.CSPos = output.Pos;
 
 	output.Pos.xy += g_projBias * output.Pos.w;
-	output.Norm = mul(input.Nrm, (float3x3)g_normal);
+	output.Norm = mul(input.Nrm, g_worldIT);
 	output.UV = pos.xz * 0.5 + 0.5;
 
 	return output;

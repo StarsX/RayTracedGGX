@@ -27,7 +27,7 @@ struct RayPayload
 
 struct GlobalConstants
 {
-	float4x3 Normal;
+	float3x3 WorldIT;
 	uint	FrameIndex;
 };
 
@@ -407,7 +407,7 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 	const float roughness = getRoughness(instanceIdx, input.Pos.xz * 0.5 + 0.5);
 
 	// Trace a reflection ray.
-	const float3 N = normalize(instanceIdx ? mul(input.Nrm, (float3x3)g_cb.Normal) : input.Nrm);
+	const float3 N = normalize(instanceIdx ? mul(input.Nrm, g_cb.WorldIT) : input.Nrm);
 	payload = computeLighting(instanceIdx, roughness, N, -WorldRayDirection(), hitWorldPosition(), 1);
 }
 
