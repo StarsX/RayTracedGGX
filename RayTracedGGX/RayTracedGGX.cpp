@@ -205,7 +205,11 @@ void RayTracedGGX::LoadAssets()
 		WaitForGpu();
 	}
 
-	if (!m_semaphore) N_RETURN(m_device.Base->GetFence(m_semaphore, m_semaphoreValue, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
+	if (!m_semaphore.Fence)
+	{
+		N_RETURN(m_device.Base->GetFence(m_semaphore.Fence, m_semaphore.Value, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
+		m_semaphore.Fence->SetName(L"Semaphore");
+	}
 
 	// Projection
 	const auto aspectRatio = m_width / static_cast<float>(m_height);
@@ -251,9 +255,8 @@ void RayTracedGGX::OnRender()
 			const auto commandType = COMPUTE;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateUpdateASCommandList(commandType);
-			ThrowIfFailed(commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++));
-			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
-			ThrowIfFailed(commandQueue->Signal(m_semaphore.get(), m_semaphoreValue));
+			N_RETURN(commandQueue->SubmitCommandList(m_commandLists[commandType].get(), &m_semaphore, 1), ThrowIfFailed(E_FAIL)); // Execute the command lists.
+			ThrowIfFailed(commandQueue->Signal(m_semaphore.Fence.get(), ++m_semaphore.Value));
 		}
 
 		// Record all the commands we need to render the scene into the command list.
@@ -269,9 +272,8 @@ void RayTracedGGX::OnRender()
 			const auto commandType = UNIVERSAL;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateRayTraceCommandList(commandType);
-			ThrowIfFailed(commandQueue->Wait(m_semaphore.get(), m_semaphoreValue++));
-			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
-			ThrowIfFailed(commandQueue->Signal(m_semaphore.get(), m_semaphoreValue));
+			N_RETURN(commandQueue->SubmitCommandList(m_commandLists[commandType].get(), &m_semaphore, 1), ThrowIfFailed(E_FAIL)); // Execute the command lists.
+			ThrowIfFailed(commandQueue->Signal(m_semaphore.Fence.get(), ++m_semaphore.Value));
 		}
 
 		// Record all the commands we need to render the scene into the command list.

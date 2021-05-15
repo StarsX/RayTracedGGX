@@ -94,8 +94,7 @@ private:
 	XUSG::Fence	m_fence;
 	uint64_t	m_fenceValues[FrameCount];
 
-	XUSG::Fence	m_semaphore;
-	uint64_t	m_semaphoreValue;
+	XUSG::Semaphore m_semaphore;
 
 	// Application state
 	uint8_t		m_asyncCompute;
