@@ -40,8 +40,8 @@ struct RayGenConstants
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<GlobalConstants> g_cb;
-ConstantBuffer<RayGenConstants> l_rayGen : register (b1);
+ConstantBuffer<GlobalConstants> g_cb		: register (b0);
+ConstantBuffer<RayGenConstants> l_rayGen	: register (b1);
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
@@ -60,7 +60,7 @@ StructuredBuffer<Vertex>	g_vertexBuffers[]	: register (t0, space2);
 //--------------------------------------------------------------------------------------
 // Samplers
 //--------------------------------------------------------------------------------------
-SamplerState g_sampler;
+SamplerState g_sampler : register (s0);
 
 static const uint g_waveXSize = 8;
 
