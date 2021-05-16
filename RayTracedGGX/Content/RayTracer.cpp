@@ -210,7 +210,7 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 			static auto s_frameIndex = 0u;
 			const auto pCbData = reinterpret_cast<CBGlobal*>(m_cbRaytracing->Map(frameIndex));
 			const auto n = 256u;
-			XMStoreFloat3x4(reinterpret_cast<XMFLOAT3X4*>(&pCbData->WorldIT), rot);
+			XMStoreFloat3x4(reinterpret_cast<XMFLOAT3X4*>(pCbData), rot);
 			pCbData->FrameIndex = s_frameIndex++;
 			s_frameIndex %= n;
 		}
