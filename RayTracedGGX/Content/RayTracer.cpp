@@ -21,7 +21,7 @@ struct RayGenConstants
 
 struct CBGlobal
 {
-	XMFLOAT3X4	WorldIT;
+	float		WorldIT[11];
 	uint32_t	FrameIndex;
 };
 
@@ -40,7 +40,6 @@ const wchar_t* RayTracer::MissShaderName = L"missMain";
 
 RayTracer::RayTracer(const RayTracing::Device& device) :
 	m_device(device),
-	m_frameParity(0),
 	m_instances()
 {
 	m_shaderPool = ShaderPool::MakeUnique();
@@ -211,7 +210,7 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 			static auto s_frameIndex = 0u;
 			const auto pCbData = reinterpret_cast<CBGlobal*>(m_cbRaytracing->Map(frameIndex));
 			const auto n = 256u;
-			XMStoreFloat3x4(&pCbData->WorldIT, rot);
+			XMStoreFloat3x4(reinterpret_cast<XMFLOAT3X4*>(&pCbData->WorldIT), rot);
 			pCbData->FrameIndex = s_frameIndex++;
 			s_frameIndex %= n;
 		}
@@ -234,8 +233,6 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 			m_worldViewProjs[i] = pCbData->WorldViewProj;
 		}
 	}
-
-	m_frameParity = !m_frameParity;
 }
 
 void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)

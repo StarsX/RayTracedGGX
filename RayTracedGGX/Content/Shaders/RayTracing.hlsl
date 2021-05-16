@@ -40,13 +40,13 @@ struct RayGenConstants
 //--------------------------------------------------------------------------------------
 // Constant buffers
 //--------------------------------------------------------------------------------------
-ConstantBuffer<GlobalConstants> g_cb : register(b0);
-ConstantBuffer<RayGenConstants> l_cbRayGen : register (b1);
+ConstantBuffer<GlobalConstants> g_cb;
+ConstantBuffer<RayGenConstants> l_rayGen : register (b1);
 
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float3>			g_renderTarget	: register (u0);
+RWTexture2D<float3>			g_renderTarget;
 RaytracingAS				g_scene			: register (t0);
 Texture2D					g_txNormal		: register (t1);
 Texture2D<float>			g_txRoughness	: register (t2);
@@ -60,7 +60,7 @@ StructuredBuffer<Vertex>	g_vertexBuffers[]	: register (t0, space2);
 //--------------------------------------------------------------------------------------
 // Samplers
 //--------------------------------------------------------------------------------------
-SamplerState g_sampler : register (s0);
+SamplerState g_sampler;
 
 static const uint g_waveXSize = 8;
 
@@ -72,9 +72,7 @@ float3 dFdx(float3 f)
 	const float3 f0 = WaveReadLaneAt(f, lanePos.y * g_waveXSize + (quadPosX << 1));
 	const float3 f1 = WaveReadLaneAt(f, lanePos.y * g_waveXSize + (quadPosX << 1) + 1);
 
-	const float3 ddx = f1 - f0;
-
-	return abs(ddx) > 0.5 ? 0.0 : ddx;
+	return f1 - f0;
 }
 
 float3 dFdy(float3 f)
@@ -85,9 +83,7 @@ float3 dFdy(float3 f)
 	const float3 f0 = WaveReadLaneAt(f, (quadPosY << 1) * g_waveXSize + lanePos.x);
 	const float3 f1 = WaveReadLaneAt(f, ((quadPosY << 1) + 1) * g_waveXSize + lanePos.x);
 
-	const float3 ddy = f1 - f0;
-
-	return abs(ddy) > 0.5 ? 0.0 : ddy;
+	return f1 - f0;
 }
 
 //--------------------------------------------------------------------------------------
@@ -180,21 +176,21 @@ uint getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 	if (norm.w > 0.0)
 	{
 		// Unproject the pixel coordinate into a ray.
-		const float4 world = mul(float4(screenPos, depth, 1.0), l_cbRayGen.ProjToWorld);
+		const float4 world = mul(float4(screenPos, depth, 1.0), l_rayGen.ProjToWorld);
 
 		pos = world.xyz / world.w;
 		N = normalize(norm.xyz - 0.5);
-		V = normalize(l_cbRayGen.EyePt - pos);
+		V = normalize(l_rayGen.EyePt - pos);
 
 		return norm.w * 2.0 - 1.0;
 	}
 	else
 	{
 		// Unproject the pixel coordinate into a ray.
-		const float4 world = mul(float4(screenPos, 0.0, 1.0), l_cbRayGen.ProjToWorld);
+		const float4 world = mul(float4(screenPos, 0.0, 1.0), l_rayGen.ProjToWorld);
 
 		pos = world.xyz / world.w;
-		V = normalize(l_cbRayGen.EyePt - pos);
+		V = normalize(l_rayGen.EyePt - pos);
 
 		return 0xffffffff;
 	}

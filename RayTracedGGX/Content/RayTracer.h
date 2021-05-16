@@ -98,7 +98,6 @@ protected:
 	XUSG::RayTracing::Device m_device;
 
 	uint32_t			m_numIndices[NUM_MESH];
-	uint8_t				m_frameParity;
 
 	DirectX::XMUINT2	m_viewport;
 	DirectX::XMFLOAT4	m_posScale;
