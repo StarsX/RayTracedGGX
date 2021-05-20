@@ -10,11 +10,11 @@
 class Denoiser
 {
 public:
-	Denoiser(const XUSG::Device& device);
+	Denoiser(const XUSG::Device::sptr& device);
 	virtual ~Denoiser();
 
 	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height,
-		std::vector<XUSG::Resource>& uploaders, XUSG::Format rtFormat,
+		std::vector<XUSG::Resource::sptr>& uploaders, XUSG::Format rtFormat,
 		const XUSG::Texture2D::sptr& rtOut, const XUSG::RenderTarget::uptr* pGbuffers,
 		const XUSG::DepthStencil::sptr& depth);
 	void Denoise(const XUSG::CommandList* pCommandList, bool sharedMemVariance = false);
@@ -103,7 +103,7 @@ protected:
 	void varianceSharedMem(const XUSG::CommandList* pCommandList);
 	void temporalSS(const XUSG::CommandList* pCommandList);
 
-	XUSG::Device m_device;
+	XUSG::Device::sptr m_device;
 
 	uint8_t						m_frameParity;
 	DirectX::XMUINT2			m_viewport;

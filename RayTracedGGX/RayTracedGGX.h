@@ -70,13 +70,13 @@ private:
 	XUSG::Viewport			m_viewport;
 	XUSG::RectRange			m_scissorRect;
 
-	XUSG::SwapChain			m_swapChain;
-	XUSG::CommandAllocator	m_commandAllocators[COMMAND_ALLOCATOR_COUNT][FrameCount];
-	XUSG::CommandQueue		m_commandQueues[COMMAND_TYPE_COUNT];
+	XUSG::SwapChain::uptr			m_swapChain;
+	XUSG::CommandAllocator::uptr	m_commandAllocators[COMMAND_ALLOCATOR_COUNT][FrameCount];
+	XUSG::CommandQueue::uptr		m_commandQueues[COMMAND_TYPE_COUNT];
 
 	bool m_isDxrSupported;
 
-	XUSG::RayTracing::Device m_device;
+	XUSG::RayTracing::Device::sptr m_device;
 	XUSG::RenderTarget::uptr m_renderTargets[FrameCount];
 	XUSG::RayTracing::CommandList::uptr m_commandLists[COMMAND_TYPE_COUNT];
 
@@ -91,7 +91,7 @@ private:
 	// Synchronization objects.
 	uint8_t		m_frameIndex;
 	HANDLE		m_fenceEvent;
-	XUSG::Fence	m_fence;
+	XUSG::Fence::uptr m_fence;
 	uint64_t	m_fenceValues[FrameCount];
 
 	XUSG::Semaphore m_semaphore;
@@ -123,6 +123,5 @@ private:
 	double CalculateFrameStats(float* fTimeStep = nullptr);
 
 	// Ray tracing
-	void EnableDirectXRaytracing(IDXGIAdapter1* adapter);
-	void CreateRaytracingInterfaces();
+	void EnableDirectXRaytracing(IDXGIAdapter1* adapter);;
 };

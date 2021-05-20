@@ -38,16 +38,16 @@ const wchar_t* RayTracer::RaygenShaderName = L"raygenMain";
 const wchar_t* RayTracer::ClosestHitShaderName = L"closestHitMain";
 const wchar_t* RayTracer::MissShaderName = L"missMain";
 
-RayTracer::RayTracer(const RayTracing::Device& device) :
+RayTracer::RayTracer(const RayTracing::Device::sptr& device) :
 	m_device(device),
 	m_instances()
 {
 	m_shaderPool = ShaderPool::MakeUnique();
-	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(device);
-	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device);
-	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device);
-	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device);
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(m_device, L"RayTracerDescriptorTableCache");
+	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(device.get());
+	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device.get());
+	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device.get());
+	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device.get());
+	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device.get(), L"RayTracerDescriptorTableCache");
 
 	AccelerationStructure::SetUAVCount(NUM_MESH + 1);
 }
@@ -57,7 +57,7 @@ RayTracer::~RayTracer()
 }
 
 bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
-	vector<Resource>& uploaders, Geometry* geometries, const char* fileName,
+	vector<Resource::sptr>& uploaders, Geometry* geometries, const char* fileName,
 	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale,
 	uint8_t maxGBufferMips)
 {
@@ -74,22 +74,22 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 
 	// Create output views
 	m_outputView = Texture2D::MakeShared();
-	N_RETURN(m_outputView->Create(m_device, width, height, Format::R11G11B10_FLOAT, 1,
+	N_RETURN(m_outputView->Create(m_device.get(), width, height, Format::R11G11B10_FLOAT, 1,
 		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"RayTracingOut"), false);
 
 	uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
 	mipCount = (min)(mipCount, maxGBufferMips);
 	const auto resourceFlags = mipCount > 1 ? ResourceFlag::ALLOW_UNORDERED_ACCESS : ResourceFlag::NONE;
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
-	N_RETURN(m_gbuffers[NORMAL]->Create(m_device, width, height, Format::R10G10B10A2_UNORM,
+	N_RETURN(m_gbuffers[NORMAL]->Create(m_device.get(), width, height, Format::R10G10B10A2_UNORM,
 		1, resourceFlags, mipCount, 1, nullptr, false, L"Normal"), false);
-	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device, width, height, Format::R8_UNORM,
+	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device.get(), width, height, Format::R8_UNORM,
 		1, resourceFlags, mipCount, 1, nullptr, false, L"Roughness"), false);
-	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device, width, height, Format::R16G16_FLOAT,
+	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device.get(), width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
 
 	m_depth = DepthStencil::MakeShared();
-	N_RETURN(m_depth->Create(m_device, width, height, Format::D24_UNORM_S8_UINT,
+	N_RETURN(m_depth->Create(m_device.get(), width, height, Format::D24_UNORM_S8_UINT,
 		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth"), false);
 
 	// Constant buffers
@@ -97,12 +97,12 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	{
 		auto& cbBasePass = m_cbBasePass[i];
 		cbBasePass = ConstantBuffer::MakeUnique();
-		N_RETURN(cbBasePass->Create(m_device, sizeof(CBBasePass[FrameCount]), FrameCount,
+		N_RETURN(cbBasePass->Create(m_device.get(), sizeof(CBBasePass[FrameCount]), FrameCount,
 			nullptr, MemoryType::UPLOAD, (L"CBBasePass" + to_wstring(i)).c_str()), false);
 	}
 
 	m_cbRaytracing = ConstantBuffer::MakeUnique();
-	N_RETURN(m_cbRaytracing->Create(m_device, sizeof(CBGlobal[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
+	N_RETURN(m_cbRaytracing->Create(m_device.get(), sizeof(CBGlobal[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
 
 	// Load input image
 	{
@@ -110,7 +110,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		DDS::AlphaMode alphaMode;
 
 		uploaders.push_back(nullptr);
-		N_RETURN(textureLoader.CreateTextureFromFile(m_device, pCommandList, envFileName,
+		N_RETURN(textureLoader.CreateTextureFromFile(m_device.get(), static_cast<XUSG::CommandList*>(pCommandList), envFileName,
 			8192, false, m_lightProbe, uploaders.back(), &alphaMode), false);
 	}
 
@@ -197,8 +197,8 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 		RayGenConstants cbRayGen = { XMMatrixTranspose(projToWorld), eyePt };
 
 		m_rayGenShaderTables[frameIndex]->Reset();
-		m_rayGenShaderTables[frameIndex]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-			m_rayTracingPipeline, RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)));
+		m_rayGenShaderTables[frameIndex]->AddShaderRecord(ShaderRecord::MakeUnique(m_device.get(),
+			m_pipelines[RAY_TRACING], RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)).get());
 	}
 
 	{
@@ -270,11 +270,11 @@ void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCom
 	};
 	const BottomLevelAS* pBottomLevelASs[NUM_MESH];
 	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASs[i].get();
-	TopLevelAS::SetInstances(m_device, m_instances[frameIndex], NUM_MESH, pBottomLevelASs, transforms);
+	TopLevelAS::SetInstances(m_device.get(), m_instances[frameIndex].get(), NUM_MESH, pBottomLevelASs, transforms);
 
 	// Update top level AS
 	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	m_topLevelAS->Build(pCommandList, m_scratch, m_instances[frameIndex], descriptorPool, true);
+	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorPool, true);
 }
 
 void RayTracer::RenderGeometry(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
@@ -329,11 +329,11 @@ const DepthStencil::sptr RayTracer::GetDepth() const
 }
 
 bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert,
-	uint32_t stride, const uint8_t* pData, vector<Resource>& uploaders)
+	uint32_t stride, const uint8_t* pData, vector<Resource::sptr>& uploaders)
 {
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	vertexBuffer = VertexBuffer::MakeUnique();
-	N_RETURN(vertexBuffer->Create(m_device, numVert, stride,
+	N_RETURN(vertexBuffer->Create(m_device.get(), numVert, stride,
 		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
 		nullptr, 1, nullptr, L"MeshVB"), false);
 	uploaders.push_back(nullptr);
@@ -343,14 +343,14 @@ bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert
 }
 
 bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndices,
-	const uint32_t* pData, vector<Resource>& uploaders)
+	const uint32_t* pData, vector<Resource::sptr>& uploaders)
 {
 	m_numIndices[MODEL_OBJ] = numIndices;
 
 	auto& indexBuffers = m_indexBuffers[MODEL_OBJ];
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	indexBuffers = IndexBuffer::MakeUnique();
-	N_RETURN(indexBuffers->Create(m_device, byteWidth, Format::R32_UINT, ResourceFlag::NONE,
+	N_RETURN(indexBuffers->Create(m_device.get(), byteWidth, Format::R32_UINT, ResourceFlag::NONE,
 		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
 	uploaders.push_back(nullptr);
 
@@ -358,7 +358,7 @@ bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndi
 		byteWidth, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
-bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<Resource>& uploaders)
+bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<Resource::sptr>& uploaders)
 {
 	// Vertex buffer
 	{
@@ -398,7 +398,7 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		vertexBuffer = VertexBuffer::MakeUnique();
-		N_RETURN(vertexBuffer->Create(m_device, static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
+		N_RETURN(vertexBuffer->Create(m_device.get(), static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
 			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
 		uploaders.push_back(nullptr);
 
@@ -434,7 +434,7 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 
 		auto& indexBuffers = m_indexBuffers[GROUND];
 		indexBuffers = IndexBuffer::MakeUnique();
-		N_RETURN(indexBuffers->Create(m_device, sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
+		N_RETURN(indexBuffers->Create(m_device.get(), sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
 			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
 		uploaders.push_back(nullptr);
 
@@ -466,7 +466,7 @@ bool RayTracer::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::VS);
 		pipelineLayout->SetConstants(1, SizeOfInUint32(uint32_t), 0, 0, Shader::Stage::PS);
-		X_RETURN(m_pipelineLayouts[GBUFFER_PASS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+		X_RETURN(m_pipelineLayouts[GBUFFER_PASS_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout"), false);
 	}
 
@@ -481,8 +481,8 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		pipelineLayout->SetRootCBV(CONSTANTS, 0);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 4, 1);
-		X_RETURN(m_pipelineLayouts[GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
-			m_device, *m_pipelineLayoutCache, PipelineLayoutFlag::NONE,
+		X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
+			m_device.get(), m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
 			L"RayTracerGlobalPipelineLayout"), false);
 	}
 
@@ -492,7 +492,7 @@ bool RayTracer::createPipelineLayouts()
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
 		pipelineLayout->SetConstants(0, SizeOfInUint32(RayGenConstants), 1);
 		X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout->GetPipelineLayout(
-			m_device, *m_pipelineLayoutCache, PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
+			m_device.get(), m_pipelineLayoutCache.get(), PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
 			L"RayTracerRayGenPipelineLayout"), false);
 	}
 
@@ -521,7 +521,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 		state->OMSetRTVFormat(1, Format::R8_UNORM);
 		state->OMSetRTVFormat(2, Format::R16G16_FLOAT);
 		state->OMSetDSVFormat(Format::D24_UNORM_S8_UINT);
-		X_RETURN(m_pipeline, state->GetPipeline(*m_graphicsPipelineCache, L"GBufferPass"), false);
+		X_RETURN(m_pipelines[GBUFFER_PASS], state->GetPipeline(m_graphicsPipelineCache.get(), L"GBufferPass"), false);
 	}
 
 	// Ray tracing pass
@@ -534,9 +534,9 @@ bool RayTracer::createPipelines(Format rtFormat)
 		state->SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
 		state->SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
-		state->SetGlobalPipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
+		state->SetGlobalPipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 		state->SetMaxRecursionDepth(1);
-		X_RETURN(m_rayTracingPipeline, state->GetPipeline(*m_rayTracingPipelineCache, L"Raytracing"), false);
+		X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(*m_rayTracingPipelineCache, L"Raytracing"), false);
 	}
 
 	return true;
@@ -553,7 +553,7 @@ bool RayTracer::createDescriptorTables()
 		descriptors[NUM_MESH] = m_topLevelAS->GetResult()->GetUAV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		const auto asTable = descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache);
+		const auto asTable = descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get());
 		N_RETURN(asTable, false);
 	}
 
@@ -561,7 +561,7 @@ bool RayTracer::createDescriptorTables()
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_outputView->GetUAV());
-		X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Index buffer SRVs
@@ -570,7 +570,7 @@ bool RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_indexBuffers[i]->GetSRV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Vertex buffer SRVs
@@ -579,7 +579,7 @@ bool RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i]->GetSRV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// G-buffer SRVs
@@ -593,7 +593,7 @@ bool RayTracer::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_GB], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_GB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// RTV table
@@ -606,15 +606,15 @@ bool RayTracer::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		m_framebuffer = descriptorTable->GetFramebuffer(*m_descriptorTableCache, & m_depth->GetDSV());
+		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableCache.get(), & m_depth->GetDSV());
 	}
 
 	// Create the sampler
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		const auto samplerAnisoWrap = SamplerPreset::ANISOTROPIC_WRAP;
-		descriptorTable->SetSamplers(0, 1, &samplerAnisoWrap, *m_descriptorTableCache);
-		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(*m_descriptorTableCache), false);
+		descriptorTable->SetSamplers(0, 1, &samplerAnisoWrap, m_descriptorTableCache.get());
+		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(m_descriptorTableCache.get()), false);
 	}
 
 	return true;
@@ -641,17 +641,18 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 	for (auto i = 0; i < NUM_MESH; ++i)
 	{
 		m_bottomLevelASs[i] = BottomLevelAS::MakeUnique();
-		N_RETURN(m_bottomLevelASs[i]->PreBuild(m_device, 1, &geometries[i], bottomLevelASIndex + i), false);
+		N_RETURN(m_bottomLevelASs[i]->PreBuild(m_device.get(), 1, &geometries[i], bottomLevelASIndex + i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
-	N_RETURN(m_topLevelAS->PreBuild(m_device, NUM_MESH, topLevelASIndex,
+	N_RETURN(m_topLevelAS->PreBuild(m_device.get(), NUM_MESH, topLevelASIndex,
 		BuildFlags::ALLOW_UPDATE | BuildFlags::PREFER_FAST_TRACE), false);
 
 	// Create scratch buffer
 	auto scratchSize = m_topLevelAS->GetScratchDataMaxSize();
 	for (const auto& bottomLevelAS : m_bottomLevelASs)
 		scratchSize = (max)(bottomLevelAS->GetScratchDataMaxSize(), scratchSize);
-	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device, m_scratch, scratchSize), false);
+	m_scratch = Resource::MakeUnique();
+	N_RETURN(AccelerationStructure::AllocateUAVBuffer(m_device.get(), m_scratch.get(), scratchSize), false);
 
 	// Get descriptor pool and create descriptor tables
 	N_RETURN(createDescriptorTables(), false);
@@ -667,17 +668,18 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 		reinterpret_cast<float*>(&matrices[GROUND]),
 		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
 	};
+	for (auto& instances : m_instances) instances = Resource::MakeUnique();
 	auto& instances = m_instances[FrameCount - 1];
 	const BottomLevelAS* ppBottomLevelASs[NUM_MESH];
 	for (auto i = 0u; i < NUM_MESH; ++i) ppBottomLevelASs[i] = m_bottomLevelASs[i].get();
-	TopLevelAS::SetInstances(m_device, instances, NUM_MESH, ppBottomLevelASs, transforms);
+	TopLevelAS::SetInstances(m_device.get(), instances.get(), NUM_MESH, ppBottomLevelASs, transforms);
 
 	// Build bottom level ASs
 	for (auto& bottomLevelAS : m_bottomLevelASs)
-		bottomLevelAS->Build(pCommandList, m_scratch, descriptorPool);
+		bottomLevelAS->Build(pCommandList, m_scratch.get(), descriptorPool);
 
 	// Build top level AS
-	m_topLevelAS->Build(pCommandList, m_scratch, instances, descriptorPool);
+	m_topLevelAS->Build(pCommandList, m_scratch.get(), instances.get(), descriptorPool);
 
 	return true;
 }
@@ -685,30 +687,30 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 bool RayTracer::buildShaderTables()
 {
 	// Get shader identifiers.
-	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device);
+	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(m_device.get());
 	const auto cbRayGen = RayGenConstants();
 
 	for (uint8_t i = 0; i < FrameCount; ++i)
 	{
 		// Ray gen shader table
 		m_rayGenShaderTables[i] = ShaderTable::MakeUnique();
-		N_RETURN(m_rayGenShaderTables[i]->Create(m_device, 1, shaderIDSize + sizeof(RayGenConstants),
+		N_RETURN(m_rayGenShaderTables[i]->Create(m_device.get(), 1, shaderIDSize + sizeof(RayGenConstants),
 			(L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
-		N_RETURN(m_rayGenShaderTables[i]->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-			m_rayTracingPipeline, RaygenShaderName, &cbRayGen, sizeof(RayGenConstants))), false);
+		N_RETURN(m_rayGenShaderTables[i]->AddShaderRecord(ShaderRecord::MakeUnique(m_device.get(),
+			m_pipelines[RAY_TRACING], RaygenShaderName, &cbRayGen, sizeof(RayGenConstants)).get()), false);
 	}
 
 	// Hit group shader table
 	m_hitGroupShaderTable = ShaderTable::MakeUnique();
-	N_RETURN(m_hitGroupShaderTable->Create(m_device, 1, shaderIDSize, L"HitGroupShaderTable"), false);
-	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-		m_rayTracingPipeline, HitGroupName)), false);
+	N_RETURN(m_hitGroupShaderTable->Create(m_device.get(), 1, shaderIDSize, L"HitGroupShaderTable"), false);
+	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(m_device.get(),
+		m_pipelines[RAY_TRACING], HitGroupName).get()), false);
 
 	// Miss shader table
 	m_missShaderTable = ShaderTable::MakeUnique();
-	N_RETURN(m_missShaderTable->Create(m_device, 1, shaderIDSize, L"MissShaderTable"), false);
-	N_RETURN(m_missShaderTable->AddShaderRecord(*ShaderRecord::MakeUnique(m_device,
-		m_rayTracingPipeline, MissShaderName)), false);
+	N_RETURN(m_missShaderTable->Create(m_device.get(), 1, shaderIDSize, L"MissShaderTable"), false);
+	N_RETURN(m_missShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(m_device.get(),
+		m_pipelines[RAY_TRACING], MissShaderName).get()), false);
 
 	return true;
 }
@@ -733,7 +735,7 @@ void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frame
 
 	// Set pipeline state
 	pCommandList->SetGraphicsPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);
-	pCommandList->SetPipelineState(m_pipeline);
+	pCommandList->SetPipelineState(m_pipelines[GBUFFER_PASS]);
 
 	// Set viewport
 	Viewport viewport(0.0f, 0.0f, static_cast<float>(m_viewport.x), static_cast<float>(m_viewport.y));
@@ -746,7 +748,7 @@ void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frame
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		// Set descriptor tables
-		pCommandList->SetGraphicsRootConstantBufferView(0, m_cbBasePass[i]->GetResource(), m_cbBasePass[i]->GetCBVOffset(frameIndex));
+		pCommandList->SetGraphicsRootConstantBufferView(0, m_cbBasePass[i].get(), m_cbBasePass[i]->GetCBVOffset(frameIndex));
 		pCommandList->SetGraphics32BitConstant(1, i);
 
 		pCommandList->IASetVertexBuffers(0, 1, &m_vertexBuffers[i]->GetVBV());
@@ -759,16 +761,16 @@ void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frame
 void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Bind the acceleration structure and dispatch rays.
-	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[GLOBAL_LAYOUT]);
+	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTable);
-	pCommandList->SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, *m_topLevelAS);
+	pCommandList->SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, m_topLevelAS.get());
 	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	pCommandList->SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	pCommandList->SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
-	pCommandList->SetComputeRootConstantBufferView(CONSTANTS, m_cbRaytracing->GetResource(), m_cbRaytracing->GetCBVOffset(frameIndex));
+	pCommandList->SetComputeRootConstantBufferView(CONSTANTS, m_cbRaytracing.get(), m_cbRaytracing->GetCBVOffset(frameIndex));
 	pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
 	// Fallback layer has no depth
-	pCommandList->DispatchRays(m_rayTracingPipeline, m_viewport.x, m_viewport.y, 1,
-		*m_hitGroupShaderTable, *m_missShaderTable, *m_rayGenShaderTables[frameIndex]);
+	pCommandList->DispatchRays(m_pipelines[RAY_TRACING], m_viewport.x, m_viewport.y, 1,
+		m_hitGroupShaderTable.get(), m_missShaderTable.get(), m_rayGenShaderTables[frameIndex].get());
 }

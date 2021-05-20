@@ -8,23 +8,24 @@ using namespace std;
 using namespace DirectX;
 using namespace XUSG;
 
-Denoiser::Denoiser(const Device& device) :
+Denoiser::Denoiser(const Device::sptr& device) :
 	m_device(device),
 	m_frameParity(0)
 {
 	m_shaderPool = ShaderPool::MakeUnique();
-	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device);
-	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device);
-	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device);
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(m_device, L"DenoiserDescriptorTableCache");
+	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device.get());
+	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device.get());
+	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device.get());
+	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device.get(), L"DenoiserDescriptorTableCache");
 }
 
 Denoiser::~Denoiser()
 {
 }
 
-bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, vector<Resource>& uploaders,
-	Format rtFormat, const Texture2D::sptr& rayTracingOut, const RenderTarget::uptr* pGbuffers, const DepthStencil::sptr& depth)
+bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height,
+	vector<Resource::sptr>& uploaders, Format rtFormat, const Texture2D::sptr& rayTracingOut,
+	const RenderTarget::uptr* pGbuffers, const DepthStencil::sptr& depth)
 {
 	m_viewport = XMUINT2(width, height);
 	m_rayTracingOut = rayTracingOut;
@@ -40,11 +41,11 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 		L"TemporalSSOut1"
 	};
 	for (auto& outputView : m_outputViews) outputView = Texture2D::MakeUnique();
-	N_RETURN(m_outputViews[UAV_AVG_H]->Create(m_device, width, height,
+	N_RETURN(m_outputViews[UAV_AVG_H]->Create(m_device.get(), width, height,
 		Format::R11G11B10_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 		1, 1, MemoryType::DEFAULT, false, namesUAV[UAV_AVG_H]), false);
 	for (uint8_t i = 1; i < NUM_UAV; ++i)
-		N_RETURN(m_outputViews[i]->Create(m_device, width, height,
+		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 			1, 1, MemoryType::DEFAULT, false, namesUAV[i]), false);
 
@@ -110,7 +111,7 @@ bool Denoiser::createPipelineLayouts()
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1);
-		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"VarianceHPipelineLayout"), false);
 	}
 
@@ -120,7 +121,7 @@ bool Denoiser::createPipelineLayouts()
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3);
-		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"VarianceVPipelineLayout"), false);
 	}
 
@@ -130,7 +131,7 @@ bool Denoiser::createPipelineLayouts()
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
-		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+		X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"TemporalSSPipelineLayout"), false);
 	}
 
@@ -139,7 +140,7 @@ bool Denoiser::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(0, DescriptorType::SRV, 1, 0);
 		pipelineLayout->SetShaderStage(0, Shader::Stage::PS);
-		X_RETURN(m_pipelineLayouts[TONE_MAP_LAYOUT], pipelineLayout->GetPipelineLayout(*m_pipelineLayoutCache,
+		X_RETURN(m_pipelineLayouts[TONE_MAP_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"ToneMappingPipelineLayout"), false);
 	}
 
@@ -158,7 +159,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H], state->GetPipeline(*m_computePipelineCache, L"VarianceHPass"), false);
+		X_RETURN(m_pipelines[VARIANCE_H], state->GetPipeline(m_computePipelineCache.get(), L"VarianceHPass"), false);
 	}
 
 	{
@@ -167,7 +168,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V], state->GetPipeline(*m_computePipelineCache, L"VarianceVPass"), false);
+		X_RETURN(m_pipelines[VARIANCE_V], state->GetPipeline(m_computePipelineCache.get(), L"VarianceVPass"), false);
 	}
 
 	{
@@ -176,7 +177,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H_S], state->GetPipeline(*m_computePipelineCache, L"VarianceHSharedMem"), false);
+		X_RETURN(m_pipelines[VARIANCE_H_S], state->GetPipeline(m_computePipelineCache.get(), L"VarianceHSharedMem"), false);
 	}
 
 	{
@@ -185,7 +186,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V_S], state->GetPipeline(*m_computePipelineCache, L"VarianceVSharedMem"), false);
+		X_RETURN(m_pipelines[VARIANCE_V_S], state->GetPipeline(m_computePipelineCache.get(), L"VarianceVSharedMem"), false);
 	}
 
 	{
@@ -194,7 +195,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		const auto state = Compute::State::MakeUnique();
 		state->SetPipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[TEMPORAL_SS], state->GetPipeline(*m_computePipelineCache, L"TemporalSS"), false);
+		X_RETURN(m_pipelines[TEMPORAL_SS], state->GetPipeline(m_computePipelineCache.get(), L"TemporalSS"), false);
 	}
 
 	{
@@ -205,11 +206,11 @@ bool Denoiser::createPipelines(Format rtFormat)
 		state->SetPipelineLayout(m_pipelineLayouts[TONE_MAP_LAYOUT]);
 		state->SetShader(Shader::Stage::VS, m_shaderPool->GetShader(Shader::Stage::VS, vsIndex++));
 		state->SetShader(Shader::Stage::PS, m_shaderPool->GetShader(Shader::Stage::PS, psIndex++));
-		state->DSSetState(Graphics::DEPTH_STENCIL_NONE, *m_graphicsPipelineCache);
+		state->DSSetState(Graphics::DEPTH_STENCIL_NONE, m_graphicsPipelineCache.get());
 		state->IASetPrimitiveTopologyType(PrimitiveTopologyType::TRIANGLE);
 		state->OMSetNumRenderTargets(1);
 		state->OMSetRTVFormat(0, rtFormat);
-		X_RETURN(m_pipelines[TONE_MAP], state->GetPipeline(*m_graphicsPipelineCache, L"ToneMapping"), false);
+		X_RETURN(m_pipelines[TONE_MAP], state->GetPipeline(m_graphicsPipelineCache.get(), L"ToneMapping"), false);
 	}
 
 	return true;
@@ -227,12 +228,12 @@ bool Denoiser::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_uavTables[UAV_TABLE_VAR_H + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_uavTables[UAV_TABLE_VAR_H + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_FLT]->GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_FLT], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_uavTables[UAV_TABLE_FLT], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Temporal SS output UAVs
@@ -240,7 +241,7 @@ bool Denoiser::createDescriptorTables()
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_uavTables[UAV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// G-buffer SRVs
@@ -253,7 +254,7 @@ bool Denoiser::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_GB], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_GB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Spatial variance input SRVs
@@ -267,7 +268,7 @@ bool Denoiser::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_VAR + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_VAR + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Temporal SS input SRVs
@@ -281,7 +282,7 @@ bool Denoiser::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Tone mapping SRVs
@@ -289,15 +290,15 @@ bool Denoiser::createDescriptorTables()
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetSRV());
-		X_RETURN(m_srvTables[SRV_TABLE_TM + i], descriptorTable->GetCbvSrvUavTable(*m_descriptorTableCache), false);
+		X_RETURN(m_srvTables[SRV_TABLE_TM + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Create the sampler
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		const auto samplerLinearClamp = SamplerPreset::LINEAR_CLAMP;
-		descriptorTable->SetSamplers(0, 1, &samplerLinearClamp, *m_descriptorTableCache);
-		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(*m_descriptorTableCache), false);
+		descriptorTable->SetSamplers(0, 1, &samplerLinearClamp, m_descriptorTableCache.get());
+		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(m_descriptorTableCache.get()), false);
 	}
 
 	return true;

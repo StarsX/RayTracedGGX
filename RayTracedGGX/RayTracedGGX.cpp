@@ -84,12 +84,16 @@ void RayTracedGGX::LoadPipeline()
 	DXGI_ADAPTER_DESC1 dxgiAdapterDesc;
 	com_ptr<IDXGIAdapter1> dxgiAdapter;
 	auto hr = DXGI_ERROR_UNSUPPORTED;
+	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
 	for (auto i = 0u; hr == DXGI_ERROR_UNSUPPORTED; ++i)
 	{
 		dxgiAdapter = nullptr;
 		ThrowIfFailed(factory->EnumAdapters1(i, &dxgiAdapter));
 		EnableDirectXRaytracing(dxgiAdapter.get());
-		hr = D3D12CreateDevice(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&m_device.Base));
+		
+		m_device = RayTracing::Device::MakeShared();
+		hr = m_device->Create(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0);
+		N_RETURN(m_device->CreateInterface(createDeviceFlags), ThrowIfFailed(E_FAIL));
 	}
 
 	dxgiAdapter->GetDesc1(&dxgiAdapterDesc);
@@ -98,33 +102,24 @@ void RayTracedGGX::LoadPipeline()
 	ThrowIfFailed(hr);
 
 	// Create the command queue.
-	N_RETURN(m_device.Base->GetCommandQueue(m_commandQueues[UNIVERSAL], CommandListType::DIRECT, CommandQueueFlag::NONE), ThrowIfFailed(E_FAIL));
-	N_RETURN(m_device.Base->GetCommandQueue(m_commandQueues[COMPUTE], CommandListType::COMPUTE, CommandQueueFlag::NONE), ThrowIfFailed(E_FAIL));
+	const wchar_t* commandQueueNames[] = { L"UniversalQueue", L"ComputeQueue" };
+	CommandListType commandListTypes[] = { CommandListType::DIRECT, CommandListType::COMPUTE };
+	for (uint8_t n = 0; n < COMMAND_TYPE_COUNT; ++n)
+	{
+		auto& commandQueue = m_commandQueues[n];
+		commandQueue = CommandQueue::MakeUnique();
+		N_RETURN(commandQueue->Create(m_device.get(), commandListTypes[n], CommandQueueFlag::NONE,
+			0, 0, commandQueueNames[n]), ThrowIfFailed(E_FAIL));
+	}
 
 	// Describe and create the swap chain.
-	DXGI_SWAP_CHAIN_DESC1 swapChainDesc = {};
-	swapChainDesc.BufferCount = FrameCount;
-	swapChainDesc.Width = m_width;
-	swapChainDesc.Height = m_height;
-	swapChainDesc.Format = GetDXGIFormat(Format::R8G8B8A8_UNORM);
-	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
-	swapChainDesc.SampleDesc.Count = 1;
-
-	ComPtr<IDXGISwapChain1> swapChain;
-	ThrowIfFailed(factory->CreateSwapChainForHwnd(
-		m_commandQueues[UNIVERSAL].get(),		// Swap chain needs the queue so that it can force a flush on it.
-		Win32Application::GetHwnd(),
-		&swapChainDesc,
-		nullptr,
-		nullptr,
-		&swapChain
-	));
+	m_swapChain = SwapChain::MakeUnique();
+	N_RETURN(m_swapChain->Create(factory.get(), Win32Application::GetHwnd(), m_commandQueues[UNIVERSAL].get(),
+		FrameCount, m_width, m_height, Format::R8G8B8A8_UNORM), ThrowIfFailed(E_FAIL));
 
 	// This sample does not support fullscreen transitions.
 	ThrowIfFailed(factory->MakeWindowAssociation(Win32Application::GetHwnd(), DXGI_MWA_NO_ALT_ENTER));
 
-	ThrowIfFailed(swapChain->QueryInterface(IID_PPV_ARGS(&m_swapChain)));
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
 
 	// Create frame resources.
@@ -132,17 +127,18 @@ void RayTracedGGX::LoadPipeline()
 	for (uint8_t n = 0; n < FrameCount; ++n)
 	{
 		m_renderTargets[n] = RenderTarget::MakeUnique();
-		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device, m_swapChain, n), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_UPDATE_AS][n], CommandListType::COMPUTE), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_GEOMETRY][n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_RAY_TRACE][n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_COMPUTE][n], CommandListType::COMPUTE), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_device.Base->GetCommandAllocator(m_commandAllocators[ALLOCATOR_IMAGE][n], CommandListType::DIRECT), ThrowIfFailed(E_FAIL));
-		m_commandAllocators[ALLOCATOR_UPDATE_AS][n]->SetName((L"UpdateASAllocator" + to_wstring(n)).c_str());
-		m_commandAllocators[ALLOCATOR_GEOMETRY][n]->SetName((L"GeometryAllocator" + to_wstring(n)).c_str());
-		m_commandAllocators[ALLOCATOR_RAY_TRACE][n]->SetName((L"RayTracingAllocator" + to_wstring(n)).c_str());
-		m_commandAllocators[ALLOCATOR_COMPUTE][n]->SetName((L"ComputeAllocator" + to_wstring(n)).c_str());
-		m_commandAllocators[ALLOCATOR_IMAGE][n]->SetName((L"ImageAllocator" + to_wstring(n)).c_str());
+		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.get(), m_swapChain.get(), n), ThrowIfFailed(E_FAIL));
+		for (uint8_t i = 0; i < COMMAND_ALLOCATOR_COUNT; ++i) m_commandAllocators[i][n] = CommandAllocator::MakeUnique();
+		N_RETURN(m_commandAllocators[ALLOCATOR_UPDATE_AS][n]->Create(m_device.get(), CommandListType::COMPUTE,
+			(L"UpdateASAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_commandAllocators[ALLOCATOR_GEOMETRY][n]->Create(m_device.get(), CommandListType::DIRECT,
+			(L"GeometryAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_commandAllocators[ALLOCATOR_RAY_TRACE][n]->Create(m_device.get(), CommandListType::DIRECT,
+			(L"RayTracingAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_commandAllocators[ALLOCATOR_COMPUTE][n]->Create(m_device.get(), CommandListType::COMPUTE,
+			(L"ComputeAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
+		N_RETURN(m_commandAllocators[ALLOCATOR_IMAGE][n]->Create(m_device.get(), CommandListType::DIRECT,
+			(L"ImageAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
 	}
 }
 
@@ -151,23 +147,24 @@ void RayTracedGGX::LoadAssets()
 {
 	// Create the command lists.
 	m_commandLists[UNIVERSAL] = RayTracing::CommandList::MakeUnique();
-	const auto pCommandList = m_commandLists[UNIVERSAL].get();
-	N_RETURN(m_device.Base->GetCommandList(pCommandList, 0, CommandListType::DIRECT,
-		m_commandAllocators[ALLOCATOR_GEOMETRY][m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
+	const auto& pCommandList = m_commandLists[UNIVERSAL].get();
+	N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::DIRECT,
+		m_commandAllocators[ALLOCATOR_GEOMETRY][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
 
 	{
 		m_commandLists[COMPUTE] = RayTracing::CommandList::MakeUnique();
-		const auto pCommandList = m_commandLists[COMPUTE].get();
-		N_RETURN(m_device.Base->GetCommandList(pCommandList, 0, CommandListType::COMPUTE,
-			m_commandAllocators[ALLOCATOR_COMPUTE][m_frameIndex], nullptr), ThrowIfFailed(E_FAIL));
-		ThrowIfFailed(pCommandList->Close());
+		const auto& pCommandList = m_commandLists[COMPUTE].get();
+		N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::COMPUTE,
+			m_commandAllocators[ALLOCATOR_COMPUTE][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
+		N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 	}
 
 	// Create ray tracing interfaces
-	CreateRaytracingInterfaces();
+	for (auto& commandList : m_commandLists)
+		N_RETURN(commandList->CreateInterface(m_device.get()), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracer
-	vector<Resource> uploaders(0);
+	vector<Resource::sptr> uploaders(0);
 	{
 		m_rayTracer = make_unique<RayTracer>(m_device);
 		if (!m_rayTracer) ThrowIfFailed(E_FAIL);
@@ -193,7 +190,11 @@ void RayTracedGGX::LoadAssets()
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
 	{
-		if (!m_fence) N_RETURN(m_device.Base->GetFence(m_fence, m_fenceValues[m_frameIndex]++, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
+		if (!m_fence)
+		{
+			m_fence = Fence::MakeUnique();
+			N_RETURN(m_fence->Create(m_device.get(), m_fenceValues[m_frameIndex]++, FenceFlag::NONE, L"Fence"), ThrowIfFailed(E_FAIL));
+		}
 
 		// Create an event handle to use for frame synchronization.
 		m_fenceEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
@@ -207,8 +208,8 @@ void RayTracedGGX::LoadAssets()
 
 	if (!m_semaphore.Fence)
 	{
-		N_RETURN(m_device.Base->GetFence(m_semaphore.Fence, m_semaphore.Value, FenceFlag::NONE), ThrowIfFailed(E_FAIL));
-		m_semaphore.Fence->SetName(L"Semaphore");
+		m_semaphore.Fence = Fence::MakeUnique();
+		N_RETURN(m_semaphore.Fence->Create(m_device.get(), m_semaphore.Value, FenceFlag::NONE, L"Semaphore"), ThrowIfFailed(E_FAIL));
 	}
 
 	// Projection
@@ -264,7 +265,7 @@ void RayTracedGGX::OnRender()
 			const auto commandType = UNIVERSAL;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateGeometryCommandList(commandType);
-			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
+			commandQueue->ExecuteCommandList(m_commandLists[commandType].get()); // Execute the command lists.
 		}
 
 		// Record all the commands we need to render the scene into the command list.
@@ -281,7 +282,7 @@ void RayTracedGGX::OnRender()
 			const auto commandType = UNIVERSAL;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateDenoiseCommandList(commandType);
-			commandQueue->SubmitCommandList(m_commandLists[commandType].get()); // Execute the command lists.
+			commandQueue->ExecuteCommandList(m_commandLists[commandType].get()); // Execute the command lists.
 		}
 	}
 	else
@@ -290,7 +291,7 @@ void RayTracedGGX::OnRender()
 		PopulateCommandList();
 
 		// Execute the command list.
-		m_commandQueues[UNIVERSAL]->SubmitCommandList(m_commandLists[UNIVERSAL].get());
+		m_commandQueues[UNIVERSAL]->ExecuteCommandList(m_commandLists[UNIVERSAL].get());
 	}
 
 	// Present the frame.
@@ -645,12 +646,4 @@ void RayTracedGGX::EnableDirectXRaytracing(IDXGIAdapter1* adapter)
 				L"Possible reasons: your OS is not in developer mode.\n\n");
 		ThrowIfFailed(isFallbackSupported ? S_OK : E_FAIL);
 	}
-}
-
-void RayTracedGGX::CreateRaytracingInterfaces()
-{
-	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
-	ThrowIfFailed(D3D12CreateRaytracingFallbackDevice(m_device.Base.get(), createDeviceFlags, 0, IID_PPV_ARGS(&m_device.Derived)));
-	for (auto& commandList : m_commandLists)
-		N_RETURN(commandList->CreateInterface(m_device), ThrowIfFailed(E_FAIL));
 }
