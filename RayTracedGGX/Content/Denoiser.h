@@ -13,10 +13,8 @@ public:
 	Denoiser(const XUSG::Device::sptr& device);
 	virtual ~Denoiser();
 
-	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height,
-		std::vector<XUSG::Resource::sptr>& uploaders, XUSG::Format rtFormat,
-		const XUSG::Texture2D::sptr& rtOut, const XUSG::RenderTarget::uptr* pGbuffers,
-		const XUSG::DepthStencil::sptr& depth);
+	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height, XUSG::Format rtFormat,
+		const XUSG::Texture2D::sptr& rtOut, const XUSG::RenderTarget::uptr* pGbuffers, const XUSG::DepthStencil::sptr& depth);
 	void Denoise(const XUSG::CommandList* pCommandList, bool sharedMemVariance = false);
 	void ToneMap(const XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);

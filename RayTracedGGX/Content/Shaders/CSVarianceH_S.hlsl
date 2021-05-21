@@ -13,7 +13,7 @@ Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t3);
 
-groupshared uint4 g_srcNrms[SHARED_MEM_SIZE];
+groupshared uint4 g_srcRghNrms[SHARED_MEM_SIZE];
 
 void loadSamples(uint2 dTid, uint gTid, uint radius)
 {
@@ -30,7 +30,7 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 
 		src = TM(src);
 		norm.xyz = norm.xyz * 2.0 - 1.0;
-		g_srcNrms[gTid] = uint4(pack(float4(src, rgh)), pack(norm));
+		g_srcRghNrms[gTid] = uint4(pack(float4(src, rgh)), pack(norm));
 	}
 
 	GroupMemoryBarrierWithGroupSync();
@@ -60,8 +60,8 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	for (uint i = 0; i < sampleCount; ++i)
 	{
 		const uint j = GTid.x + i;
-		const float4 srcRgh = unpack(g_srcNrms[j].xy);
-		const float4 norm = unpack(g_srcNrms[j].zw);
+		const float4 srcRgh = unpack(g_srcRghNrms[j].xy);
+		const float4 norm = unpack(g_srcRghNrms[j].zw);
 
 		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
 			* Gaussian(radius, i, a)

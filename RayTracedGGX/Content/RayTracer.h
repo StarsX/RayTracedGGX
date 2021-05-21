@@ -22,7 +22,7 @@ public:
 	virtual ~RayTracer();
 
 	bool Init(XUSG::RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
-		std::vector<XUSG::Resource::sptr>& uploaders, XUSG::RayTracing::Geometry* geometries,
+		std::vector<XUSG::Resource::uptr>& uploaders, XUSG::RayTracing::GeometryBuffer* pGeometries,
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f),
 		uint8_t maxGBufferMips = 1);
@@ -87,17 +87,17 @@ protected:
 	};
 
 	bool createVB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numVert,
-		uint32_t stride, const uint8_t* pData, std::vector<XUSG::Resource::sptr>& uploaders);
+		uint32_t stride, const uint8_t* pData, std::vector<XUSG::Resource::uptr>& uploaders);
 	bool createIB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numIndices,
-		const uint32_t* pData, std::vector<XUSG::Resource::sptr>& uploaders);
+		const uint32_t* pData, std::vector<XUSG::Resource::uptr>& uploaders);
 	bool createGroundMesh(XUSG::RayTracing::CommandList* pCommandList,
-		std::vector<XUSG::Resource::sptr>& uploaders);
+		std::vector<XUSG::Resource::uptr>& uploaders);
 	bool createInputLayout();
 	bool createPipelineLayouts();
 	bool createPipelines(XUSG::Format rtFormat);
 	bool createDescriptorTables();
 	bool buildAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList,
-		XUSG::RayTracing::Geometry* geometries);
+		XUSG::RayTracing::GeometryBuffer* pGeometries);
 	bool buildShaderTables();
 
 	void gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex);

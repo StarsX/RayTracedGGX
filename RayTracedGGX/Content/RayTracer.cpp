@@ -57,7 +57,7 @@ RayTracer::~RayTracer()
 }
 
 bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
-	vector<Resource::sptr>& uploaders, Geometry* geometries, const char* fileName,
+	vector<Resource::uptr>& uploaders, GeometryBuffer* pGeometries, const char* fileName,
 	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale,
 	uint8_t maxGBufferMips)
 {
@@ -109,9 +109,9 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		DDS::Loader textureLoader;
 		DDS::AlphaMode alphaMode;
 
-		uploaders.push_back(nullptr);
+		uploaders.emplace_back(Resource::MakeUnique());
 		N_RETURN(textureLoader.CreateTextureFromFile(m_device.get(), static_cast<XUSG::CommandList*>(pCommandList), envFileName,
-			8192, false, m_lightProbe, uploaders.back(), &alphaMode), false);
+			8192, false, m_lightProbe, uploaders.back().get(), &alphaMode), false);
 	}
 
 	// Create raytracing pipelines
@@ -120,7 +120,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(createPipelines(rtFormat), false);
 
 	// Build acceleration structures
-	N_RETURN(buildAccelerationStructures(pCommandList, geometries), false);
+	N_RETURN(buildAccelerationStructures(pCommandList, pGeometries), false);
 	N_RETURN(buildShaderTables(), false);
 
 	return true;
@@ -329,21 +329,21 @@ const DepthStencil::sptr RayTracer::GetDepth() const
 }
 
 bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert,
-	uint32_t stride, const uint8_t* pData, vector<Resource::sptr>& uploaders)
+	uint32_t stride, const uint8_t* pData, vector<Resource::uptr>& uploaders)
 {
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	vertexBuffer = VertexBuffer::MakeUnique();
 	N_RETURN(vertexBuffer->Create(m_device.get(), numVert, stride,
 		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
 		nullptr, 1, nullptr, L"MeshVB"), false);
-	uploaders.push_back(nullptr);
+	uploaders.emplace_back(Resource::MakeUnique());
 
-	return vertexBuffer->Upload(pCommandList, uploaders.back(), pData,
+	return vertexBuffer->Upload(pCommandList, uploaders.back().get(), pData,
 		stride * numVert, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndices,
-	const uint32_t* pData, vector<Resource::sptr>& uploaders)
+	const uint32_t* pData, vector<Resource::uptr>& uploaders)
 {
 	m_numIndices[MODEL_OBJ] = numIndices;
 
@@ -352,13 +352,13 @@ bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndi
 	indexBuffers = IndexBuffer::MakeUnique();
 	N_RETURN(indexBuffers->Create(m_device.get(), byteWidth, Format::R32_UINT, ResourceFlag::NONE,
 		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
-	uploaders.push_back(nullptr);
+	uploaders.emplace_back(Resource::MakeUnique());
 
-	return indexBuffers->Upload(pCommandList, uploaders.back(), pData,
+	return indexBuffers->Upload(pCommandList, uploaders.back().get(), pData,
 		byteWidth, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
-bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<Resource::sptr>& uploaders)
+bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<Resource::uptr>& uploaders)
 {
 	// Vertex buffer
 	{
@@ -400,9 +400,9 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 		vertexBuffer = VertexBuffer::MakeUnique();
 		N_RETURN(vertexBuffer->Create(m_device.get(), static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
 			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
-		uploaders.push_back(nullptr);
+		uploaders.push_back(Resource::MakeUnique());
 
-		N_RETURN(vertexBuffer->Upload(pCommandList, uploaders.back(), vertices,
+		N_RETURN(vertexBuffer->Upload(pCommandList, uploaders.back().get(), vertices,
 			sizeof(vertices), 0, ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -436,9 +436,9 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 		indexBuffers = IndexBuffer::MakeUnique();
 		N_RETURN(indexBuffers->Create(m_device.get(), sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
 			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
-		uploaders.push_back(nullptr);
+		uploaders.push_back(Resource::MakeUnique());
 
-		N_RETURN(indexBuffers->Upload(pCommandList, uploaders.back(), indices,
+		N_RETURN(indexBuffers->Upload(pCommandList, uploaders.back().get(), indices,
 			sizeof(indices), 0, ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -536,7 +536,7 @@ bool RayTracer::createPipelines(Format rtFormat)
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state->SetGlobalPipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 		state->SetMaxRecursionDepth(1);
-		X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(*m_rayTracingPipelineCache, L"Raytracing"), false);
+		X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(m_rayTracingPipelineCache.get(), L"Raytracing"), false);
 	}
 
 	return true;
@@ -620,7 +620,7 @@ bool RayTracer::createDescriptorTables()
 	return true;
 }
 
-bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pCommandList, Geometry* geometries)
+bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pCommandList, GeometryBuffer* pGeometries)
 {
 	// Set geometries
 	VertexBufferView vertexBufferViews[NUM_MESH];
@@ -629,9 +629,9 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 	{
 		vertexBufferViews[i] = m_vertexBuffers[i]->GetVBV();
 		indexBufferViews[i] = m_indexBuffers[i]->GetIBV();
+		BottomLevelAS::SetTriangleGeometries(pGeometries[i], 1, Format::R32G32B32_FLOAT,
+			&vertexBufferViews[i], &indexBufferViews[i]);
 	}
-	BottomLevelAS::SetTriangleGeometries(geometries, NUM_MESH, Format::R32G32B32_FLOAT,
-		vertexBufferViews, indexBufferViews);
 
 	// Descriptor index in descriptor pool
 	const auto bottomLevelASIndex = 0u;
@@ -641,11 +641,11 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 	for (auto i = 0; i < NUM_MESH; ++i)
 	{
 		m_bottomLevelASs[i] = BottomLevelAS::MakeUnique();
-		N_RETURN(m_bottomLevelASs[i]->PreBuild(m_device.get(), 1, &geometries[i], bottomLevelASIndex + i), false);
+		N_RETURN(m_bottomLevelASs[i]->PreBuild(m_device.get(), 1, pGeometries[i], bottomLevelASIndex + i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
 	N_RETURN(m_topLevelAS->PreBuild(m_device.get(), NUM_MESH, topLevelASIndex,
-		BuildFlags::ALLOW_UPDATE | BuildFlags::PREFER_FAST_TRACE), false);
+		BuildFlag::ALLOW_UPDATE | BuildFlag::PREFER_FAST_TRACE), false);
 
 	// Create scratch buffer
 	auto scratchSize = m_topLevelAS->GetScratchDataMaxSize();

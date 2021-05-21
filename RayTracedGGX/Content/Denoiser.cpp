@@ -23,9 +23,8 @@ Denoiser::~Denoiser()
 {
 }
 
-bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height,
-	vector<Resource::sptr>& uploaders, Format rtFormat, const Texture2D::sptr& rayTracingOut,
-	const RenderTarget::uptr* pGbuffers, const DepthStencil::sptr& depth)
+bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, Format rtFormat,
+	const Texture2D::sptr& rayTracingOut, const RenderTarget::uptr* pGbuffers, const DepthStencil::sptr& depth)
 {
 	m_viewport = XMUINT2(width, height);
 	m_rayTracingOut = rayTracingOut;

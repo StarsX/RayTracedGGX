@@ -164,12 +164,12 @@ void RayTracedGGX::LoadAssets()
 		N_RETURN(commandList->CreateInterface(m_device.get()), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracer
-	vector<Resource::sptr> uploaders(0);
+	vector<Resource::uptr> uploaders(0);
 	{
 		m_rayTracer = make_unique<RayTracer>(m_device);
 		if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
-		Geometry geometries[RayTracer::NUM_MESH];
+		GeometryBuffer geometries[RayTracer::NUM_MESH];
 		if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries, m_meshFileName.c_str(),
 			m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale)) ThrowIfFailed(E_FAIL);
 	}
@@ -179,7 +179,7 @@ void RayTracedGGX::LoadAssets()
 		m_denoiser = make_unique<Denoiser>(m_device);
 		if (!m_denoiser) ThrowIfFailed(E_FAIL);
 
-		if (!m_denoiser->Init(pCommandList, m_width, m_height, uploaders, Format::R8G8B8A8_UNORM,
+		if (!m_denoiser->Init(pCommandList, m_width, m_height, Format::R8G8B8A8_UNORM,
 			m_rayTracer->GetRayTracingOutput(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()))
 			ThrowIfFailed(E_FAIL);
 	}
