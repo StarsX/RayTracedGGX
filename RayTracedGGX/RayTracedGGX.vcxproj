@@ -131,6 +131,7 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="Common\d3d12.h" />
     <ClInclude Include="Common\D3D12RaytracingFallback.h" />
     <ClInclude Include="Common\D3D12RaytracingHelpers.hpp" />
     <ClInclude Include="Common\d3d12video.h" />

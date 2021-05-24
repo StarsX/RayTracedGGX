@@ -134,6 +134,9 @@
     <ClInclude Include="Content\Denoiser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="Common\d3d12.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\Shaders\PSGBuffer.hlsl">

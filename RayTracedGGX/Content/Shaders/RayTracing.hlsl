@@ -46,7 +46,7 @@ ConstantBuffer<RayGenConstants> l_rayGen	: register (b1);
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float3>			g_renderTarget;
+RWTexture2D<float3>			g_renderTarget	: register (u0);
 RaytracingAS				g_scene			: register (t0);
 Texture2D					g_txNormal		: register (t1);
 Texture2D<float>			g_txRoughness	: register (t2);
