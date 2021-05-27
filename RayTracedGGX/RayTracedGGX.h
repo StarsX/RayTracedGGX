@@ -57,7 +57,7 @@ private:
 	{
 		ALLOCATOR_UPDATE_AS,
 		ALLOCATOR_GEOMETRY,
-		ALLOCATOR_RAY_TRACE,
+		ALLOCATOR_GRAPHICS,
 		ALLOCATOR_COMPUTE,
 		ALLOCATOR_IMAGE,
 
@@ -117,7 +117,7 @@ private:
 	void PopulateUpdateASCommandList(CommandType commandType);
 	void PopulateGeometryCommandList(CommandType commandType);
 	void PopulateRayTraceCommandList(CommandType commandType);
-	void PopulateDenoiseCommandList(CommandType commandType);
+	void PopulateImageCommandList(CommandType commandType);
 	void WaitForGpu();
 	void MoveToNextFrame();
 	double CalculateFrameStats(float* fTimeStep = nullptr);
