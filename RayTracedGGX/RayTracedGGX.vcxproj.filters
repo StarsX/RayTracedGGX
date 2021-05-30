@@ -104,13 +104,7 @@
     <ClInclude Include="XUSG\Core\XUSG.h">
       <Filter>XUSG\Core</Filter>
     </ClInclude>
-    <ClInclude Include="XUSG\Core\XUSG_DX12.h">
-      <Filter>XUSG\Core</Filter>
-    </ClInclude>
     <ClInclude Include="XUSG\RayTracing\XUSGRayTracing.h">
-      <Filter>XUSG\RayTracing</Filter>
-    </ClInclude>
-    <ClInclude Include="XUSG\RayTracing\XUSGRayTracing_DX12.h">
       <Filter>XUSG\RayTracing</Filter>
     </ClInclude>
     <ClInclude Include="XUSG\Optional\XUSGObjLoader.h">

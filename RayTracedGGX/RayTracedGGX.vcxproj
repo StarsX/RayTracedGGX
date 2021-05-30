@@ -62,8 +62,8 @@
     <PostBuildEvent>
       <Command>COPY /Y "$(OutDir)*.cso" "$(ProjectDir)..\Bin\"
 
-COPY /Y "$(OutDir)*.exe" "$(ProjectDir)..\Bin\"
 
+COPY /Y "$(OutDir)*.exe" "$(ProjectDir)..\Bin\"
 COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\Bin\"
 </Command>
     </PostBuildEvent>
@@ -90,8 +90,8 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
     <PostBuildEvent>
       <Command>COPY /Y "$(OutDir)*.cso" "$(ProjectDir)..\Bin\"
 
-COPY /Y "$(OutDir)*.exe" "$(ProjectDir)..\Bin\"
 
+COPY /Y "$(OutDir)*.exe" "$(ProjectDir)..\Bin\"
 COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\Bin\"
 </Command>
     </PostBuildEvent>
@@ -147,10 +147,8 @@ COPY /Y "$(ProjectDir)XUSG\$(Platform)\$(Configuration)\*.dll" "$(ProjectDir)..\
     <ClInclude Include="stdafx.h" />
     <ClInclude Include="XUSG\Advanced\XUSGDDSLoader.h" />
     <ClInclude Include="XUSG\Core\XUSG.h" />
-    <ClInclude Include="XUSG\Core\XUSG_DX12.h" />
     <ClInclude Include="XUSG\Optional\XUSGObjLoader.h" />
     <ClInclude Include="XUSG\RayTracing\XUSGRayTracing.h" />
-    <ClInclude Include="XUSG\RayTracing\XUSGRayTracing_DX12.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\Shaders\CSVarianceH.hlsl">

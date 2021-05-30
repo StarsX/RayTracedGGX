@@ -128,6 +128,7 @@ void RayTracedGGX::LoadPipeline()
 	{
 		m_renderTargets[n] = RenderTarget::MakeUnique();
 		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.get(), m_swapChain.get(), n), ThrowIfFailed(E_FAIL));
+
 		for (uint8_t i = 0; i < COMMAND_ALLOCATOR_COUNT; ++i) m_commandAllocators[i][n] = CommandAllocator::MakeUnique();
 		N_RETURN(m_commandAllocators[ALLOCATOR_UPDATE_AS][n]->Create(m_device.get(), CommandListType::COMPUTE,
 			(L"UpdateASAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
