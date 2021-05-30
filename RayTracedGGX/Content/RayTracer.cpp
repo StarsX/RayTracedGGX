@@ -659,10 +659,10 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
-	XMFLOAT4X4 matrices[NUM_MESH];
-	XMStoreFloat4x4(&matrices[GROUND], XMMatrixTranspose((XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f))));
-	XMStoreFloat4x4(&matrices[MODEL_OBJ], XMMatrixTranspose((XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
-		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z))));
+	XMFLOAT3X4 matrices[NUM_MESH];
+	XMStoreFloat3x4(&matrices[GROUND], (XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f)));
+	XMStoreFloat3x4(&matrices[MODEL_OBJ], (XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
+		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)));
 	float* const transforms[] =
 	{
 		reinterpret_cast<float*>(&matrices[GROUND]),
