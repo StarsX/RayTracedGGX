@@ -153,9 +153,9 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 d
 	{
 		payload.Color = 0.0;
 		payload.RecursionDepth = currentRayRecursionDepth;
-		TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
+		//TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
 		// Note: make sure to enable face culling so as to avoid surface face fighting.
-		//TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
+		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
 	}
 
 	return payload;
@@ -318,7 +318,7 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 	ray.TMin = ray.TMax = 0.0;
 
 	float3 H;
-	float NoL, VoH;
+	float NoL;
 
 	if (instanceIdx != 0xffffffff)
 	{
@@ -332,11 +332,7 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 		if (NoL > 0.0)
 		{
 			// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
-			VoH = dot(V, H);
-			float t = (1.0 - VoH);
-			t *= t;
-			t *= t;
-			ray.TMin = max(t * t, 0.1);
+			ray.TMin = 0.0;
 			ray.TMax = 10000.0;
 		}
 	}
@@ -355,7 +351,7 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 		float3(0.95, 0.93, 0.88),	// Silver
 		float3(1.00, 0.71, 0.29)	// Gold
 	};
-	VoH = saturate(VoH);
+	const float VoH = saturate(dot(V, H));
 	const float3 F = F_Schlick(specColors[instanceIdx], VoH);
 
 	// Visibility factor
