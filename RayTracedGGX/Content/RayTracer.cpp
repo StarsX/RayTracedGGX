@@ -88,8 +88,9 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device.get(), width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
 
+	const auto dsFormat = Format::D24_UNORM_S8_UINT;
 	m_depth = DepthStencil::MakeShared();
-	N_RETURN(m_depth->Create(m_device.get(), width, height, Format::D24_UNORM_S8_UINT,
+	N_RETURN(m_depth->Create(m_device.get(), width, height, dsFormat,
 		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth"), false);
 
 	// Constant buffers
@@ -117,7 +118,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	// Create raytracing pipelines
 	N_RETURN(createInputLayout(), false);
 	N_RETURN(createPipelineLayouts(), false);
-	N_RETURN(createPipelines(rtFormat), false);
+	N_RETURN(createPipelines(rtFormat, dsFormat), false);
 
 	// Build acceleration structures
 	N_RETURN(buildAccelerationStructures(pCommandList, pGeometries), false);
@@ -245,16 +246,15 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t fram
 	};
 	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
+	zPrepass(pCommandList, frameIndex);
 	gbufferPass(pCommandList, frameIndex);
 
-	ResourceBarrier barriers[5];
+	ResourceBarrier barriers[4];
 	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
 	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
-	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ |
-		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 
 	rayTrace(pCommandList, frameIndex);
@@ -287,16 +287,15 @@ void RayTracer::RenderGeometry(const RayTracing::CommandList* pCommandList, uint
 	};
 	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
+	zPrepass(pCommandList, frameIndex);
 	gbufferPass(pCommandList, frameIndex);
 
-	ResourceBarrier barriers[5];
+	ResourceBarrier barriers[4];
 	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
 	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
-	numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ |
-		ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	pCommandList->Barrier(numBarriers, barriers);
 }
 
@@ -461,6 +460,15 @@ bool RayTracer::createInputLayout()
 
 bool RayTracer::createPipelineLayouts()
 {
+	// This is a pipeline layout for Z prepass
+	{
+		// Get pipeline layout
+		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
+		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::VS);
+		X_RETURN(m_pipelineLayouts[Z_PREPASS_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
+			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"ZPrepassLayout"), false);
+	}
+
 	// This is a pipeline layout for g-buffer pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
@@ -499,11 +507,24 @@ bool RayTracer::createPipelineLayouts()
 	return true;
 }
 
-bool RayTracer::createPipelines(Format rtFormat)
+bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 {
 	auto vsIndex = 0u;
 	auto psIndex = 0u;
 	auto csIndex = 0u;
+
+	// Z prepass
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::VS, vsIndex, L"VSDepth.cso"), false);
+
+		const auto state = Graphics::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[Z_PREPASS_LAYOUT]);
+		state->SetShader(Shader::Stage::VS, m_shaderPool->GetShader(Shader::Stage::VS, vsIndex++));
+		state->IASetInputLayout(m_pInputLayout);
+		state->IASetPrimitiveTopologyType(PrimitiveTopologyType::TRIANGLE);
+		state->OMSetDSVFormat(dsFormat);
+		X_RETURN(m_pipelines[Z_PREPASS], state->GetPipeline(m_graphicsPipelineCache.get(), L"ZPrepass"), false);
+	}
 
 	// G-buffer pass
 	{
@@ -516,11 +537,12 @@ bool RayTracer::createPipelines(Format rtFormat)
 		state->SetShader(Shader::Stage::VS, m_shaderPool->GetShader(Shader::Stage::VS, vsIndex++));
 		state->SetShader(Shader::Stage::PS, m_shaderPool->GetShader(Shader::Stage::PS, psIndex++));
 		state->IASetPrimitiveTopologyType(PrimitiveTopologyType::TRIANGLE);
+		state->DSSetState(Graphics::DEPTH_READ_EQUAL, m_graphicsPipelineCache.get());
 		state->OMSetNumRenderTargets(3);
 		state->OMSetRTVFormat(0, Format::R10G10B10A2_UNORM);
 		state->OMSetRTVFormat(1, Format::R8_UNORM);
 		state->OMSetRTVFormat(2, Format::R16G16_FLOAT);
-		state->OMSetDSVFormat(Format::D24_UNORM_S8_UINT);
+		state->OMSetDSVFormat(dsFormat);
 		X_RETURN(m_pipelines[GBUFFER_PASS], state->GetPipeline(m_graphicsPipelineCache.get(), L"GBufferPass"), false);
 	}
 
@@ -715,11 +737,47 @@ bool RayTracer::buildShaderTables()
 	return true;
 }
 
-void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex)
+void RayTracer::zPrepass(const XUSG::CommandList* pCommandList, uint8_t frameIndex)
+{
+	// Set depth barrier to write
+	ResourceBarrier barrier;
+	const auto numBarriers = m_depth->SetBarrier(&barrier, ResourceState::DEPTH_WRITE);
+	pCommandList->Barrier(numBarriers, &barrier);
+
+	//Clear depth
+	pCommandList->OMSetRenderTargets(0, nullptr, &m_depth->GetDSV());
+	pCommandList->ClearDepthStencilView(m_depth->GetDSV(), ClearFlag::DEPTH, 1.0f);
+
+	// Set pipeline state
+	pCommandList->SetGraphicsPipelineLayout(m_pipelineLayouts[Z_PREPASS_LAYOUT]);
+	pCommandList->SetPipelineState(m_pipelines[Z_PREPASS]);
+
+	// Set viewport
+	Viewport viewport(0.0f, 0.0f, static_cast<float>(m_viewport.x), static_cast<float>(m_viewport.y));
+	RectRange scissorRect(0, 0, m_viewport.x, m_viewport.y);
+	pCommandList->RSSetViewports(1, &viewport);
+	pCommandList->RSSetScissorRects(1, &scissorRect);
+
+	// Record commands.
+	pCommandList->IASetPrimitiveTopology(PrimitiveTopology::TRIANGLELIST);
+
+	for (auto i = 0u; i < NUM_MESH; ++i)
+	{
+		// Set descriptor tables
+		pCommandList->SetGraphicsRootConstantBufferView(0, m_cbBasePass[i].get(), m_cbBasePass[i]->GetCBVOffset(frameIndex));
+		pCommandList->IASetVertexBuffers(0, 1, &m_vertexBuffers[i]->GetVBV());
+		pCommandList->IASetIndexBuffer(m_indexBuffers[i]->GetIBV());
+		pCommandList->DrawIndexed(m_numIndices[i], 1, 0, 0, 0);
+	}
+}
+
+void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex, bool depthClear)
 {
 	// Set barriers
 	ResourceBarrier barriers[4];
-	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_WRITE);
+	const auto depthState = depthClear ? ResourceState::DEPTH_WRITE :
+		ResourceState::DEPTH_READ | ResourceState::NON_PIXEL_SHADER_RESOURCE;
+	auto numBarriers = m_depth->SetBarrier(barriers, depthState);
 	for (auto& gbuffer : m_gbuffers)
 		numBarriers = gbuffer->SetBarrier(barriers, ResourceState::RENDER_TARGET, numBarriers, 0);
 	pCommandList->Barrier(numBarriers, barriers);
@@ -731,7 +789,7 @@ void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frame
 	const float clearColor[4] = {};
 	pCommandList->ClearRenderTargetView(m_gbuffers[NORMAL]->GetRTV(), clearColor);
 	pCommandList->ClearRenderTargetView(m_gbuffers[VELOCITY]->GetRTV(), clearColor);
-	pCommandList->ClearDepthStencilView(m_depth->GetDSV(), ClearFlag::DEPTH, 1.0f);
+	if (depthClear) pCommandList->ClearDepthStencilView(m_depth->GetDSV(), ClearFlag::DEPTH, 1.0f);
 
 	// Set pipeline state
 	pCommandList->SetGraphicsPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);

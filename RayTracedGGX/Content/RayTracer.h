@@ -41,6 +41,7 @@ public:
 protected:
 	enum PipelineLayoutIndex : uint8_t
 	{
+		Z_PREPASS_LAYOUT,
 		GBUFFER_PASS_LAYOUT,
 		RT_GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
@@ -50,6 +51,7 @@ protected:
 
 	enum PipelineIndex : uint8_t
 	{
+		Z_PREPASS,
 		GBUFFER_PASS,
 		RAY_TRACING,
 
@@ -94,13 +96,14 @@ protected:
 		std::vector<XUSG::Resource::uptr>& uploaders);
 	bool createInputLayout();
 	bool createPipelineLayouts();
-	bool createPipelines(XUSG::Format rtFormat);
+	bool createPipelines(XUSG::Format rtFormat, XUSG::Format dsFormat);
 	bool createDescriptorTables();
 	bool buildAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList,
 		XUSG::RayTracing::GeometryBuffer* pGeometries);
 	bool buildShaderTables();
 
-	void gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex);
+	void zPrepass(const XUSG::CommandList* pCommandList, uint8_t frameIndex);
+	void gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex, bool depthClear = false);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	XUSG::RayTracing::Device::sptr m_device;

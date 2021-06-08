@@ -160,6 +160,9 @@
     <FxCompile Include="Content\Shaders\CSVarianceV_S.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
+    <FxCompile Include="Content\Shaders\VSDepth.hlsl">
+      <Filter>Shaders\Renderer</Filter>
+    </FxCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="Content\Shaders\BRDFModels.hlsli">
