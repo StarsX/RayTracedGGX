@@ -52,6 +52,7 @@ protected:
 
 	enum GBuffer : uint8_t
 	{
+		BASE_COLOR,
 		NORMAL,
 		ROUGHNESS,
 		VELOCITY,

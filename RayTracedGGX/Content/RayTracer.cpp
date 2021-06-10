@@ -7,11 +7,19 @@
 #define _INDEPENDENT_DDS_LOADER_
 #include "Advanced/XUSGDDSLoader.h"
 #undef _INDEPENDENT_DDS_LOADER_
+#include "DirectXPackedVector.h"
 
 using namespace std;
 using namespace DirectX;
 using namespace XUSG;
 using namespace XUSG::RayTracing;
+
+struct Vertex
+{
+	XMFLOAT3 Pos;
+	XMFLOAT3 Nrm;
+	PackedVector::XMCOLOR Color;
+};
 
 struct RayGenConstants
 {
@@ -21,6 +29,7 @@ struct RayGenConstants
 
 struct CBGlobal
 {
+	XMFLOAT3X4	WorldITs[RayTracer::NUM_MESH - 1];
 	float		WorldIT[11];
 	uint32_t	FrameIndex;
 };
@@ -81,6 +90,8 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	mipCount = (min)(mipCount, maxGBufferMips);
 	const auto resourceFlags = mipCount > 1 ? ResourceFlag::ALLOW_UNORDERED_ACCESS : ResourceFlag::NONE;
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
+	N_RETURN(m_gbuffers[BASE_COLOR]->Create(m_device.get(), width, height, Format::R8G8B8A8_UNORM,
+		1, resourceFlags, 1, 1, nullptr, false, L"BaseColor"), false);
 	N_RETURN(m_gbuffers[NORMAL]->Create(m_device.get(), width, height, Format::R10G10B10A2_UNORM,
 		1, resourceFlags, mipCount, 1, nullptr, false, L"Normal"), false);
 	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device.get(), width, height, Format::R8_UNORM,
@@ -211,7 +222,7 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 			static auto s_frameIndex = 0u;
 			const auto pCbData = reinterpret_cast<CBGlobal*>(m_cbRaytracing->Map(frameIndex));
 			const auto n = 256u;
-			XMStoreFloat3x4(reinterpret_cast<XMFLOAT3X4*>(pCbData), rot);
+			for (auto i = 0u; i < NUM_MESH; ++i) XMStoreFloat3x4(&pCbData->WorldITs[i], i ? rot : XMMatrixIdentity());
 			pCbData->FrameIndex = s_frameIndex++;
 			s_frameIndex %= n;
 		}
@@ -223,7 +234,7 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 			XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)
 		};
 
-		for (auto i = 0; i < NUM_MESH; ++i)
+		for (auto i = 0u; i < NUM_MESH; ++i)
 		{
 			const auto pCbData = reinterpret_cast<CBBasePass*>(m_cbBasePass[i]->Map(frameIndex));
 			pCbData->ProjBias = projBias;
@@ -249,8 +260,9 @@ void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t fram
 	zPrepass(pCommandList, frameIndex);
 	gbufferPass(pCommandList, frameIndex);
 
-	ResourceBarrier barriers[4];
+	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+	numBarriers = m_gbuffers[BASE_COLOR]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
@@ -290,8 +302,9 @@ void RayTracer::RenderGeometry(const RayTracing::CommandList* pCommandList, uint
 	zPrepass(pCommandList, frameIndex);
 	gbufferPass(pCommandList, frameIndex);
 
-	ResourceBarrier barriers[4];
+	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
+	numBarriers = m_gbuffers[BASE_COLOR]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
@@ -330,15 +343,25 @@ const DepthStencil::sptr RayTracer::GetDepth() const
 bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert,
 	uint32_t stride, const uint8_t* pData, vector<Resource::uptr>& uploaders)
 {
+	// Gold
+	const PackedVector::XMCOLOR color(1.0f, 0.71f, 0.29f, 1.0f);
+	vector<Vertex> vertexData(numVert);
+
+	for (auto i = 0u; i < numVert; ++i)
+	{
+		memcpy(&vertexData[i], &pData[stride * i], stride);
+		vertexData[i].Color = color;
+	}
+
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	vertexBuffer = VertexBuffer::MakeUnique();
-	N_RETURN(vertexBuffer->Create(m_device.get(), numVert, stride,
+	N_RETURN(vertexBuffer->Create(m_device.get(), numVert, sizeof(Vertex),
 		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
 		nullptr, 1, nullptr, L"MeshVB"), false);
 	uploaders.emplace_back(Resource::MakeUnique());
 
-	return vertexBuffer->Upload(pCommandList, uploaders.back().get(), pData,
-		stride * numVert, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
+	return vertexBuffer->Upload(pCommandList, uploaders.back().get(), vertexData.data(),
+		sizeof(Vertex) * numVert, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
 bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndices,
@@ -361,43 +384,46 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 {
 	// Vertex buffer
 	{
+		// Silver
+		const PackedVector::XMCOLOR color(0.95f, 0.93f, 0.88f, 1.0f);
+
 		// Cube vertices positions and corresponding triangle normals.
-		XMFLOAT3 vertices[][2] =
+		Vertex vertices[] =
 		{
-			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
-			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
 
-			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
-			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
 
-			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
-			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
-			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
-			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
 
-			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
-			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
 
-			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
-			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
-			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
-			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
 
-			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
-			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
-			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
-			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
 		};
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		vertexBuffer = VertexBuffer::MakeUnique();
-		N_RETURN(vertexBuffer->Create(m_device.get(), static_cast<uint32_t>(size(vertices)), sizeof(XMFLOAT3[2]),
+		N_RETURN(vertexBuffer->Create(m_device.get(), static_cast<uint32_t>(size(vertices)), sizeof(Vertex),
 			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
 		uploaders.push_back(Resource::MakeUnique());
 
@@ -449,8 +475,9 @@ bool RayTracer::createInputLayout()
 	// Define the vertex input layout.
 	const InputElement inputElements[] =
 	{
-		{ "POSITION",	0, Format::R32G32B32_FLOAT, 0, 0,								InputClassification::PER_VERTEX_DATA, 0 },
-		{ "NORMAL",		0, Format::R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
+		{ "POSITION",	0, Format::R32G32B32_FLOAT,	0, 0,								InputClassification::PER_VERTEX_DATA, 0 },
+		{ "NORMAL",		0, Format::R32G32B32_FLOAT,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 },
+		{ "COLOR",		0, Format::B8G8R8A8_UNORM,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
 	};
 
 	X_RETURN(m_pInputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
@@ -488,7 +515,7 @@ bool RayTracer::createPipelineLayouts()
 		pipelineLayout->SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		pipelineLayout->SetRootCBV(CONSTANTS, 0);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 4, 1);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 5, 1);
 		X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			m_device.get(), m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
 			L"RayTracerGlobalPipelineLayout"), false);
@@ -538,10 +565,11 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 		state->SetShader(Shader::Stage::PS, m_shaderPool->GetShader(Shader::Stage::PS, psIndex++));
 		state->IASetPrimitiveTopologyType(PrimitiveTopologyType::TRIANGLE);
 		state->DSSetState(Graphics::DEPTH_READ_EQUAL, m_graphicsPipelineCache.get());
-		state->OMSetNumRenderTargets(3);
-		state->OMSetRTVFormat(0, Format::R10G10B10A2_UNORM);
-		state->OMSetRTVFormat(1, Format::R8_UNORM);
-		state->OMSetRTVFormat(2, Format::R16G16_FLOAT);
+		state->OMSetNumRenderTargets(4);
+		state->OMSetRTVFormat(0, Format::R8G8B8A8_UNORM);
+		state->OMSetRTVFormat(1, Format::R10G10B10A2_UNORM);
+		state->OMSetRTVFormat(2, Format::R8_UNORM);
+		state->OMSetRTVFormat(3, Format::R16G16_FLOAT);
 		state->OMSetDSVFormat(dsFormat);
 		X_RETURN(m_pipelines[GBUFFER_PASS], state->GetPipeline(m_graphicsPipelineCache.get(), L"GBufferPass"), false);
 	}
@@ -608,6 +636,7 @@ bool RayTracer::createDescriptorTables()
 	{
 		const Descriptor descriptors[] =
 		{
+			m_gbuffers[BASE_COLOR]->GetSRV(),
 			m_gbuffers[NORMAL]->GetSRV(),
 			m_gbuffers[ROUGHNESS]->GetSRV(),
 			m_depth->GetSRV(),
@@ -622,6 +651,7 @@ bool RayTracer::createDescriptorTables()
 	{
 		const Descriptor descriptors[] =
 		{
+			m_gbuffers[BASE_COLOR]->GetRTV(),
 			m_gbuffers[NORMAL]->GetRTV(),
 			m_gbuffers[ROUGHNESS]->GetRTV(),
 			m_gbuffers[VELOCITY]->GetRTV()
@@ -774,7 +804,7 @@ void RayTracer::zPrepass(const XUSG::CommandList* pCommandList, uint8_t frameInd
 void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex, bool depthClear)
 {
 	// Set barriers
-	ResourceBarrier barriers[4];
+	ResourceBarrier barriers[5];
 	const auto depthState = depthClear ? ResourceState::DEPTH_WRITE :
 		ResourceState::DEPTH_READ | ResourceState::NON_PIXEL_SHADER_RESOURCE;
 	auto numBarriers = m_depth->SetBarrier(barriers, depthState);

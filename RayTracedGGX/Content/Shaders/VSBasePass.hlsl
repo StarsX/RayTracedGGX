@@ -9,6 +9,7 @@ struct VSIn
 {
 	float3	Pos	: POSITION;
 	float3	Nrm	: NORMAL;
+	float4	Col	: COLOR;
 };
 
 struct VSOut
@@ -18,6 +19,7 @@ struct VSOut
 	float4	TSPos 	: POSHISTORY;
 	float3	Norm	: NORMAL;
 	float2	UV		: TEXCOORD;
+	float4	Color	: COLOR;
 };
 
 //--------------------------------------------------------------------------------------
@@ -46,6 +48,7 @@ VSOut main(VSIn input)
 	output.Pos.xy += g_projBias * output.Pos.w;
 	output.Norm = mul(input.Nrm, g_worldIT);
 	output.UV = pos.xz * 0.5 + 0.5;
+	output.Color = input.Col;
 
 	return output;
 }

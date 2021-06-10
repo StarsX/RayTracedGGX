@@ -17,6 +17,14 @@ struct Vertex
 {
 	float3	Pos;
 	float3	Nrm;
+	uint	Col;
+};
+
+struct VertexIn
+{
+	float3	Pos;
+	float3	Nrm;
+	float4	Col;
 };
 
 struct RayPayload
@@ -27,7 +35,7 @@ struct RayPayload
 
 struct GlobalConstants
 {
-	float3x3 WorldIT;
+	float3x3 WorldITs[2];
 	uint	FrameIndex;
 };
 
@@ -48,10 +56,11 @@ ConstantBuffer<RayGenConstants> l_rayGen	: register (b1);
 //--------------------------------------------------------------------------------------
 RWTexture2D<float3>			g_renderTarget	: register (u0);
 RaytracingAS				g_scene			: register (t0);
-Texture2D					g_txNormal		: register (t1);
-Texture2D<float>			g_txRoughness	: register (t2);
-Texture2D<float>			g_txDepth		: register (t3);
-TextureCube<float3>			g_txEnv			: register (t4);
+Texture2D					g_txBaseColor	: register (t1);
+Texture2D					g_txNormal		: register (t2);
+Texture2D<float>			g_txRoughness	: register (t3);
+Texture2D<float>			g_txDepth		: register (t4);
+TextureCube<float3>			g_txEnv			: register (t5);
 
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register (t0, space1);
@@ -84,6 +93,16 @@ float3 dFdy(float3 f)
 	const float3 f1 = WaveReadLaneAt(f, ((quadPosY << 1) + 1) * g_waveXSize + lanePos.x);
 
 	return f1 - f0;
+}
+
+float unorm8(uint u)
+{
+	return u / 255.0;
+}
+
+float4 rgba8(uint u)
+{
+	return float4(unorm8(u & 0xff), unorm8((u >> 8) & 0xff), unorm8((u >> 16) & 0xff), unorm8((u >> 24) & 0xff));
 }
 
 //--------------------------------------------------------------------------------------
@@ -165,24 +184,27 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 d
 // Generate a ray in world space for a primary-surface pixel corresponding to an index
 // from the dispatched 2D grid.
 //--------------------------------------------------------------------------------------
-uint getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out float3 pos)
+bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out float3 pos, out float4 color)
 {
 	const float4 norm = g_txNormal[index];
-	const float depth = g_txDepth[index];
 
 	float2 screenPos = (index + 0.5) / dim * 2.0 - 1.0;
 	screenPos.y = -screenPos.y; // Invert Y for Y-up-style NDC.
 
 	if (norm.w > 0.0)
 	{
+		const float depth = g_txDepth[index];
+		color = g_txBaseColor[index];
+
 		// Unproject the pixel coordinate into a ray.
+
 		const float4 world = mul(float4(screenPos, depth, 1.0), l_rayGen.ProjToWorld);
 
 		pos = world.xyz / world.w;
 		N = normalize(norm.xyz - 0.5);
 		V = normalize(l_rayGen.EyePt - pos);
 
-		return norm.w * 2.0 - 1.0;
+		return true;
 	}
 	else
 	{
@@ -192,14 +214,14 @@ uint getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 		pos = world.xyz / world.w;
 		V = normalize(l_rayGen.EyePt - pos);
 
-		return 0xffffffff;
+		return false;
 	}
 }
 
 //--------------------------------------------------------------------------------------
 // Get IA-style inputs
 //--------------------------------------------------------------------------------------
-Vertex getInput(float2 barycentrics)
+VertexIn getInput(float2 barycentrics)
 {
 	const uint meshIdx = InstanceIndex();
 	const uint baseIdx = PrimitiveIndex() * 3;
@@ -224,7 +246,7 @@ Vertex getInput(float2 barycentrics)
 		barycentrics.xy
 	};
 
-	Vertex input;
+	VertexIn input;
 	input.Pos =
 		baryWeights.x * vertices[0].Pos +
 		baryWeights.y * vertices[1].Pos +
@@ -234,6 +256,12 @@ Vertex getInput(float2 barycentrics)
 		baryWeights.x * vertices[0].Nrm +
 		baryWeights.y * vertices[1].Nrm +
 		baryWeights.z * vertices[2].Nrm;
+
+	input.Col =
+		baryWeights.x * rgba8(vertices[0].Col) +
+		baryWeights.y * rgba8(vertices[1].Col) +
+		baryWeights.z * rgba8(vertices[2].Col);
+	input.Col.xz = input.Col.zx;
 
 	return input;
 }
@@ -311,7 +339,7 @@ float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
 	//return Hammersley(s, numSamples);
 }
 
-RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V, float3 pos, uint recursionDepth = 0)
+RayPayload computeLighting(bool hit, float roughness, float3 N, float3 V, float3 pos, float4 color, uint recursionDepth = 0)
 {
 	RayDesc ray;
 	ray.Origin = pos;
@@ -320,7 +348,7 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 	float3 H;
 	float NoL;
 
-	if (instanceIdx != 0xffffffff)
+	if (hit)
 	{
 		// Trace a reflection ray.
 		const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
@@ -342,17 +370,12 @@ RayPayload computeLighting(uint instanceIdx, float roughness, float3 N, float3 V
 	const float3 dLdy = dFdy(ray.Direction);
 	RayPayload payload = traceRadianceRay(ray, recursionDepth, dLdx, dLdy);
 
-	if (instanceIdx == 0xffffffff) return payload;
+	if (!hit) return payload;
 	else if (NoL <= 0.0) return (RayPayload)0;
 
 	// Calculate fresnel
-	const float3 specColors[] =
-	{
-		float3(0.95, 0.93, 0.88),	// Silver
-		float3(1.00, 0.71, 0.29)	// Gold
-	};
 	const float VoH = saturate(dot(V, H));
-	const float3 F = F_Schlick(specColors[instanceIdx], VoH);
+	const float3 F = F_Schlick(color.xyz, VoH);
 
 	// Visibility factor
 	const float NoV = saturate(dot(N, V));
@@ -380,10 +403,11 @@ void raygenMain()
 
 	// Generate a ray corresponding to an index from a primary surface.
 	float3 N, V, pos;
-	const uint instanceIdx = getPrimarySurface(index, dim, N, V, pos);
+	float4 color;
+	const bool hit = getPrimarySurface(index, dim, N, V, pos, color);
 
-	const float roughness = instanceIdx != 0xffffffff ? g_txRoughness[index] : 0.0;
-	const RayPayload payload = computeLighting(instanceIdx, roughness, N, V, pos);
+	const float roughness = hit ? g_txRoughness[index] : 0.0;
+	const RayPayload payload = computeLighting(hit, roughness, N, V, pos, color);
 	g_renderTarget[index] = payload.Color; // Write the raytraced color to the output texture.
 }
 
@@ -393,14 +417,14 @@ void raygenMain()
 [shader("closesthit")]
 void closestHitMain(inout RayPayload payload, TriAttributes attr)
 {
-	Vertex input = getInput(attr.barycentrics);
+	VertexIn input = getInput(attr.barycentrics);
 
 	const uint instanceIdx = InstanceIndex();
 	const float roughness = getRoughness(instanceIdx, input.Pos.xz * 0.5 + 0.5);
 
 	// Trace a reflection ray.
-	const float3 N = normalize(instanceIdx ? mul(input.Nrm, g_cb.WorldIT) : input.Nrm);
-	payload = computeLighting(instanceIdx, roughness, N, -WorldRayDirection(), hitWorldPosition(), 1);
+	const float3 N = normalize(mul(input.Nrm, g_cb.WorldITs[instanceIdx]));
+	payload = computeLighting(true, roughness, N, -WorldRayDirection(), hitWorldPosition(), input.Col, 1);
 }
 
 //--------------------------------------------------------------------------------------
