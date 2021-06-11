@@ -5,10 +5,17 @@
 #include "BRDFModels.hlsli"
 #include "Material.hlsli"
 
+#define METALLIC 1
 #define MAX_RECURSION_DEPTH	1
 
 typedef RaytracingAccelerationStructure RaytracingAS;
 typedef BuiltInTriangleIntersectionAttributes TriAttributes;
+
+enum HitGroup
+{
+	HIT_GROUP_REFLECTION,
+	HIT_GROUP_DIFFUSE
+};
 
 //--------------------------------------------------------------------------------------
 // Structs
@@ -119,6 +126,18 @@ float3 computeLocalDirectionGGX(float a, float2 xi)
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
 }
 
+float3 computeLocalDirectionCos(float2 xi)
+{
+	const float phi = 2.0 * PI * xi.x;
+
+	// Only near the specular direction according to the roughness for importance sampling
+	const float cosTheta = sqrt(xi.y);
+	//const float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+	const float sinTheta = sqrt(1.0 - xi.y);
+
+	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
 //--------------------------------------------------------------------------------------
 // Transform local to world space
 //--------------------------------------------------------------------------------------
@@ -142,6 +161,22 @@ float3 computeDirectionGGX(float a, float3 normal, float2 xi)
 	return tanSpace[0] * localDir.x + tanSpace[1] * localDir.y + tanSpace[2] * localDir.z;
 }
 
+// Compute local direction first and transform it to world space
+float3 computeDirectionCos(float3 normal, float2 xi)
+{
+	//const float3 localDir = float3(0.0.xx, 1.0);
+#if 1
+	const float3 localDir = computeLocalDirectionCos(xi);
+
+	return normalize(normal + localDir);
+#else
+	const float3 localDir = computeLocalDirectionCos(xi);
+	const float3x3 tanSpace = computeLocalToWorld(normal);
+
+	return tanSpace[0] * localDir.x + tanSpace[1] * localDir.y + tanSpace[2] * localDir.z;
+#endif
+}
+
 //--------------------------------------------------------------------------------------
 // Retrieve hit world position.
 //--------------------------------------------------------------------------------------
@@ -162,7 +197,7 @@ float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0)
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
-RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 ddx = 0.0, float3 ddy = 0.0)
+RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, uint hitGroup, float3 ddx = 0.0, float3 ddy = 0.0)
 {
 	RayPayload payload;
 
@@ -174,7 +209,7 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 d
 		payload.RecursionDepth = currentRayRecursionDepth;
 		//TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
 		// Note: make sure to enable face culling so as to avoid surface face fighting.
-		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, 0, 1, 0, ray, payload);
+		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, hitGroup, 1, 0, ray, payload);
 	}
 
 	return payload;
@@ -197,7 +232,6 @@ bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 		color = g_txBaseColor[index];
 
 		// Unproject the pixel coordinate into a ray.
-
 		const float4 world = mul(float4(screenPos, depth, 1.0), l_rayGen.ProjToWorld);
 
 		pos = world.xyz / world.w;
@@ -339,7 +373,7 @@ float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
 	//return Hammersley(s, numSamples);
 }
 
-RayPayload computeLighting(bool hit, float roughness, float3 N, float3 V, float3 pos, float4 color, uint recursionDepth = 0)
+RayPayload computeReflection(bool hit, float roughness, float3 N, float3 V, float3 pos, float4 color, uint recursionDepth = 0)
 {
 	RayDesc ray;
 	ray.Origin = pos;
@@ -368,7 +402,7 @@ RayPayload computeLighting(bool hit, float roughness, float3 N, float3 V, float3
 
 	const float3 dLdx = dFdx(ray.Direction);
 	const float3 dLdy = dFdy(ray.Direction);
-	RayPayload payload = traceRadianceRay(ray, recursionDepth, dLdx, dLdy);
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, HIT_GROUP_REFLECTION, dLdx, dLdy);
 
 	if (!hit) return payload;
 	else if (NoL <= 0.0) return (RayPayload)0;
@@ -392,6 +426,45 @@ RayPayload computeLighting(bool hit, float roughness, float3 N, float3 V, float3
 	return payload;
 }
 
+RayPayload computeDiffuse(bool hit, float3 N, float3 V, float3 pos, float4 color, uint recursionDepth = 0)
+{
+	RayDesc ray;
+	ray.Origin = pos;
+
+	if (hit)
+	{
+		// Trace a reflection ray.
+		const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
+		ray.Direction = computeDirectionCos(N, xi);
+
+		// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
+		ray.TMin = 0.0;
+		ray.TMax = 10000.0;
+	}
+	else
+	{
+		ray.Direction = -V;
+		ray.TMin = ray.TMax = 0.0;
+	}
+
+	const float3 dLdx = dFdx(ray.Direction);
+	const float3 dLdy = dFdy(ray.Direction);
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, HIT_GROUP_DIFFUSE, dLdx, dLdy);
+
+	//if (!hit) return payload;
+	if (!hit) return (RayPayload)0;
+
+	// BRDF
+	const float3 albedo = 0.5; // Adjust color for a better visual effect
+	//const float NoL = dot(N, ray.Direction);
+	//const float3 brdf = albedo / PI;
+	//const float pdf = NoL / PI;
+	//payload.Color *= brdf * NoL / pdf;
+	payload.Color *= albedo * (1.0 - 0.04);
+
+	return payload;
+}
+
 //--------------------------------------------------------------------------------------
 // Ray generation
 //--------------------------------------------------------------------------------------
@@ -407,24 +480,45 @@ void raygenMain()
 	const bool hit = getPrimarySurface(index, dim, N, V, pos, color);
 
 	const float roughness = hit ? g_txRoughness[index] : 0.0;
-	const RayPayload payload = computeLighting(hit, roughness, N, V, pos, color);
+#if METALLIC
+	const RayPayload payload = computeReflection(hit, roughness, N, V, pos, color);
+
 	g_renderTarget[index] = payload.Color; // Write the raytraced color to the output texture.
+#else
+	const RayPayload payloadR = computeReflection(hit, roughness, N, V, pos, 0.04);
+	const RayPayload payloadD = computeDiffuse(hit, N, V, pos, color);
+
+	g_renderTarget[index] = payloadR.Color + payloadD.Color; // Write the raytraced color to the output texture.
+#endif
 }
 
 //--------------------------------------------------------------------------------------
-// Ray closest hit
+// Ray closest hits
 //--------------------------------------------------------------------------------------
 [shader("closesthit")]
-void closestHitMain(inout RayPayload payload, TriAttributes attr)
+void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 {
 	VertexIn input = getInput(attr.barycentrics);
 
-	const uint instanceIdx = InstanceIndex();
-	const float roughness = getRoughness(instanceIdx, input.Pos.xz * 0.5 + 0.5);
-
 	// Trace a reflection ray.
+	const uint instanceIdx = InstanceIndex();
 	const float3 N = normalize(mul(input.Nrm, g_cb.WorldITs[instanceIdx]));
-	payload = computeLighting(true, roughness, N, -WorldRayDirection(), hitWorldPosition(), input.Col, 1);
+#if METALLIC
+	const float roughness = getRoughness(instanceIdx, input.Pos.xz * 0.5 + 0.5);
+	payload = computeReflection(true, roughness, N, -WorldRayDirection(), hitWorldPosition(), input.Col, 1);
+#else
+	payload = computeDiffuse(true, N, -WorldRayDirection(), hitWorldPosition(), input.Col, 1);
+#endif
+}
+
+[shader("closesthit")]
+void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
+{
+	VertexIn input = getInput(attr.barycentrics);
+
+	// Trace a diffuse ray.
+	const float3 N = normalize(mul(input.Nrm, g_cb.WorldITs[InstanceIndex()]));
+	payload = computeDiffuse(true, N, -WorldRayDirection(), hitWorldPosition(), input.Col, 1);
 }
 
 //--------------------------------------------------------------------------------------
@@ -434,4 +528,5 @@ void closestHitMain(inout RayPayload payload, TriAttributes attr)
 void missMain(inout RayPayload payload)
 {
 	payload.Color = environment(WorldRayDirection());
+	//payload.Color = environment(WorldRayDirection() + WorldRayOrigin() * 0.01);
 }

@@ -42,9 +42,9 @@ struct CBBasePass
 	XMFLOAT2	ProjBias;
 };
 
-const wchar_t* RayTracer::HitGroupName = L"hitGroup";
+const wchar_t* RayTracer::HitGroupNames[] = { L"hitGroupReflection", L"hitGroupDiffuse" };
 const wchar_t* RayTracer::RaygenShaderName = L"raygenMain";
-const wchar_t* RayTracer::ClosestHitShaderName = L"closestHitMain";
+const wchar_t* RayTracer::ClosestHitShaderNames[] = { L"closestHitReflection", L"closestHitDiffuse" };
 const wchar_t* RayTracer::MissShaderName = L"missMain";
 
 RayTracer::RayTracer(const RayTracing::Device::sptr& device) :
@@ -580,7 +580,8 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 		
 		const auto state = RayTracing::State::MakeUnique();
 		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		state->SetHitGroup(0, HitGroupName, ClosestHitShaderName);
+		state->SetHitGroup(HIT_GROUP_REFLECTION, HitGroupNames[HIT_GROUP_REFLECTION], ClosestHitShaderNames[HIT_GROUP_REFLECTION]);
+		state->SetHitGroup(HIT_GROUP_DIFFUSE, HitGroupNames[HIT_GROUP_DIFFUSE], ClosestHitShaderNames[HIT_GROUP_DIFFUSE]);
 		state->SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
 		state->SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
@@ -754,9 +755,11 @@ bool RayTracer::buildShaderTables()
 
 	// Hit group shader table
 	m_hitGroupShaderTable = ShaderTable::MakeUnique();
-	N_RETURN(m_hitGroupShaderTable->Create(m_device.get(), 1, shaderIDSize, L"HitGroupShaderTable"), false);
+	N_RETURN(m_hitGroupShaderTable->Create(m_device.get(), 2, shaderIDSize, L"HitGroupShaderTable"), false);
 	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(m_device.get(),
-		m_pipelines[RAY_TRACING], HitGroupName).get()), false);
+		m_pipelines[RAY_TRACING], HitGroupNames[HIT_GROUP_REFLECTION]).get()), false);
+	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(m_device.get(),
+		m_pipelines[RAY_TRACING], HitGroupNames[HIT_GROUP_DIFFUSE]).get()), false);
 
 	// Miss shader table
 	m_missShaderTable = ShaderTable::MakeUnique();

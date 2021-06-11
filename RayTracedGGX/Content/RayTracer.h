@@ -89,6 +89,14 @@ protected:
 		NUM_SRV_TABLE
 	};
 
+	enum HitGroup : uint8_t
+	{
+		HIT_GROUP_REFLECTION,
+		HIT_GROUP_DIFFUSE,
+
+		NUM_HIT_GROUP
+	};
+
 	bool createVB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numVert,
 		uint32_t stride, const uint8_t* pData, std::vector<XUSG::Resource::uptr>& uploaders);
 	bool createIB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numIndices,
@@ -144,9 +152,9 @@ protected:
 	XUSG::ShaderResource::sptr	m_lightProbe;
 
 	// Shader tables
-	static const wchar_t* HitGroupName;
+	static const wchar_t* HitGroupNames[NUM_HIT_GROUP];
 	static const wchar_t* RaygenShaderName;
-	static const wchar_t* ClosestHitShaderName;
+	static const wchar_t* ClosestHitShaderNames[NUM_HIT_GROUP];
 	static const wchar_t* MissShaderName;
 	XUSG::RayTracing::ShaderTable::uptr	m_missShaderTable;
 	XUSG::RayTracing::ShaderTable::uptr	m_hitGroupShaderTable;
