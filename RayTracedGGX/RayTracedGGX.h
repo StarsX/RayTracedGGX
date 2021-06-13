@@ -97,6 +97,7 @@ private:
 	XUSG::Semaphore m_semaphore;
 
 	// Application state
+	float		m_metallic;
 	uint8_t		m_asyncCompute;
 	bool		m_useSharedMem;
 	bool		m_isPaused;

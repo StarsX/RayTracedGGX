@@ -3,7 +3,8 @@
 //--------------------------------------------------------------------------------------
 
 static const float3 g_lumBase = { 0.25, 0.5, 0.25 };
-static const float g_gamma = 0.125;
+static const float g_gammaRefl = 0.15;
+static const float g_gammaDiff = 0.15;
 
 //--------------------------------------------------------------------------------------
 // A fast invertible tone map that preserves color (Reinhard)

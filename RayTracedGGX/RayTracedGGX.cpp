@@ -27,6 +27,7 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
+	m_metallic(1.0f),
 	m_asyncCompute(true),
 	m_useSharedMem(false),
 	m_isPaused(false),
@@ -318,6 +319,14 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 	case VK_SPACE:
 		m_isPaused = !m_isPaused;
 		break;
+	case VK_UP:
+		m_metallic = (min)(m_metallic + 0.25f, 1.0f);
+		for (auto i = 0u; i < RayTracer::NUM_MESH; ++i) m_rayTracer->SetMetallic(i, m_metallic);
+		break;
+	case VK_DOWN:
+		m_metallic = (max)(m_metallic - 0.25f, 0.0f);
+		for (auto i = 0u; i < RayTracer::NUM_MESH; ++i) m_rayTracer->SetMetallic(i, m_metallic);
+		break;
 	case 'V':
 		m_useSharedMem = !m_useSharedMem;
 		break;
@@ -591,6 +600,7 @@ double RayTracedGGX::CalculateFrameStats(float* pTimeStep)
 		windowText << setprecision(2) << fixed << L"    fps: " << fps;
 		windowText << L"    [V] " << (m_useSharedMem ? L"Shared memory" : L"Direct access");
 		windowText << L"    [A] " << (m_asyncCompute ? L"Async compute" : L"Single command list");
+		windowText << L"    [\x2191][\x2193] Metallic: " << m_metallic;
 		SetCustomWindowText(windowText.str().c_str());
 	}
 

@@ -160,6 +160,12 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	return true;
 }
 
+void RayTracer::SetMetallic(uint32_t meshIdx, float metallic)
+{
+	const auto pCbData = reinterpret_cast<CBMaterial*>(m_cbMaterials->Map());
+	pCbData->RoughMetals[meshIdx].y = metallic;
+}
+
 static const XMFLOAT2& IncrementalHalton()
 {
 	static auto haltonBase = XMUINT2(0, 0);
