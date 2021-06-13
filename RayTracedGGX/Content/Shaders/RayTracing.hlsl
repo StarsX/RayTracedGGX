@@ -427,6 +427,8 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		payload.Color *= albedo * (1.0 - 0.04);
 	}
 
+	payload.Color *= recursionDepth > 0 ? exp(-0.15 * RayTCurrent()) : 1.0;
+
 	return payload;
 }
 

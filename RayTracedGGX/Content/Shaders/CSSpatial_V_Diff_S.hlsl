@@ -94,5 +94,5 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 
 	const float3 result = clipColor(TM(src.xyz), neighborMin, neighborMax);
 
-	g_renderTarget[DTid] = float4(ITM(result), 1.0);
+	g_renderTarget[DTid] = float4(dest.xyz + ITM(result), dest.w);
 }
