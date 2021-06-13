@@ -60,10 +60,9 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	}
 
 	//const float depthC = g_depths[GTid.y + radius];
-	normC.xyz = normC.xyz * 2.0 - 1.0;
-
 	const float roughness = g_txRoughness[DTid];
 	const uint sampleCount = radius * 2 + 1;
+	normC.xyz = normC.xyz * 2.0 - 1.0;
 
 	const float a = RoughnessSigma(roughness);
 	float3 mu = 0.0, m2 = 0.0;

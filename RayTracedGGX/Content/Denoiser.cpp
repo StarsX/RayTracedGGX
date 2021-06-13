@@ -24,10 +24,11 @@ Denoiser::~Denoiser()
 }
 
 bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, Format rtFormat,
-	const Texture2D::sptr& rayTracingOut, const RenderTarget::uptr* pGbuffers, const DepthStencil::sptr& depth)
+	const Texture2D::uptr* inputViews, const RenderTarget::uptr* pGbuffers,
+	const DepthStencil::sptr& depth, uint8_t maxMips)
 {
 	m_viewport = XMUINT2(width, height);
-	m_rayTracingOut = rayTracingOut;
+	m_inputViews = inputViews;
 	m_pGbuffers = pGbuffers;
 	m_depth = depth;
 
@@ -35,18 +36,30 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	const wchar_t* namesUAV[] =
 	{
 		L"VarianceScratch",
-		L"FilteredOut",
 		L"TemporalSSOut0",
-		L"TemporalSSOut1"
+		L"TemporalSSOut1",
+		L"FilteredOut",
+		L"FilteredOut1"
 	};
+
+	const uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
+
 	for (auto& outputView : m_outputViews) outputView = Texture2D::MakeUnique();
-	N_RETURN(m_outputViews[UAV_AVG_H]->Create(m_device.get(), width, height,
+	N_RETURN(m_outputViews[UAV_SCT]->Create(m_device.get(), width, height,
 		Format::R11G11B10_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		1, 1, MemoryType::DEFAULT, false, namesUAV[UAV_AVG_H]), false);
-	for (uint8_t i = 1; i < NUM_UAV; ++i)
+		(min)(mipCount, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[UAV_SCT]), false);
+
+	for (uint8_t i = UAV_TSS; i <= UAV_TSS1; ++i)
 		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			1, 1, MemoryType::DEFAULT, false, namesUAV[i]), false);
+			(min)(mipCount, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[i]), false);
+
+	N_RETURN(m_outputViews[UAV_FLT]->Create(m_device.get(), width, height,
+		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+		min<uint8_t>(mipCount - 1, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[UAV_FLT]), false);
+	N_RETURN(m_outputViews[UAV_FLT1]->Create(m_device.get(), width, height,
+		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+		1, 1, MemoryType::DEFAULT, false, namesUAV[UAV_FLT1]), false);
 
 	// Create pipelines
 	N_RETURN(createPipelineLayouts(), false);
@@ -56,7 +69,8 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	return true;
 }
 
-void Denoiser::Denoise(const CommandList* pCommandList, bool sharedMemVariance)
+void Denoiser::Denoise(const CommandList* pCommandList, uint32_t numBarriers,
+	ResourceBarrier* pBarriers, bool useSharedMem)
 {
 	m_frameParity = !m_frameParity;
 
@@ -68,17 +82,24 @@ void Denoiser::Denoise(const CommandList* pCommandList, bool sharedMemVariance)
 	};
 	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
 
-	if (sharedMemVariance) varianceSharedMem(pCommandList);
-	else varianceDirect(pCommandList);
-
+	reflectionSpatialFilter(pCommandList, numBarriers, pBarriers, useSharedMem);
+	diffuseSpatialFilter(pCommandList, numBarriers, pBarriers, useSharedMem);
 	temporalSS(pCommandList);
 }
 
 void Denoiser::ToneMap(const CommandList* pCommandList, const Descriptor& rtv,
 	uint32_t numBarriers, ResourceBarrier* pBarriers)
 {
+	// Bind the heaps, acceleration structure and dispatch rays.
+	const DescriptorPool descriptorPools[] =
+	{
+		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
+		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
+	};
+	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
+
 	numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(
-		pBarriers, ResourceState::PIXEL_SHADER_RESOURCE, numBarriers);
+		pBarriers, ResourceState::PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	pCommandList->Barrier(numBarriers, pBarriers);
 
 	// Set render target
@@ -103,24 +124,34 @@ void Denoiser::ToneMap(const CommandList* pCommandList, const Descriptor& rtv,
 
 bool Denoiser::createPipelineLayouts()
 {
-	// This is a pipeline layout for variance horizontal pass
+	// This is a pipeline layout for spatial horizontal pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1);
-		X_RETURN(m_pipelineLayouts[VARIANCE_H_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
-			PipelineLayoutFlag::NONE, L"VarianceHPipelineLayout"), false);
+		X_RETURN(m_pipelineLayouts[SPATIAL_H_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
+			PipelineLayoutFlag::NONE, L"SpatialHPipelineLayout"), false);
 	}
 
-	// This is a pipeline layout for variance vertical pass
+	// This is a pipeline layout for spatial vertical pass of reflection map
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3);
-		X_RETURN(m_pipelineLayouts[VARIANCE_V_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
-			PipelineLayoutFlag::NONE, L"VarianceVPipelineLayout"), false);
+		X_RETURN(m_pipelineLayouts[SPT_V_RFL_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
+			PipelineLayoutFlag::NONE, L"ReflectionSpatialVPipelineLayout"), false);
+	}
+
+	// This is a pipeline layout for spatial vertical pass of diffuse map
+	{
+		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
+		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 4);
+		X_RETURN(m_pipelineLayouts[SPT_V_DFF_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
+			PipelineLayoutFlag::NONE, L"DiffuseSpatialVPipelineLayout"), false);
 	}
 
 	// This is a pipeline layout for temporal super sampling
@@ -151,42 +182,87 @@ bool Denoiser::createPipelines(Format rtFormat)
 	auto psIndex = 0u;
 	auto csIndex = 0u;
 
+	// Spatial horizontal pass of reflection map
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceH.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_H_Refl.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
+		state->SetPipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H], state->GetPipeline(m_computePipelineCache.get(), L"VarianceHPass"), false);
+		X_RETURN(m_pipelines[SPATIAL_H_RFL], state->GetPipeline(m_computePipelineCache.get(), L"ReflectionSpatialHPass"), false);
 	}
 
+	// Spatial vertical pass of reflection map
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceV.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_V_Refl.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		state->SetPipelineLayout(m_pipelineLayouts[SPT_V_RFL_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V], state->GetPipeline(m_computePipelineCache.get(), L"VarianceVPass"), false);
+		X_RETURN(m_pipelines[SPATIAL_V_RFL], state->GetPipeline(m_computePipelineCache.get(), L"ReflectionSpatialVPass"), false);
 	}
 
+	// Spatial horizontal pass of diffuse map
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceH_S.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_H_Diff.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
+		state->SetPipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_H_S], state->GetPipeline(m_computePipelineCache.get(), L"VarianceHSharedMem"), false);
+		X_RETURN(m_pipelines[SPATIAL_H_DFF], state->GetPipeline(m_computePipelineCache.get(), L"DiffuseSpatialHPass"), false);
 	}
 
+	// Spatial vertical pass of diffuse map
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSVarianceV_S.cso"), false);
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_V_Diff.cso"), false);
 
 		const auto state = Compute::State::MakeUnique();
-		state->SetPipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		state->SetPipelineLayout(m_pipelineLayouts[SPT_V_DFF_LAYOUT]);
 		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
-		X_RETURN(m_pipelines[VARIANCE_V_S], state->GetPipeline(m_computePipelineCache.get(), L"VarianceVSharedMem"), false);
+		X_RETURN(m_pipelines[SPATIAL_V_DFF], state->GetPipeline(m_computePipelineCache.get(), L"DiffuseSpatialVPass"), false);
 	}
 
+	// Spatial horizontal pass of reflection map using shared memory
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_H_Refl_S.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[SPATIAL_H_RFL_S], state->GetPipeline(m_computePipelineCache.get(), L"ReflectionSpatialHSharedMem"), false);
+	}
+
+	// Spatial vertical pass of reflection map using shared memory
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_V_Refl_S.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[SPT_V_RFL_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[SPATIAL_V_RFL_S], state->GetPipeline(m_computePipelineCache.get(), L"ReflectionSpatialVSharedMem"), false);
+	}
+
+	// Spatial horizontal pass of diffuse map using shared memory
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_H_Diff_S.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[SPATIAL_H_DFF_S], state->GetPipeline(m_computePipelineCache.get(), L"DiffuseSpatialHSharedMem"), false);
+	}
+
+	// Spatial vertical pass of diffuse map
+	{
+		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSSpatial_V_Diff_S.cso"), false);
+
+		const auto state = Compute::State::MakeUnique();
+		state->SetPipelineLayout(m_pipelineLayouts[SPT_V_DFF_LAYOUT]);
+		state->SetShader(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		X_RETURN(m_pipelines[SPATIAL_V_DFF_S], state->GetPipeline(m_computePipelineCache.get(), L"DiffuseSpatialVSharedMem"), false);
+	}
+
+	// Temporal super sampling
 	{
 		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"CSTemporalSS.cso"), false);
 
@@ -196,6 +272,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 		X_RETURN(m_pipelines[TEMPORAL_SS], state->GetPipeline(m_computePipelineCache.get(), L"TemporalSS"), false);
 	}
 
+	// Tone mapping
 	{
 		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::VS, vsIndex, L"VSScreenQuad.cso"), false);
 		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::PS, psIndex, L"PSToneMap.cso"), false);
@@ -216,22 +293,24 @@ bool Denoiser::createPipelines(Format rtFormat)
 
 bool Denoiser::createDescriptorTables()
 {
-	// Spatial variance UAVs
+	// Spatial filter output UAVs
 	for (auto i = 0u; i < 2; ++i)
 	{
 		const Descriptor descriptors[] =
 		{
-			m_outputViews[UAV_AVG_H]->GetUAV(),
+			m_outputViews[UAV_SCT]->GetUAV(),
 			m_outputViews[UAV_TSS + i]->GetUAV() // Reuse it as variance scratch
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_uavTables[UAV_TABLE_VAR_H + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		X_RETURN(m_uavTables[UAV_TABLE_SPF_H + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
+
+	for (uint8_t i = 0; i < NUM_TERM; ++i)
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_FLT]->GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_FLT], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_FLT + i]->GetUAV());
+		X_RETURN(m_uavTables[UAV_TABLE_FLT + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Temporal SS output UAVs
@@ -247,7 +326,7 @@ bool Denoiser::createDescriptorTables()
 		const Descriptor descriptors[] =
 		{
 			m_pGbuffers[NORMAL]->GetSRV(),
-			m_pGbuffers[ROUGHNESS]->GetSRV(),
+			m_pGbuffers[ROUGH_METAL]->GetSRV(),
 			m_depth->GetSRV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
@@ -255,18 +334,32 @@ bool Denoiser::createDescriptorTables()
 		X_RETURN(m_srvTables[SRV_TABLE_GB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
-	// Spatial variance input SRVs
-	for (auto i = 0u; i < 2; ++i)
+	// Spatial filter input SRVs
+	for (uint8_t i = 0; i < 2; ++i)
 	{
 		const Descriptor descriptors[] =
 		{
-			m_rayTracingOut->GetSRV(),
-			m_outputViews[UAV_AVG_H]->GetSRV(),
-			m_outputViews[UAV_TSS + i]->GetSRV() // Reuse it as variance scratch
+			m_inputViews[TERM_REFLECTION]->GetSRV(),
+			m_outputViews[UAV_SCT]->GetSRV(),
+			m_outputViews[UAV_TSS + i]->GetSRV(),	// Reuse it as variance scratch
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_VAR + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		X_RETURN(m_srvTables[SRV_TABLE_SPF_RFL + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+	}
+
+	for (uint8_t i = 0; i < 2; ++i)
+	{
+		const Descriptor descriptors[] =
+		{
+			m_inputViews[TERM_DIFFUSE]->GetSRV(),
+			m_outputViews[UAV_SCT]->GetSRV(),
+			m_outputViews[UAV_TSS + i]->GetSRV(),	// Reuse it as variance scratch
+			m_outputViews[UAV_FLT]->GetSRV()
+		};
+		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
+		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
+		X_RETURN(m_srvTables[SRV_TABLE_SPF_DFF + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Temporal SS input SRVs
@@ -274,7 +367,7 @@ bool Denoiser::createDescriptorTables()
 	{
 		const Descriptor descriptors[] =
 		{
-			m_outputViews[UAV_FLT]->GetSRV(),
+			m_outputViews[UAV_FLT1]->GetSRV(),
 			m_outputViews[UAV_TSS + !i]->GetSRV(),
 			m_pGbuffers[VELOCITY]->GetSRV()
 		};
@@ -302,86 +395,117 @@ bool Denoiser::createDescriptorTables()
 	return true;
 }
 
-void Denoiser::varianceDirect(const CommandList* pCommandList)
+void Denoiser::reflectionSpatialFilter(const CommandList* pCommandList, uint32_t numBarriers,
+	ResourceBarrier* pBarriers, bool useSharedMem)
 {
-	ResourceBarrier barriers[3];
-
 	// Horizontal pass
 	{
-		auto numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
-		numBarriers = m_rayTracingOut->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		pCommandList->Barrier(numBarriers, barriers);
+		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, numBarriers, 0);
+		numBarriers = m_inputViews[TERM_REFLECTION]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, pBarriers);
 
-		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H + m_frameParity]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_SPF_H + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_RFL]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H]);
-		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+		if (useSharedMem)
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_H_RFL_S]);
+			pCommandList->Dispatch(DIV_UP(m_viewport.x, 32), m_viewport.y, 1);
+		}
+		else
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_H_RFL]);
+			pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+		}
 	}
 
 	// Vertical pass
 	{
-		auto numBarriers = m_outputViews[UAV_FLT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		pCommandList->Barrier(numBarriers, barriers);
+		numBarriers = m_outputViews[UAV_FLT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+		pCommandList->Barrier(numBarriers, pBarriers);
 
-		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPT_V_RFL_LAYOUT]);
 		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_RFL + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V]);
-		pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+		if (useSharedMem)
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_V_RFL_S]);
+			pCommandList->Dispatch(m_viewport.x, DIV_UP(m_viewport.y, 32), 1);
+		}
+		else
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_V_RFL]);
+			pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+		}
 	}
 }
 
-void Denoiser::varianceSharedMem(const CommandList* pCommandList)
+void Denoiser::diffuseSpatialFilter(const CommandList* pCommandList, uint32_t numBarriers,
+	ResourceBarrier* pBarriers, bool useSharedMem)
 {
-	ResourceBarrier barriers[3];
-
 	// Horizontal pass
 	{
-		auto numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
-		numBarriers = m_rayTracingOut->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		pCommandList->Barrier(numBarriers, barriers);
+		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, numBarriers, 0);
+		numBarriers = m_inputViews[TERM_DIFFUSE]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+		pCommandList->Barrier(numBarriers, pBarriers);
 
-		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_H_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_VAR_H + m_frameParity]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR]);
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_SPF_H + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_DFF]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_H_S]);
-		pCommandList->Dispatch(DIV_UP(m_viewport.x, 32), m_viewport.y, 1);
+		if (useSharedMem)
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_H_DFF_S]);
+			pCommandList->Dispatch(DIV_UP(m_viewport.x, 32), m_viewport.y, 1);
+		}
+		else
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_H_DFF]);
+			pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+		}
 	}
 
 	// Vertical pass
 	{
-		auto numBarriers = m_outputViews[UAV_FLT]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-		numBarriers = m_outputViews[UAV_AVG_H]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-		pCommandList->Barrier(numBarriers, barriers);
+		numBarriers = m_outputViews[UAV_FLT1]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+		numBarriers = m_outputViews[UAV_FLT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+		pCommandList->Barrier(numBarriers, pBarriers);
 
-		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[VARIANCE_V_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
-		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_VAR + m_frameParity]);
+		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPT_V_DFF_LAYOUT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT1]);
+		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_DFF + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
-		pCommandList->SetPipelineState(m_pipelines[VARIANCE_V_S]);
-		pCommandList->Dispatch(m_viewport.x, DIV_UP(m_viewport.y, 32), 1);
+		if (useSharedMem)
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_V_DFF_S]);
+			pCommandList->Dispatch(m_viewport.x, DIV_UP(m_viewport.y, 32), 1);
+		}
+		else
+		{
+			pCommandList->SetPipelineState(m_pipelines[SPATIAL_V_DFF]);
+			pCommandList->Dispatch(DIV_UP(m_viewport.x, 8), DIV_UP(m_viewport.y, 8), 1);
+		}
 	}
 }
 
 void Denoiser::temporalSS(const CommandList* pCommandList)
 {
 	ResourceBarrier barriers[5];
-	auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-	numBarriers = m_outputViews[UAV_FLT]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_outputViews[UAV_TSS + !m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+	numBarriers = m_outputViews[UAV_FLT1]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+	numBarriers = m_outputViews[UAV_TSS + !m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_pGbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::END_ONLY);
 	pCommandList->Barrier(numBarriers, barriers);

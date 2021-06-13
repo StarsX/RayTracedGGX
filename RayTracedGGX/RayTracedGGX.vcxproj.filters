@@ -148,20 +148,32 @@
     <FxCompile Include="Content\Shaders\CSTemporalSS.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceH.hlsl">
+    <FxCompile Include="Content\Shaders\CSSpatial_H_Refl.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceH_S.hlsl">
+    <FxCompile Include="Content\Shaders\CSSpatial_H_Refl_S.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceV.hlsl">
+    <FxCompile Include="Content\Shaders\CSSpatial_V_Refl.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\CSVarianceV_S.hlsl">
+    <FxCompile Include="Content\Shaders\CSSpatial_V_Refl_S.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
     <FxCompile Include="Content\Shaders\VSDepth.hlsl">
       <Filter>Shaders\Renderer</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSSpatial_H_Diff.hlsl">
+      <Filter>Shaders\Denoiser</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSSpatial_V_Diff.hlsl">
+      <Filter>Shaders\Denoiser</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSSpatial_H_Diff_S.hlsl">
+      <Filter>Shaders\Denoiser</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\CSSpatial_V_Diff_S.hlsl">
+      <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

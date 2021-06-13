@@ -14,17 +14,20 @@ public:
 	virtual ~Denoiser();
 
 	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height, XUSG::Format rtFormat,
-		const XUSG::Texture2D::sptr& rtOut, const XUSG::RenderTarget::uptr* pGbuffers, const XUSG::DepthStencil::sptr& depth);
-	void Denoise(const XUSG::CommandList* pCommandList, bool sharedMemVariance = false);
+		const XUSG::Texture2D::uptr* inputViews, const XUSG::RenderTarget::uptr* pGbuffers,
+		const XUSG::DepthStencil::sptr& depth, uint8_t maxMips = 1);
+	void Denoise(const XUSG::CommandList* pCommandList, uint32_t numBarriers,
+		XUSG::ResourceBarrier* pBarriers, bool useSharedMem = false);
 	void ToneMap(const XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
 protected:
 	enum PipelineLayoutIndex : uint8_t
 	{
-		VARIANCE_H_LAYOUT,
-		VARIANCE_V_LAYOUT,
-		TEMPORAL_SS_LAYOUT,
+		SPATIAL_H_LAYOUT,	// Spatial horizontal pass
+		SPT_V_RFL_LAYOUT,	// Spatial vertical pass of reflection map
+		SPT_V_DFF_LAYOUT,	// Spatial vertical pass of diffuse map
+		TEMPORAL_SS_LAYOUT,	// Temporal super sampling
 		TONE_MAP_LAYOUT,
 
 		NUM_PIPELINE_LAYOUT
@@ -40,11 +43,15 @@ protected:
 
 	enum PipelineIndex : uint8_t
 	{
-		VARIANCE_H,
-		VARIANCE_V,
-		VARIANCE_H_S,
-		VARIANCE_V_S,
-		TEMPORAL_SS,
+		SPATIAL_H_RFL,		// Spatial horizontal pass of reflection map
+		SPATIAL_V_RFL,		// Spatial vertical pass of reflection map
+		SPATIAL_H_DFF,		// Spatial horizontal pass of diffuse map
+		SPATIAL_V_DFF,		// Spatial vertical pass of diffuse map
+		SPATIAL_H_RFL_S,	// Spatial horizontal pass of reflection map using shared memory
+		SPATIAL_V_RFL_S,	// Spatial vertical pass of reflection map using shared memory
+		SPATIAL_H_DFF_S,	// Spatial horizontal pass of diffuse map using shared memory
+		SPATIAL_V_DFF_S,	// Spatial vertical pass of diffuse map using shared memory
+		TEMPORAL_SS,		// Temporal super sampling
 		TONE_MAP,
 
 		NUM_PIPELINE
@@ -54,7 +61,7 @@ protected:
 	{
 		BASE_COLOR,
 		NORMAL,
-		ROUGHNESS,
+		ROUGH_METAL,
 		VELOCITY,
 
 		NUM_GBUFFER
@@ -62,10 +69,11 @@ protected:
 
 	enum UAVResource : uint8_t
 	{
-		UAV_AVG_H,
-		UAV_FLT,
-		UAV_TSS,
+		UAV_SCT,			// Scratch buffer
+		UAV_TSS,			// For temporal super sampling
 		UAV_TSS1,
+		UAV_FLT,			// Spatially filtered
+		UAV_FLT1,
 
 		NUM_UAV
 	};
@@ -73,11 +81,13 @@ protected:
 	enum SRVTable : uint8_t
 	{
 		SRV_TABLE_GB,
-		SRV_TABLE_VAR,
-		SRV_TABLE_VAR1,
-		SRV_TABLE_TSS,
+		SRV_TABLE_SPF_RFL,
+		SRV_TABLE_SPF_RFL1,
+		SRV_TABLE_SPF_DFF,	// For spatial filter of diffuse map
+		SRV_TABLE_SPF_DFF1,
+		SRV_TABLE_TSS,		// For temporal super sampling map
 		SRV_TABLE_TSS1,
-		SRV_TABLE_TM,
+		SRV_TABLE_TM,		// For tone mapping
 		SRV_TABLE_TM1,
 
 		NUM_SRV_TABLE
@@ -85,21 +95,32 @@ protected:
 
 	enum UAVTable : uint8_t
 	{
-		UAV_TABLE_VAR_H,
-		UAV_TABLE_VAR_H1,
+		UAV_TABLE_SPF_H,	// For spatial horizontal filter
+		UAV_TABLE_SPF_H1,
 		UAV_TABLE_FLT,
+		UAV_TABLE_FLT1,
 		UAV_TABLE_TSS,
 		UAV_TABLE_TSS1,
 
 		NUM_UAV_TABLE
 	};
 
+	enum FilterTerm : uint8_t
+	{
+		TERM_REFLECTION,
+		TERM_DIFFUSE,
+
+		NUM_TERM
+	};
+
 	bool createPipelineLayouts();
 	bool createPipelines(XUSG::Format rtFormat);
 	bool createDescriptorTables();
 
-	void varianceDirect(const XUSG::CommandList* pCommandList);
-	void varianceSharedMem(const XUSG::CommandList* pCommandList);
+	void reflectionSpatialFilter(const XUSG::CommandList* pCommandList, uint32_t numBarriers,
+		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
+	void diffuseSpatialFilter(const XUSG::CommandList* pCommandList, uint32_t numBarriers,
+		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
 	void temporalSS(const XUSG::CommandList* pCommandList);
 
 	XUSG::Device::sptr m_device;
@@ -114,14 +135,14 @@ protected:
 	XUSG::DescriptorTable		m_uavTables[NUM_UAV_TABLE];
 	XUSG::DescriptorTable		m_samplerTable;
 
-	XUSG::Texture2D::uptr		m_outputViews[NUM_UAV];
-	XUSG::Texture2D::sptr		m_rayTracingOut;
-	XUSG::DepthStencil::sptr	m_depth;
+	XUSG::Texture2D::uptr			m_outputViews[NUM_UAV];
+	XUSG::DepthStencil::sptr		m_depth;
+	const XUSG::Texture2D::uptr*	m_inputViews;
 	const XUSG::RenderTarget::uptr* m_pGbuffers;
 
-	XUSG::ShaderPool::uptr					m_shaderPool;
-	XUSG::Graphics::PipelineCache::uptr		m_graphicsPipelineCache;
-	XUSG::Compute::PipelineCache::uptr		m_computePipelineCache;
-	XUSG::PipelineLayoutCache::uptr			m_pipelineLayoutCache;
-	XUSG::DescriptorTableCache::uptr		m_descriptorTableCache;
+	XUSG::ShaderPool::uptr				m_shaderPool;
+	XUSG::Graphics::PipelineCache::uptr	m_graphicsPipelineCache;
+	XUSG::Compute::PipelineCache::uptr	m_computePipelineCache;
+	XUSG::PipelineLayoutCache::uptr		m_pipelineLayoutCache;
+	XUSG::DescriptorTableCache::uptr	m_descriptorTableCache;
 };

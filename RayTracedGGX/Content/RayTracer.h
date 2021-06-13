@@ -32,7 +32,7 @@ public:
 	void RenderGeometry(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void RayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
-	const XUSG::Texture2D::sptr& GetRayTracingOutput() const;
+	const XUSG::Texture2D::uptr* GetRayTracingOutputs() const;
 	const XUSG::RenderTarget::uptr* GetGBuffers() const;
 	const XUSG::DepthStencil::sptr GetDepth() const;
 
@@ -66,6 +66,7 @@ protected:
 		SAMPLER,
 		INDEX_BUFFERS,
 		VERTEX_BUFFERS,
+		MATERIALS,
 		CONSTANTS,
 		G_BUFFERS
 	};
@@ -74,7 +75,7 @@ protected:
 	{
 		BASE_COLOR,
 		NORMAL,
-		ROUGHNESS,
+		ROUGH_METAL,
 		VELOCITY,
 
 		NUM_GBUFFER
@@ -139,11 +140,12 @@ protected:
 	XUSG::VertexBuffer::uptr	m_vertexBuffers[NUM_MESH];
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];
 
-	XUSG::Texture2D::sptr		m_outputView;
+	XUSG::Texture2D::uptr		m_outputViews[NUM_HIT_GROUP];
 	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
 	XUSG::DepthStencil::sptr	m_depth;
 
 	XUSG::ConstantBuffer::uptr	m_cbBasePass[NUM_MESH];
+	XUSG::ConstantBuffer::uptr	m_cbMaterials;
 	XUSG::ConstantBuffer::uptr	m_cbRaytracing;
 
 	XUSG::Resource::uptr		m_scratch;

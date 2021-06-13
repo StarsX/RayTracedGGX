@@ -20,10 +20,9 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	if (normC.w <= 0.0) return;
 
 	const float roughness = g_txRoughness[DTid];
+	//const float depthC = g_txDepth[DTid];
 	const uint radius = RADIUS;
 	const uint sampleCount = radius * 2 + 1;
-
-	//const float depthC = g_txDepth[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 	
 	const float a = RoughnessSigma(roughness);

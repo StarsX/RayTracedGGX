@@ -28,7 +28,7 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
 	m_asyncCompute(true),
-	m_useSharedMemVariance(false),
+	m_useSharedMem(false),
 	m_isPaused(false),
 	m_tracking(false),
 	m_meshFileName("Media/dragon.obj"),
@@ -181,7 +181,7 @@ void RayTracedGGX::LoadAssets()
 		if (!m_denoiser) ThrowIfFailed(E_FAIL);
 
 		if (!m_denoiser->Init(pCommandList, m_width, m_height, Format::R8G8B8A8_UNORM,
-			m_rayTracer->GetRayTracingOutput(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()))
+			m_rayTracer->GetRayTracingOutputs(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()))
 			ThrowIfFailed(E_FAIL);
 	}
 
@@ -319,7 +319,7 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 		m_isPaused = !m_isPaused;
 		break;
 	case 'V':
-		m_useSharedMemVariance = !m_useSharedMemVariance;
+		m_useSharedMem = !m_useSharedMem;
 		break;
 	case 'A':
 		m_asyncCompute = !m_asyncCompute;
@@ -433,10 +433,12 @@ void RayTracedGGX::PopulateCommandList()
 	// Record commands.
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 	m_rayTracer->Render(pCommandList, m_frameIndex);
-	m_denoiser->Denoise(pCommandList, m_useSharedMemVariance);
 
-	ResourceBarrier barriers[2];
-	auto numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
+	ResourceBarrier barriers[4];
+	auto numBarriers = 0u;
+	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
+
+	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
 	m_denoiser->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
@@ -521,10 +523,11 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
-	m_denoiser->Denoise(pCommandList, m_useSharedMemVariance);
+	ResourceBarrier barriers[4];
+	auto numBarriers = 0u;
+	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
 
-	ResourceBarrier barriers[2];
-	auto numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
+	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
 	m_denoiser->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
@@ -586,7 +589,7 @@ double RayTracedGGX::CalculateFrameStats(float* pTimeStep)
 
 		wstringstream windowText;
 		windowText << setprecision(2) << fixed << L"    fps: " << fps;
-		windowText << L"    [V] " << (m_useSharedMemVariance ? L"Shared memory" : L"Direct access");
+		windowText << L"    [V] " << (m_useSharedMem ? L"Shared memory" : L"Direct access");
 		windowText << L"    [A] " << (m_asyncCompute ? L"Async compute" : L"Single command list");
 		SetCustomWindowText(windowText.str().c_str());
 	}

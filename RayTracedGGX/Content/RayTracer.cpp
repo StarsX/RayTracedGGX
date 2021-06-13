@@ -18,7 +18,6 @@ struct Vertex
 {
 	XMFLOAT3 Pos;
 	XMFLOAT3 Nrm;
-	PackedVector::XMCOLOR Color;
 };
 
 struct RayGenConstants
@@ -42,6 +41,12 @@ struct CBBasePass
 	XMFLOAT2	ProjBias;
 };
 
+struct CBMaterial
+{
+	XMFLOAT4	BaseColors[RayTracer::NUM_MESH];
+	XMFLOAT4	RoughMetals[RayTracer::NUM_MESH];
+};
+
 const wchar_t* RayTracer::HitGroupNames[] = { L"hitGroupReflection", L"hitGroupDiffuse" };
 const wchar_t* RayTracer::RaygenShaderName = L"raygenMain";
 const wchar_t* RayTracer::ClosestHitShaderNames[] = { L"closestHitReflection", L"closestHitDiffuse" };
@@ -58,7 +63,7 @@ RayTracer::RayTracer(const RayTracing::Device::sptr& device) :
 	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device.get());
 	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device.get(), L"RayTracerDescriptorTableCache");
 
-	AccelerationStructure::SetUAVCount(NUM_MESH + 1);
+	AccelerationStructure::SetUAVCount(NUM_MESH + NUM_HIT_GROUP + 1);
 }
 
 RayTracer::~RayTracer()
@@ -82,9 +87,14 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(createGroundMesh(pCommandList, uploaders), false);
 
 	// Create output views
-	m_outputView = Texture2D::MakeShared();
-	N_RETURN(m_outputView->Create(m_device.get(), width, height, Format::R11G11B10_FLOAT, 1,
-		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false, L"RayTracingOut"), false);
+	for (uint8_t i = 0; i < NUM_HIT_GROUP; ++i)
+	{
+		auto& outputView = m_outputViews[i];
+		outputView = Texture2D::MakeUnique();
+		N_RETURN(outputView->Create(m_device.get(), width, height, Format::R11G11B10_FLOAT, 1,
+			ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false,
+			(L"RayTracingOut" + to_wstring(i)).c_str()), false);
+	}
 
 	uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
 	mipCount = (min)(mipCount, maxGBufferMips);
@@ -94,8 +104,8 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		1, resourceFlags, 1, 1, nullptr, false, L"BaseColor"), false);
 	N_RETURN(m_gbuffers[NORMAL]->Create(m_device.get(), width, height, Format::R10G10B10A2_UNORM,
 		1, resourceFlags, mipCount, 1, nullptr, false, L"Normal"), false);
-	N_RETURN(m_gbuffers[ROUGHNESS]->Create(m_device.get(), width, height, Format::R8_UNORM,
-		1, resourceFlags, mipCount, 1, nullptr, false, L"Roughness"), false);
+	N_RETURN(m_gbuffers[ROUGH_METAL]->Create(m_device.get(), width, height, Format::R8G8_UNORM,
+		1, resourceFlags, mipCount, 1, nullptr, false, L"RoughnessMetallic"), false);
 	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device.get(), width, height, Format::R16G16_FLOAT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
 
@@ -115,6 +125,18 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 
 	m_cbRaytracing = ConstantBuffer::MakeUnique();
 	N_RETURN(m_cbRaytracing->Create(m_device.get(), sizeof(CBGlobal[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
+
+	m_cbMaterials = ConstantBuffer::MakeUnique();
+	N_RETURN(m_cbMaterials->Create(m_device.get(), sizeof(CBMaterial), 1, nullptr, MemoryType::UPLOAD, L"CBMaterial"), false);
+	{
+		const auto pCbData = reinterpret_cast<CBMaterial*>(m_cbMaterials->Map());
+		pCbData->BaseColors[0] = XMFLOAT4(0.95f, 0.93f, 0.88f, 1.0f);	// Silver
+		//pCbData->BaseColors[0] = XMFLOAT4(powf(0.92549f, 2.2f), powf(0.69412f, 2.2f), powf(0.6745f, 2.2f), 1.0f); // Rose gold
+		//pCbData->BaseColors[0] = XMFLOAT4(0.72f, 0.43f, 0.47f, 1.0f);	// Rose gold
+		pCbData->BaseColors[1] = XMFLOAT4(1.0f, 0.71f, 0.29f, 1.0f);	// Gold
+		pCbData->RoughMetals[0] = XMFLOAT4(0.5f, 1.0f, 0.0f, 0.0f);
+		pCbData->RoughMetals[1] = XMFLOAT4(0.16f, 1.0f, 0.0f, 0.0f);
+	}
 
 	// Load input image
 	{
@@ -249,26 +271,7 @@ void RayTracer::UpdateFrame(uint8_t frameIndex, CXMVECTOR eyePt, CXMMATRIX viewP
 
 void RayTracer::Render(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
-	// Bind the heaps
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
-	zPrepass(pCommandList, frameIndex);
-	gbufferPass(pCommandList, frameIndex);
-
-	ResourceBarrier barriers[5];
-	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-	numBarriers = m_gbuffers[BASE_COLOR]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
-	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
-	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
-		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
-	pCommandList->Barrier(numBarriers, barriers);
-
+	RenderGeometry(pCommandList, frameIndex);
 	rayTrace(pCommandList, frameIndex);
 }
 
@@ -302,11 +305,12 @@ void RayTracer::RenderGeometry(const RayTracing::CommandList* pCommandList, uint
 	zPrepass(pCommandList, frameIndex);
 	gbufferPass(pCommandList, frameIndex);
 
-	ResourceBarrier barriers[5];
-	auto numBarriers = m_outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS);
-	numBarriers = m_gbuffers[BASE_COLOR]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	numBarriers = m_gbuffers[NORMAL]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
-	numBarriers = m_gbuffers[ROUGHNESS]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+	ResourceBarrier barriers[6];
+	auto numBarriers = 0u;
+	for (auto& outputView : m_outputViews)
+		numBarriers = outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
+	for (uint8_t i = 0; i < VELOCITY; ++i)
+		numBarriers = m_gbuffers[i]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
 	pCommandList->Barrier(numBarriers, barriers);
@@ -325,9 +329,9 @@ void RayTracer::RayTrace(const RayTracing::CommandList* pCommandList, uint8_t fr
 	rayTrace(pCommandList, frameIndex);
 }
 
-const Texture2D::sptr& RayTracer::GetRayTracingOutput() const
+const Texture2D::uptr* RayTracer::GetRayTracingOutputs() const
 {
-	return m_outputView;
+	return m_outputViews;
 }
 
 const RenderTarget::uptr* RayTracer::GetGBuffers() const
@@ -343,16 +347,6 @@ const DepthStencil::sptr RayTracer::GetDepth() const
 bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert,
 	uint32_t stride, const uint8_t* pData, vector<Resource::uptr>& uploaders)
 {
-	// Gold
-	const PackedVector::XMCOLOR color(1.0f, 0.71f, 0.29f, 1.0f);
-	vector<Vertex> vertexData(numVert);
-
-	for (auto i = 0u; i < numVert; ++i)
-	{
-		memcpy(&vertexData[i], &pData[stride * i], stride);
-		vertexData[i].Color = color;
-	}
-
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	vertexBuffer = VertexBuffer::MakeUnique();
 	N_RETURN(vertexBuffer->Create(m_device.get(), numVert, sizeof(Vertex),
@@ -360,7 +354,7 @@ bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert
 		nullptr, 1, nullptr, L"MeshVB"), false);
 	uploaders.emplace_back(Resource::MakeUnique());
 
-	return vertexBuffer->Upload(pCommandList, uploaders.back().get(), vertexData.data(),
+	return vertexBuffer->Upload(pCommandList, uploaders.back().get(), pData,
 		sizeof(Vertex) * numVert, 0, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 }
 
@@ -384,41 +378,38 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 {
 	// Vertex buffer
 	{
-		// Silver
-		const PackedVector::XMCOLOR color(0.95f, 0.93f, 0.88f, 1.0f);
-
 		// Cube vertices positions and corresponding triangle normals.
 		Vertex vertices[] =
 		{
-			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
-			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) },
 
-			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
-			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, -1.0f, 0.0f) },
 
-			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
-			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
-			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
-			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(-1.0f, 0.0f, 0.0f) },
 
-			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
-			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f), color },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) },
 
-			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
-			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
-			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
-			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f), color },
+			{ XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, -1.0f) },
 
-			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
-			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
-			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
-			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f), color },
+			{ XMFLOAT3(-1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(1.0f, -1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
+			{ XMFLOAT3(-1.0f, 1.0f, 1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) },
 		};
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
@@ -476,8 +467,7 @@ bool RayTracer::createInputLayout()
 	const InputElement inputElements[] =
 	{
 		{ "POSITION",	0, Format::R32G32B32_FLOAT,	0, 0,								InputClassification::PER_VERTEX_DATA, 0 },
-		{ "NORMAL",		0, Format::R32G32B32_FLOAT,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 },
-		{ "COLOR",		0, Format::B8G8R8A8_UNORM,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
+		{ "NORMAL",		0, Format::R32G32B32_FLOAT,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
 	};
 
 	X_RETURN(m_pInputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
@@ -499,8 +489,9 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout for g-buffer pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
-		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::VS);
-		pipelineLayout->SetConstants(1, SizeOfInUint32(uint32_t), 0, 0, Shader::Stage::PS);
+		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::PS);
+		pipelineLayout->SetRootCBV(1, 0, 0, Shader::Stage::VS);
+		pipelineLayout->SetConstants(2, SizeOfInUint32(uint32_t), 1, 0, Shader::Stage::PS);
 		X_RETURN(m_pipelineLayouts[GBUFFER_PASS_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"GBufferPipelineLayout"), false);
 	}
@@ -509,12 +500,13 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout that is shared across all raytracing shaders invoked during a DispatchRays() call.
 	{
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
-		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0);
+		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0);
 		pipelineLayout->SetRootSRV(ACCELERATION_STRUCTURE, 0, 0, DescriptorFlag::DATA_STATIC);
 		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout->SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
-		pipelineLayout->SetRootCBV(CONSTANTS, 0);
+		pipelineLayout->SetRootCBV(MATERIALS, 0);
+		pipelineLayout->SetRootCBV(CONSTANTS, 1);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 5, 1);
 		X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			m_device.get(), m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
@@ -525,7 +517,7 @@ bool RayTracer::createPipelineLayouts()
 	// This is a pipeline layout that enables a shader to have unique arguments that come from shader tables.
 	{
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
-		pipelineLayout->SetConstants(0, SizeOfInUint32(RayGenConstants), 1);
+		pipelineLayout->SetConstants(0, SizeOfInUint32(RayGenConstants), 2);
 		X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout->GetPipelineLayout(
 			m_device.get(), m_pipelineLayoutCache.get(), PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
 			L"RayTracerRayGenPipelineLayout"), false);
@@ -568,7 +560,7 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 		state->OMSetNumRenderTargets(4);
 		state->OMSetRTVFormat(0, Format::R8G8B8A8_UNORM);
 		state->OMSetRTVFormat(1, Format::R10G10B10A2_UNORM);
-		state->OMSetRTVFormat(2, Format::R8_UNORM);
+		state->OMSetRTVFormat(2, Format::R8G8_UNORM);
 		state->OMSetRTVFormat(3, Format::R16G16_FLOAT);
 		state->OMSetDSVFormat(dsFormat);
 		X_RETURN(m_pipelines[GBUFFER_PASS], state->GetPipeline(m_graphicsPipelineCache.get(), L"GBufferPass"), false);
@@ -610,8 +602,13 @@ bool RayTracer::createDescriptorTables()
 
 	// Output UAV
 	{
+		const Descriptor descriptors[] =
+		{
+			m_outputViews[HIT_GROUP_REFLECTION]->GetUAV(),
+			m_outputViews[HIT_GROUP_DIFFUSE]->GetUAV()
+		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputView->GetUAV());
+		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
@@ -639,7 +636,7 @@ bool RayTracer::createDescriptorTables()
 		{
 			m_gbuffers[BASE_COLOR]->GetSRV(),
 			m_gbuffers[NORMAL]->GetSRV(),
-			m_gbuffers[ROUGHNESS]->GetSRV(),
+			m_gbuffers[ROUGH_METAL]->GetSRV(),
 			m_depth->GetSRV(),
 			m_lightProbe->GetSRV()
 		};
@@ -654,7 +651,7 @@ bool RayTracer::createDescriptorTables()
 		{
 			m_gbuffers[BASE_COLOR]->GetRTV(),
 			m_gbuffers[NORMAL]->GetRTV(),
-			m_gbuffers[ROUGHNESS]->GetRTV(),
+			m_gbuffers[ROUGH_METAL]->GetRTV(),
 			m_gbuffers[VELOCITY]->GetRTV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
@@ -821,12 +818,14 @@ void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frame
 	// Clear render target
 	const float clearColor[4] = {};
 	pCommandList->ClearRenderTargetView(m_gbuffers[NORMAL]->GetRTV(), clearColor);
+	pCommandList->ClearRenderTargetView(m_gbuffers[ROUGH_METAL]->GetRTV(), clearColor);
 	pCommandList->ClearRenderTargetView(m_gbuffers[VELOCITY]->GetRTV(), clearColor);
 	if (depthClear) pCommandList->ClearDepthStencilView(m_depth->GetDSV(), ClearFlag::DEPTH, 1.0f);
 
 	// Set pipeline state
 	pCommandList->SetGraphicsPipelineLayout(m_pipelineLayouts[GBUFFER_PASS_LAYOUT]);
 	pCommandList->SetPipelineState(m_pipelines[GBUFFER_PASS]);
+	pCommandList->SetGraphicsRootConstantBufferView(0, m_cbMaterials.get());
 
 	// Set viewport
 	Viewport viewport(0.0f, 0.0f, static_cast<float>(m_viewport.x), static_cast<float>(m_viewport.y));
@@ -839,8 +838,8 @@ void RayTracer::gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frame
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		// Set descriptor tables
-		pCommandList->SetGraphicsRootConstantBufferView(0, m_cbBasePass[i].get(), m_cbBasePass[i]->GetCBVOffset(frameIndex));
-		pCommandList->SetGraphics32BitConstant(1, i);
+		pCommandList->SetGraphicsRootConstantBufferView(1, m_cbBasePass[i].get(), m_cbBasePass[i]->GetCBVOffset(frameIndex));
+		pCommandList->SetGraphics32BitConstant(2, i);
 
 		pCommandList->IASetVertexBuffers(0, 1, &m_vertexBuffers[i]->GetVBV());
 		pCommandList->IASetIndexBuffer(m_indexBuffers[i]->GetIBV());
@@ -858,6 +857,7 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t fr
 	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	pCommandList->SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	pCommandList->SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
+	pCommandList->SetComputeRootConstantBufferView(MATERIALS, m_cbMaterials.get());
 	pCommandList->SetComputeRootConstantBufferView(CONSTANTS, m_cbRaytracing.get(), m_cbRaytracing->GetCBVOffset(frameIndex));
 	pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
