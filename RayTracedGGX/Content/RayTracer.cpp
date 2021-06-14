@@ -681,7 +681,7 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 	// Set geometries
 	VertexBufferView vertexBufferViews[NUM_MESH];
 	IndexBufferView indexBufferViews[NUM_MESH];
-	for (auto i = 0; i < NUM_MESH; ++i)
+	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		vertexBufferViews[i] = m_vertexBuffers[i]->GetVBV();
 		indexBufferViews[i] = m_indexBuffers[i]->GetIBV();
@@ -694,7 +694,7 @@ bool RayTracer::buildAccelerationStructures(const RayTracing::CommandList* pComm
 	const auto topLevelASIndex = bottomLevelASIndex + NUM_MESH;
 
 	// Prebuild
-	for (auto i = 0; i < NUM_MESH; ++i)
+	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		m_bottomLevelASs[i] = BottomLevelAS::MakeUnique();
 		N_RETURN(m_bottomLevelASs[i]->PreBuild(m_device.get(), 1, pGeometries[i], bottomLevelASIndex + i), false);

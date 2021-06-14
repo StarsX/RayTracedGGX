@@ -473,8 +473,8 @@ void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 
 	const float2 uv = input.Pos.xz * 0.5 + 0.5;
 	const float2 rghMtl = getRoughMetal(instanceIdx, uv);
-	const float4 color = getBaseColor(instanceIdx, uv);
 	const uint hitGroup = rghMtl.y > 0.5 ? HIT_GROUP_REFLECTION : HIT_GROUP_DIFFUSE;
+	const float4 color = getBaseColor(instanceIdx, uv);
 
 	// Trace a reflection ray.
 	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, 1);
@@ -492,11 +492,12 @@ void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 
 	const float2 uv = input.Pos.xz * 0.5 + 0.5;
 	const float2 rghMtl = getRoughMetal(instanceIdx, uv);
+	const uint hitGroup = rghMtl.y > 0.5 ? HIT_GROUP_REFLECTION : HIT_GROUP_DIFFUSE;
 	float4 color = getBaseColor(instanceIdx, uv);
-	color.xyz *= 1.0 - rghMtl.y;
+	color.xyz *= hitGroup ? 1.0 - rghMtl.y : 1.0;
 
 	// Trace a diffuse ray.
-	payload = computeLighting(true, rghMtl, N, V, P, color, HIT_GROUP_DIFFUSE, 1);
+	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, 1);
 }
 
 //--------------------------------------------------------------------------------------

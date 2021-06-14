@@ -27,8 +27,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_frameIndex(0),
 	m_viewport(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)),
 	m_scissorRect(0, 0, static_cast<long>(width), static_cast<long>(height)),
-	m_metallic(1.0f),
-	m_asyncCompute(true),
+	m_asyncCompute(1),
+	m_currentMesh(0),
 	m_useSharedMem(false),
 	m_isPaused(false),
 	m_tracking(false),
@@ -43,6 +43,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	freopen_s(&stream, "CONOUT$", "w+t", stdout);
 	freopen_s(&stream, "CONIN$", "r+t", stdin);
 #endif
+
+	for (auto& metallic : m_metallics) metallic = 1.0f;
 }
 
 RayTracedGGX::~RayTracedGGX()
@@ -314,18 +316,26 @@ void RayTracedGGX::OnDestroy()
 // User hot-key interactions.
 void RayTracedGGX::OnKeyUp(uint8_t key)
 {
+	auto& metallic = m_metallics[m_currentMesh];
+
 	switch (key)
 	{
 	case VK_SPACE:
 		m_isPaused = !m_isPaused;
 		break;
+	case VK_LEFT:
+		m_currentMesh = (m_currentMesh + RayTracer::NUM_MESH - 1) % RayTracer::NUM_MESH;
+		break;
+	case VK_RIGHT:
+		m_currentMesh = (m_currentMesh + 1) % RayTracer::NUM_MESH;
+		break;
 	case VK_UP:
-		m_metallic = (min)(m_metallic + 0.25f, 1.0f);
-		for (auto i = 0u; i < RayTracer::NUM_MESH; ++i) m_rayTracer->SetMetallic(i, m_metallic);
+		metallic = (min)(metallic + 0.25f, 1.0f);
+		m_rayTracer->SetMetallic(m_currentMesh, metallic);
 		break;
 	case VK_DOWN:
-		m_metallic = (max)(m_metallic - 0.25f, 0.0f);
-		for (auto i = 0u; i < RayTracer::NUM_MESH; ++i) m_rayTracer->SetMetallic(i, m_metallic);
+		metallic = (max)(metallic - 0.25f, 0.0f);
+		m_rayTracer->SetMetallic(m_currentMesh, metallic);
 		break;
 	case 'V':
 		m_useSharedMem = !m_useSharedMem;
@@ -596,11 +606,18 @@ double RayTracedGGX::CalculateFrameStats(float* pTimeStep)
 		frameCnt = 0;
 		elapsedTime = totalTime;
 
+		const wchar_t* meshNames[] =
+		{
+			L"Ground",
+			L"Model object"
+		};
+
 		wstringstream windowText;
 		windowText << setprecision(2) << fixed << L"    fps: " << fps;
 		windowText << L"    [V] " << (m_useSharedMem ? L"Shared memory" : L"Direct access");
 		windowText << L"    [A] " << (m_asyncCompute ? L"Async compute" : L"Single command list");
-		windowText << L"    [\x2191][\x2193] Metallic: " << m_metallic;
+		windowText << L"    [\x2190][\x2192] Current mesh: " << meshNames[m_currentMesh];
+		windowText << L"    [\x2191][\x2193] Metallic: " << m_metallics[m_currentMesh];
 		SetCustomWindowText(windowText.str().c_str());
 	}
 

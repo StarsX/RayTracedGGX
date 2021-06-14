@@ -10,7 +10,7 @@
 class RayTracer
 {
 public:
-	enum MeshIndex : uint8_t
+	enum MeshIndex : uint32_t
 	{
 		GROUND,
 		MODEL_OBJ,

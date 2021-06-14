@@ -97,8 +97,9 @@ private:
 	XUSG::Semaphore m_semaphore;
 
 	// Application state
-	float		m_metallic;
 	uint8_t		m_asyncCompute;
+	uint32_t	m_currentMesh;
+	float		m_metallics[RayTracer::NUM_MESH];
 	bool		m_useSharedMem;
 	bool		m_isPaused;
 	StepTimer	m_timer;

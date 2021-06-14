@@ -294,7 +294,7 @@ bool Denoiser::createPipelines(Format rtFormat)
 bool Denoiser::createDescriptorTables()
 {
 	// Spatial filter output UAVs
-	for (auto i = 0u; i < 2; ++i)
+	for (uint8_t i = 0; i < 2; ++i)
 	{
 		const Descriptor descriptors[] =
 		{
@@ -314,7 +314,7 @@ bool Denoiser::createDescriptorTables()
 	}
 
 	// Temporal SS output UAVs
-	for (auto i = 0u; i < 2; ++i)
+	for (uint8_t i = 0; i < 2; ++i)
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetUAV());
@@ -363,7 +363,7 @@ bool Denoiser::createDescriptorTables()
 	}
 
 	// Temporal SS input SRVs
-	for (auto i = 0u; i < 2; ++i)
+	for (uint8_t i = 0; i < 2; ++i)
 	{
 		const Descriptor descriptors[] =
 		{
@@ -377,7 +377,7 @@ bool Denoiser::createDescriptorTables()
 	}
 
 	// Tone mapping SRVs
-	for (auto i = 0u; i < 2; ++i)
+	for (uint8_t i = 0; i < 2; ++i)
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetSRV());
