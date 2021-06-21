@@ -316,9 +316,12 @@ bool Denoiser::createDescriptorTables()
 	// Temporal SS output UAVs
 	for (uint8_t i = 0; i < 2; ++i)
 	{
-		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetUAV());
-		X_RETURN(m_uavTables[UAV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		if (m_outputViews[UAV_TSS + i]->GetNumMips() <= 1)
+		{
+			const auto descriptorTable = Util::DescriptorTable::MakeUnique();
+			descriptorTable->SetDescriptors(0, 1, &m_outputViews[UAV_TSS + i]->GetUAV());
+			X_RETURN(m_uavTables[UAV_TABLE_TSS + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		}
 	}
 
 	// G-buffer SRVs

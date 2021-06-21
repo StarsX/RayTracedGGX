@@ -50,7 +50,6 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	const uint sampleCount = radius * 2 + 1;
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
-	const float a = RoughnessSigma(1.0);
 	float3 m1 = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
@@ -62,7 +61,6 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		const float4 norm = unpack(g_srcMtlNrms[j].zw);
 
 		const float w = (norm.w > 0.0 && srcMtl.w < 1.0 ? 1.0 : 0.0)
-			* Gaussian(radius, i, a)
 			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
 			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
 		const float3 wsrc = srcMtl.xyz * w;
