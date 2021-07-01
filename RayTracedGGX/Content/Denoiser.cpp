@@ -35,7 +35,6 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	// Create output views
 	const wchar_t* namesUAV[] =
 	{
-		L"VarianceScratch",
 		L"TemporalSSOut0",
 		L"TemporalSSOut1",
 		L"FilteredOut",
@@ -45,10 +44,6 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	const uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
 
 	for (auto& outputView : m_outputViews) outputView = Texture2D::MakeUnique();
-	N_RETURN(m_outputViews[UAV_SCT]->Create(m_device.get(), width, height,
-		Format::R11G11B10_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		(min)(mipCount, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[UAV_SCT]), false);
-
 	for (uint8_t i = UAV_TSS; i <= UAV_TSS1; ++i)
 		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
@@ -127,7 +122,7 @@ bool Denoiser::createPipelineLayouts()
 	// This is a pipeline layout for spatial horizontal pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
-		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 2, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
+		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 1, 0);
 		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 1);
 		X_RETURN(m_pipelineLayouts[SPATIAL_H_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
@@ -138,8 +133,8 @@ bool Denoiser::createPipelineLayouts()
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 0);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 2);
 		X_RETURN(m_pipelineLayouts[SPT_V_RFL_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"ReflectionSpatialVPipelineLayout"), false);
 	}
@@ -148,8 +143,8 @@ bool Denoiser::createPipelineLayouts()
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
-		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 4, 0);
-		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 4);
+		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
+		pipelineLayout->SetRange(G_BUFFERS, DescriptorType::SRV, 3, 3);
 		X_RETURN(m_pipelineLayouts[SPT_V_DFF_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"DiffuseSpatialVPipelineLayout"), false);
 	}
@@ -294,18 +289,6 @@ bool Denoiser::createPipelines(Format rtFormat)
 bool Denoiser::createDescriptorTables()
 {
 	// Spatial filter output UAVs
-	for (uint8_t i = 0; i < 2; ++i)
-	{
-		const Descriptor descriptors[] =
-		{
-			m_outputViews[UAV_SCT]->GetUAV(),
-			m_outputViews[UAV_TSS + i]->GetUAV() // Reuse it as variance scratch
-		};
-		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_uavTables[UAV_TABLE_SPF_H + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
-	}
-
 	for (uint8_t i = 0; i < NUM_TERM; ++i)
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
@@ -343,8 +326,7 @@ bool Denoiser::createDescriptorTables()
 		const Descriptor descriptors[] =
 		{
 			m_inputViews[TERM_REFLECTION]->GetSRV(),
-			m_outputViews[UAV_SCT]->GetSRV(),
-			m_outputViews[UAV_TSS + i]->GetSRV(),	// Reuse it as variance scratch
+			m_outputViews[UAV_TSS + i]->GetSRV()	// Reuse it as scratch
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
@@ -356,8 +338,7 @@ bool Denoiser::createDescriptorTables()
 		const Descriptor descriptors[] =
 		{
 			m_inputViews[TERM_DIFFUSE]->GetSRV(),
-			m_outputViews[UAV_SCT]->GetSRV(),
-			m_outputViews[UAV_TSS + i]->GetSRV(),	// Reuse it as variance scratch
+			m_outputViews[UAV_TSS + i]->GetSRV(),	// Reuse it as scratch
 			m_outputViews[UAV_FLT]->GetSRV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
@@ -403,13 +384,12 @@ void Denoiser::reflectionSpatialFilter(const CommandList* pCommandList, uint32_t
 {
 	// Horizontal pass
 	{
-		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, numBarriers, 0);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
 		numBarriers = m_inputViews[TERM_REFLECTION]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 		pCommandList->Barrier(numBarriers, pBarriers);
 
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_SPF_H + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_SCT + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_RFL]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
@@ -428,7 +408,6 @@ void Denoiser::reflectionSpatialFilter(const CommandList* pCommandList, uint32_t
 	// Vertical pass
 	{
 		numBarriers = m_outputViews[UAV_FLT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
-		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		pCommandList->Barrier(numBarriers, pBarriers);
 
@@ -455,13 +434,12 @@ void Denoiser::diffuseSpatialFilter(const CommandList* pCommandList, uint32_t nu
 {
 	// Horizontal pass
 	{
-		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
-		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, numBarriers, 0);
+		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
 		numBarriers = m_inputViews[TERM_DIFFUSE]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 		pCommandList->Barrier(numBarriers, pBarriers);
 
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPATIAL_H_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_SPF_H + m_frameParity]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_SCT + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_DFF]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
@@ -481,7 +459,6 @@ void Denoiser::diffuseSpatialFilter(const CommandList* pCommandList, uint32_t nu
 	{
 		numBarriers = m_outputViews[UAV_FLT1]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
 		numBarriers = m_outputViews[UAV_FLT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
-		numBarriers = m_outputViews[UAV_SCT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		pCommandList->Barrier(numBarriers, pBarriers);
 

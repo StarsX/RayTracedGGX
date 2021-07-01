@@ -186,7 +186,7 @@
     <None Include="Content\Shaders\FilterCommon.hlsli">
       <Filter>Shaders\Denoiser</Filter>
     </None>
-    <None Include="Content\Shaders\Variance.hlsli">
+    <None Include="Content\Shaders\SpatialFilter.hlsli">
       <Filter>Shaders\Denoiser</Filter>
     </None>
   </ItemGroup>

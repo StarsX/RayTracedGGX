@@ -47,6 +47,16 @@ float RoughnessSigma(float roughness)
 	return 320.0 * roughness * roughness * roughness;
 }
 
+float3 Denoise(float3 src, float3 mu, float roughness)
+{
+	const float t = roughness;
+	const float b = 1.0 - roughness * 2.0;
+	float3 d = TM(src) - mu;
+	d = max(abs(d) - t, 0.0) * sign(d);
+
+	return mu + b * d;
+}
+
 //--------------------------------------------------------------------------------------
 // Clip color
 //--------------------------------------------------------------------------------------

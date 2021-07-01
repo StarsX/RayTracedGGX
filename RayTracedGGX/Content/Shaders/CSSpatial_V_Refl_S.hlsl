@@ -2,20 +2,19 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#include "Variance.hlsli"
+#include "SpatialFilter.hlsli"
 
 //--------------------------------------------------------------------------------------
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	g_renderTarget;
 Texture2D<float3>	g_txAverage;
-Texture2D<float3>	g_txSquareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
-//Texture2D<float>	g_txDepth : register (t5);
+//Texture2D<float>	g_txDepth : register (t4);
 
 groupshared uint4 g_avgRghNrms[SHARED_MEM_SIZE];
-groupshared uint2 g_sqas[SHARED_MEM_SIZE];
+//groupshared float g_depths[SHARED_MEM_SIZE];
 
 void loadSamples(uint2 dTid, uint gTid, uint radius)
 {
@@ -26,15 +25,13 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 	for (uint i = 0; i < 2; ++i, dTid.y += offset, gTid += offset)
 	{
 		const float3 avg = g_txAverage[dTid];
-		const float3 sqa = g_txSquareAvg[dTid];
 		float4 norm = g_txNormal[dTid];
-		//const float depth = g_txDepth[dTid];
 		const float rgh = g_txRoughness[dTid];
+		//const float depth = g_txDepth[dTid];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		g_avgRghNrms[gTid] = uint4(pack(float4(avg, rgh)), pack(norm));
-		//g_sqas[gTid] = pack(float4(sqa, depth));
-		g_sqas[gTid] = pack(sqa);
+		//g_depths[gTid] = depth;
 	}
 
 	GroupMemoryBarrierWithGroupSync();
@@ -74,7 +71,6 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		const uint j = GTid.y + i;
 		const float4 avgRgh = unpack(g_avgRghNrms[j].xy);
 		const float4 norm = unpack(g_avgRghNrms[j].zw);
-		const float3 sqa = unpack(g_sqas[j]).xyz;
 
 		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
 			* Gaussian(radius, i, a)
@@ -82,17 +78,11 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
 			* RoughnessWeight(roughness, avgRgh.w, 0.0, 0.5);
 		mu += avgRgh.xyz * w;
-		m2 += sqa * w;
 		wsum += w;
 	}
 
 	mu /= wsum;
-	const float3 sigma = sqrt(abs(m2 / wsum - mu * mu));
-	const float3 gsigma = g_gammaRefl * sigma;
-	const float3 neighborMin = mu - gsigma;
-	const float3 neighborMax = mu + gsigma;
-
-	const float3 result = clipColor(TM(src.xyz), neighborMin, neighborMax);
+	const float3 result = Denoise(src, mu, roughness);
 
 	g_renderTarget[DTid] = float4(ITM(result), 1.0);
 }

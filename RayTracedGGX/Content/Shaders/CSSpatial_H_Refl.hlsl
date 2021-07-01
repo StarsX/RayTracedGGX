@@ -2,13 +2,12 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#include "Variance.hlsli"
+#include "SpatialFilter.hlsli"
 
 //--------------------------------------------------------------------------------------
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float3>	g_renderTarget;
-RWTexture2D<float3>	g_squareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t3);
@@ -26,7 +25,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 	
 	const float a = RoughnessSigma(roughness);
-	float3 m1 = 0.0, m2 = 0.0;
+	float3 mu = 0.0;
 	float wsum = 0.0;
 
 	[unroll]
@@ -45,12 +44,9 @@ void main(uint2 DTid : SV_DispatchThreadID)
 			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N)
 			//* Gaussian(depthC, depth, SIGMA_Z);
 			* RoughnessWeight(roughness, rgh, 0.0, 0.5);
-		const float3 wsrc = src * w;
-		m1 += wsrc;
-		m2 += wsrc * src;
+		mu += src * w;
 		wsum += w;
 	}
 
-	g_renderTarget[DTid] = m1 / wsum;
-	g_squareAvg[DTid] = m2 / wsum;
+	g_renderTarget[DTid] = mu / wsum;
 }

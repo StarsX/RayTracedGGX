@@ -2,18 +2,17 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#include "Variance.hlsli"
+#include "SpatialFilter.hlsli"
 
 //--------------------------------------------------------------------------------------
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	g_renderTarget;
-Texture2D<float3>	g_txAverage;
-Texture2D<float3>	g_txSquareAvg;
-Texture2D			g_txDest;
-Texture2D			g_txNormal;
-Texture2D<float2>	g_txRoughMetal;
-//Texture2D<float>	g_txDepth : register (t5);
+Texture2D<float3>	g_txAverage		: register (t1);
+Texture2D			g_txDest		: register (t2);
+Texture2D			g_txNormal		: register (t3);
+Texture2D<float2>	g_txRoughMetal	: register (t4);
+//Texture2D<float>	g_txDepth		: register (t5);
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
@@ -45,24 +44,18 @@ void main(uint2 DTid : SV_DispatchThreadID)
 		if (norm.w <= 0.0 || mtl >= 1.0) continue;
 
 		float3 avg = g_txAverage[index];
-		float3 sqa = g_txSquareAvg[index];
 		//const float depth = g_txDepth[index];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		const float w = NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
 			//* Gaussian(depthC, depth, SIGMA_Z);
 		mu += avg * w;
-		m2 += sqa * w;
 		wsum += w;
 	}
 
 	mu /= wsum;
-	const float3 sigma = sqrt(abs(m2 / wsum - mu * mu));
-	const float3 gsigma = g_gammaDiff * sigma;
-	const float3 neighborMin = mu - gsigma;
-	const float3 neighborMax = mu + gsigma;
-
-	const float3 result = clipColor(TM(src), neighborMin, neighborMax);
+	const float3 result = mu;
+	//const float3 result = Denoise(src, mu, 1.0);
 
 	g_renderTarget[DTid] = float4(dest.xyz + ITM(result), dest.w);
 }

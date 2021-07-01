@@ -453,7 +453,7 @@ void RayTracedGGX::PopulateCommandList()
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 	m_rayTracer->Render(pCommandList, m_frameIndex);
 
-	ResourceBarrier barriers[4];
+	ResourceBarrier barriers[3];
 	auto numBarriers = 0u;
 	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
 
@@ -542,7 +542,7 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
-	ResourceBarrier barriers[4];
+	ResourceBarrier barriers[3];
 	auto numBarriers = 0u;
 	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
 

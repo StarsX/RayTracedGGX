@@ -69,7 +69,6 @@ protected:
 
 	enum UAVResource : uint8_t
 	{
-		UAV_SCT,			// Scratch buffer
 		UAV_TSS,			// For temporal super sampling
 		UAV_TSS1,
 		UAV_FLT,			// Spatially filtered
@@ -95,14 +94,14 @@ protected:
 
 	enum UAVTable : uint8_t
 	{
-		UAV_TABLE_SPF_H,	// For spatial horizontal filter
-		UAV_TABLE_SPF_H1,
 		UAV_TABLE_FLT,
 		UAV_TABLE_FLT1,
 		UAV_TABLE_TSS,
 		UAV_TABLE_TSS1,
 
-		NUM_UAV_TABLE
+		NUM_UAV_TABLE,
+
+		UAV_TABLE_SCT = UAV_TABLE_TSS, // For spatial horizontal filter scratch
 	};
 
 	enum FilterTerm : uint8_t

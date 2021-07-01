@@ -2,17 +2,16 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#include "Variance.hlsli"
+#include "SpatialFilter.hlsli"
 
 //--------------------------------------------------------------------------------------
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	g_renderTarget;
 Texture2D<float3>	g_txAverage;
-Texture2D<float3>	g_txSquareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
-//Texture2D<float>	g_txDepth : register (t5);
+//Texture2D<float>	g_txDepth : register (t4);
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
@@ -42,7 +41,6 @@ void main(uint2 DTid : SV_DispatchThreadID)
 		const uint2 index = uint2(DTid.x, DTid.y + i - radius);
 		float4 norm = g_txNormal[index];
 		float3 avg = g_txAverage[index];
-		float3 sqa = g_txSquareAvg[index];
 		//const float depth = g_txDepth[index];
 		const float rgh = g_txRoughness[index];
 
@@ -53,17 +51,11 @@ void main(uint2 DTid : SV_DispatchThreadID)
 			//* Gaussian(depthC, depth, SIGMA_Z);
 			* RoughnessWeight(roughness, rgh, 0.0, 0.5);
 		mu += avg * w;
-		m2 += sqa * w;
 		wsum += w;
 	}
 
 	mu /= wsum;
-	const float3 sigma = sqrt(abs(m2 / wsum - mu * mu));
-	const float3 gsigma = g_gammaRefl * sigma;
-	const float3 neighborMin = mu - gsigma;
-	const float3 neighborMax = mu + gsigma;
-
-	const float3 result = clipColor(TM(src), neighborMin, neighborMax);
+	const float3 result = Denoise(src, mu, roughness);
 
 	g_renderTarget[DTid] = float4(ITM(result), 1.0);
 }

@@ -2,18 +2,18 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
-#include "Variance.hlsli"
+#include "SpatialFilter.hlsli"
 
 //--------------------------------------------------------------------------------------
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float3>	g_renderTarget;
-RWTexture2D<float3>	g_squareAvg;
 Texture2D			g_txNormal;
 Texture2D<float>	g_txRoughness;
 //Texture2D<float>	g_txDepth : register (t3);
 
 groupshared uint4 g_srcRghNrms[SHARED_MEM_SIZE];
+//groupshared float g_depths[SHARED_MEM_SIZE];
 
 void loadSamples(uint2 dTid, uint gTid, uint radius)
 {
@@ -25,12 +25,13 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 	{
 		float3 src = g_txSource[dTid];
 		float4 norm = g_txNormal[dTid];
-		//const float depth = g_txDepth[dTid];
 		const float rgh = g_txRoughness[dTid];
+		//const float depth = g_txDepth[dTid];
 
 		src = TM(src);
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		g_srcRghNrms[gTid] = uint4(pack(float4(src, rgh)), pack(norm));
+		//g_depths[gTid] = depth;
 	}
 
 	GroupMemoryBarrierWithGroupSync();
@@ -53,7 +54,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
 	const float a = RoughnessSigma(roughness);
-	float3 m1 = 0.0, m2 = 0.0;
+	float3 mu = 0.0;
 	float wsum = 0.0;
 
 	[unroll]
@@ -68,12 +69,9 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N)
 			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
 			* RoughnessWeight(roughness, srcRgh.w, 0.0, 0.5);
-		const float3 wsrc = srcRgh.xyz * w;
-		m1 += wsrc;
-		m2 += wsrc * srcRgh.xyz;
+		mu += srcRgh.xyz * w;
 		wsum += w;
 	}
 
-	g_renderTarget[DTid] = m1 / wsum;
-	g_squareAvg[DTid] = m2 / wsum;
+	g_renderTarget[DTid] = mu / wsum;
 }
