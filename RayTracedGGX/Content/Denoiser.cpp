@@ -49,12 +49,11 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 			(min)(mipCount, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[i]), false);
 
-	N_RETURN(m_outputViews[UAV_FLT]->Create(m_device.get(), width, height,
-		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		min<uint8_t>(mipCount - 1, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[UAV_FLT]), false);
-	N_RETURN(m_outputViews[UAV_FLT1]->Create(m_device.get(), width, height,
-		Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-		1, 1, MemoryType::DEFAULT, false, namesUAV[UAV_FLT1]), false);
+	for (uint8_t i = UAV_FLT_RFL; i <= UAV_FLT_DFF; ++i)
+		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
+			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
+			min<uint8_t>(mipCount - 1, maxMips), 1, MemoryType::DEFAULT, false,
+			namesUAV[i]), false);
 
 	// Create pipelines
 	N_RETURN(createPipelineLayouts(), false);
@@ -339,7 +338,7 @@ bool Denoiser::createDescriptorTables()
 		{
 			m_inputViews[TERM_DIFFUSE]->GetSRV(),
 			m_outputViews[UAV_TSS + i]->GetSRV(),	// Reuse it as scratch
-			m_outputViews[UAV_FLT]->GetSRV()
+			m_outputViews[UAV_FLT_RFL]->GetSRV()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
@@ -351,7 +350,7 @@ bool Denoiser::createDescriptorTables()
 	{
 		const Descriptor descriptors[] =
 		{
-			m_outputViews[UAV_FLT1]->GetSRV(),
+			m_outputViews[UAV_FLT_DFF]->GetSRV(),
 			m_outputViews[UAV_TSS + !i]->GetSRV(),
 			m_pGbuffers[VELOCITY]->GetSRV()
 		};
@@ -407,12 +406,12 @@ void Denoiser::reflectionSpatialFilter(const CommandList* pCommandList, uint32_t
 
 	// Vertical pass
 	{
-		numBarriers = m_outputViews[UAV_FLT]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+		numBarriers = m_outputViews[UAV_FLT_RFL]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
 		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		pCommandList->Barrier(numBarriers, pBarriers);
 
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPT_V_RFL_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT_RFL]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_RFL + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
@@ -457,13 +456,13 @@ void Denoiser::diffuseSpatialFilter(const CommandList* pCommandList, uint32_t nu
 
 	// Vertical pass
 	{
-		numBarriers = m_outputViews[UAV_FLT1]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
-		numBarriers = m_outputViews[UAV_FLT]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+		numBarriers = m_outputViews[UAV_FLT_DFF]->SetBarrier(pBarriers, ResourceState::UNORDERED_ACCESS, 0, 0);
+		numBarriers = m_outputViews[UAV_FLT_RFL]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(pBarriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 		pCommandList->Barrier(numBarriers, pBarriers);
 
 		pCommandList->SetComputePipelineLayout(m_pipelineLayouts[SPT_V_DFF_LAYOUT]);
-		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT1]);
+		pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_FLT_DFF]);
 		pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_SPF_DFF + m_frameParity]);
 		pCommandList->SetComputeDescriptorTable(G_BUFFERS, m_srvTables[SRV_TABLE_GB]);
 
@@ -484,7 +483,7 @@ void Denoiser::temporalSS(const CommandList* pCommandList)
 {
 	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, 0, 0);
-	numBarriers = m_outputViews[UAV_FLT1]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
+	numBarriers = m_outputViews[UAV_FLT_DFF]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_outputViews[UAV_TSS + !m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_pGbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::END_ONLY);

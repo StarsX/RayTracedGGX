@@ -69,10 +69,11 @@ protected:
 
 	enum UAVResource : uint8_t
 	{
-		UAV_TSS,			// For temporal super sampling
+		UAV_TSS,				// For temporal super sampling
 		UAV_TSS1,
-		UAV_FLT,			// Spatially filtered
-		UAV_FLT1,
+		UAV_FLT,
+		UAV_FLT_RFL = UAV_FLT,	// Spatially filtered reflection
+		UAV_FLT_DFF,
 
 		NUM_UAV
 	};
@@ -82,11 +83,11 @@ protected:
 		SRV_TABLE_GB,
 		SRV_TABLE_SPF_RFL,
 		SRV_TABLE_SPF_RFL1,
-		SRV_TABLE_SPF_DFF,	// For spatial filter of diffuse map
+		SRV_TABLE_SPF_DFF,		// For spatial filter of diffuse map
 		SRV_TABLE_SPF_DFF1,
-		SRV_TABLE_TSS,		// For temporal super sampling map
+		SRV_TABLE_TSS,			// For temporal super sampling map
 		SRV_TABLE_TSS1,
-		SRV_TABLE_TM,		// For tone mapping
+		SRV_TABLE_TM,			// For tone mapping
 		SRV_TABLE_TM1,
 
 		NUM_SRV_TABLE
@@ -94,13 +95,14 @@ protected:
 
 	enum UAVTable : uint8_t
 	{
-		UAV_TABLE_FLT,
-		UAV_TABLE_FLT1,
+		UAV_TABLE_FLT_RFL,
+		UAV_TABLE_FLT_DFF,
 		UAV_TABLE_TSS,
 		UAV_TABLE_TSS1,
 
 		NUM_UAV_TABLE,
 
+		UAV_TABLE_FLT = UAV_TABLE_FLT_RFL,
 		UAV_TABLE_SCT = UAV_TABLE_TSS, // For spatial horizontal filter scratch
 	};
 
