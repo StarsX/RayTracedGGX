@@ -40,8 +40,9 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
 	AllocConsole();
 	FILE* stream;
-	freopen_s(&stream, "CONOUT$", "w+t", stdout);
 	freopen_s(&stream, "CONIN$", "r+t", stdin);
+	freopen_s(&stream, "CONOUT$", "w+t", stdout);
+	freopen_s(&stream, "CONOUT$", "w+t", stderr);
 #endif
 
 	for (auto& metallic : m_metallics) metallic = 1.0f;

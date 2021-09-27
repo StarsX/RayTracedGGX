@@ -92,7 +92,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		auto& outputView = m_outputViews[i];
 		outputView = Texture2D::MakeUnique();
 		N_RETURN(outputView->Create(m_device.get(), width, height, Format::R11G11B10_FLOAT, 1,
-			ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, MemoryType::DEFAULT, false,
+			ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, false, MemoryFlag::NONE,
 			(L"RayTracingOut" + to_wstring(i)).c_str()), false);
 	}
 
@@ -101,33 +101,35 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	const auto resourceFlags = mipCount > 1 ? ResourceFlag::ALLOW_UNORDERED_ACCESS : ResourceFlag::NONE;
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
 	N_RETURN(m_gbuffers[BASE_COLOR]->Create(m_device.get(), width, height, Format::R8G8B8A8_UNORM,
-		1, resourceFlags, 1, 1, nullptr, false, L"BaseColor"), false);
+		1, resourceFlags, 1, 1, nullptr, false, MemoryFlag::NONE, L"BaseColor"), false);
 	N_RETURN(m_gbuffers[NORMAL]->Create(m_device.get(), width, height, Format::R10G10B10A2_UNORM,
-		1, resourceFlags, mipCount, 1, nullptr, false, L"Normal"), false);
+		1, resourceFlags, mipCount, 1, nullptr, false, MemoryFlag::NONE, L"Normal"), false);
 	N_RETURN(m_gbuffers[ROUGH_METAL]->Create(m_device.get(), width, height, Format::R8G8_UNORM,
-		1, resourceFlags, mipCount, 1, nullptr, false, L"RoughnessMetallic"), false);
+		1, resourceFlags, mipCount, 1, nullptr, false, MemoryFlag::NONE, L"RoughnessMetallic"), false);
 	N_RETURN(m_gbuffers[VELOCITY]->Create(m_device.get(), width, height, Format::R16G16_FLOAT,
-		1, ResourceFlag::NONE, 1, 1, nullptr, false, L"Velocity"), false);
+		1, ResourceFlag::NONE, 1, 1, nullptr, false, MemoryFlag::NONE, L"Velocity"), false);
 
 	const auto dsFormat = Format::D24_UNORM_S8_UINT;
 	m_depth = DepthStencil::MakeShared();
-	N_RETURN(m_depth->Create(m_device.get(), width, height, dsFormat,
-		ResourceFlag::NONE, 1, 1, 1, 1.0f, 0, false, L"Depth"), false);
+	N_RETURN(m_depth->Create(m_device.get(), width, height, dsFormat, ResourceFlag::NONE,
+		1, 1, 1, 1.0f, 0, false, MemoryFlag::NONE, L"Depth"), false);
 
 	// Constant buffers
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		auto& cbBasePass = m_cbBasePass[i];
 		cbBasePass = ConstantBuffer::MakeUnique();
-		N_RETURN(cbBasePass->Create(m_device.get(), sizeof(CBBasePass[FrameCount]), FrameCount,
-			nullptr, MemoryType::UPLOAD, (L"CBBasePass" + to_wstring(i)).c_str()), false);
+		N_RETURN(cbBasePass->Create(m_device.get(), sizeof(CBBasePass[FrameCount]), FrameCount, nullptr,
+			MemoryType::UPLOAD, MemoryFlag::NONE, (L"CBBasePass" + to_wstring(i)).c_str()), false);
 	}
 
 	m_cbRaytracing = ConstantBuffer::MakeUnique();
-	N_RETURN(m_cbRaytracing->Create(m_device.get(), sizeof(CBGlobal[FrameCount]), FrameCount, nullptr, MemoryType::UPLOAD, L"CBGlobal"), false);
+	N_RETURN(m_cbRaytracing->Create(m_device.get(), sizeof(CBGlobal[FrameCount]), FrameCount,
+		nullptr, MemoryType::UPLOAD, MemoryFlag::NONE, L"CBGlobal"), false);
 
 	m_cbMaterials = ConstantBuffer::MakeUnique();
-	N_RETURN(m_cbMaterials->Create(m_device.get(), sizeof(CBMaterial), 1, nullptr, MemoryType::UPLOAD, L"CBMaterial"), false);
+	N_RETURN(m_cbMaterials->Create(m_device.get(), sizeof(CBMaterial), 1,
+		nullptr, MemoryType::UPLOAD, MemoryFlag::NONE, L"CBMaterial"), false);
 	{
 		const auto pCbData = reinterpret_cast<CBMaterial*>(m_cbMaterials->Map());
 		pCbData->BaseColors[0] = XMFLOAT4(0.95f, 0.93f, 0.88f, 1.0f);	// Silver
@@ -357,7 +359,7 @@ bool RayTracer::createVB(RayTracing::CommandList* pCommandList, uint32_t numVert
 	vertexBuffer = VertexBuffer::MakeUnique();
 	N_RETURN(vertexBuffer->Create(m_device.get(), numVert, sizeof(Vertex),
 		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
-		nullptr, 1, nullptr, L"MeshVB"), false);
+		nullptr, 1, nullptr, MemoryFlag::NONE, L"MeshVB"), false);
 	uploaders.emplace_back(Resource::MakeUnique());
 
 	return vertexBuffer->Upload(pCommandList, uploaders.back().get(), pData,
@@ -373,7 +375,7 @@ bool RayTracer::createIB(RayTracing::CommandList* pCommandList, uint32_t numIndi
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	indexBuffers = IndexBuffer::MakeUnique();
 	N_RETURN(indexBuffers->Create(m_device.get(), byteWidth, Format::R32_UINT, ResourceFlag::NONE,
-		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"MeshIB"), false);
+		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, MemoryFlag::NONE, L"MeshIB"), false);
 	uploaders.emplace_back(Resource::MakeUnique());
 
 	return indexBuffers->Upload(pCommandList, uploaders.back().get(), pData,
@@ -420,8 +422,9 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		vertexBuffer = VertexBuffer::MakeUnique();
-		N_RETURN(vertexBuffer->Create(m_device.get(), static_cast<uint32_t>(size(vertices)), sizeof(Vertex),
-			ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundVB"), false);
+		N_RETURN(vertexBuffer->Create(m_device.get(), static_cast<uint32_t>(size(vertices)),
+			sizeof(Vertex), ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr,
+			1, nullptr, MemoryFlag::NONE, L"GroundVB"), false);
 		uploaders.push_back(Resource::MakeUnique());
 
 		N_RETURN(vertexBuffer->Upload(pCommandList, uploaders.back().get(), vertices,
@@ -457,7 +460,7 @@ bool RayTracer::createGroundMesh(RayTracing::CommandList* pCommandList, vector<R
 		auto& indexBuffers = m_indexBuffers[GROUND];
 		indexBuffers = IndexBuffer::MakeUnique();
 		N_RETURN(indexBuffers->Create(m_device.get(), sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
-			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, L"GroundIB"), false);
+			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, MemoryFlag::NONE, L"GroundIB"), false);
 		uploaders.push_back(Resource::MakeUnique());
 
 		N_RETURN(indexBuffers->Upload(pCommandList, uploaders.back().get(), indices,

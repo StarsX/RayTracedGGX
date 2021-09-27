@@ -47,12 +47,12 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	for (uint8_t i = UAV_TSS; i <= UAV_TSS1; ++i)
 		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			(min)(mipCount, maxMips), 1, MemoryType::DEFAULT, false, namesUAV[i]), false);
+			(min)(mipCount, maxMips), 1, false, MemoryFlag::NONE, namesUAV[i]), false);
 
 	for (uint8_t i = UAV_FLT_RFL; i <= UAV_FLT_DFF; ++i)
 		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
-			min<uint8_t>(mipCount - 1, maxMips), 1, MemoryType::DEFAULT, false,
+			min<uint8_t>(mipCount - 1, maxMips), 1, false, MemoryFlag::NONE,
 			namesUAV[i]), false);
 
 	// Create pipelines
