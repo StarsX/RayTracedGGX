@@ -1,1 +1,1 @@
-start RayTracedGGX.exe -env Media/galileo_cross.dds
+start RayTracedGGX.exe -env Assets/galileo_cross.dds

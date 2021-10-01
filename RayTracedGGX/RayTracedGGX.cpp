@@ -32,8 +32,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_useSharedMem(false),
 	m_isPaused(false),
 	m_tracking(false),
-	m_meshFileName("Media/dragon.obj"),
-	m_envFileName(L"Media/rnl_cross.dds"),
+	m_meshFileName("Assets/dragon.obj"),
+	m_envFileName(L"Assets/rnl_cross.dds"),
 	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f)
 {
 #if defined (_DEBUG)

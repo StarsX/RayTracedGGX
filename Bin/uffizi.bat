@@ -1,1 +1,1 @@
-start RayTracedGGX.exe -env Media/uffizi_cross.dds
+start RayTracedGGX.exe -env Assets/uffizi_cross.dds

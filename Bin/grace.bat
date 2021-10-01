@@ -1,1 +1,1 @@
-start RayTracedGGX.exe -env Media/grace_cross.dds
+start RayTracedGGX.exe -env Assets/grace_cross.dds

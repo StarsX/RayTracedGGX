@@ -1,1 +1,1 @@
-start RayTracedGGX.exe -env Media/stpeters_cross.dds
+start RayTracedGGX.exe -env Assets/stpeters_cross.dds

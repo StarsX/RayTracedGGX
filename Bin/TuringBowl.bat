@@ -1,1 +1,1 @@
-start RayTracedGGX.exe -mesh Media/TuringBowl.obj 0.0 2.8 0.0 0.03
+start RayTracedGGX.exe -mesh Assets/TuringBowl.obj 0.0 2.8 0.0 0.03
