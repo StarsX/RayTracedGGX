@@ -308,3 +308,5 @@ $RECYCLE.BIN/
 *.lnk
 
 !XUSG*.pdb
+!FallbackLayer.pdb
+!Bin/*/*.[Oo]bj
