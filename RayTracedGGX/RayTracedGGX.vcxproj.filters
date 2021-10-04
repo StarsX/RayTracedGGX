@@ -28,17 +28,8 @@
     <Filter Include="XUSG">
       <UniqueIdentifier>{440b6ecd-3e27-4e4a-a2af-c8c7477dacdf}</UniqueIdentifier>
     </Filter>
-    <Filter Include="XUSG\Core">
-      <UniqueIdentifier>{35f02f42-90cf-458c-a9dc-c77f2ec85da4}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="XUSG\RayTracing">
-      <UniqueIdentifier>{8a94dc10-18f6-415c-b116-508b87607a00}</UniqueIdentifier>
-    </Filter>
     <Filter Include="XUSG\Optional">
       <UniqueIdentifier>{f5f77362-2600-4645-924b-1913b86dc530}</UniqueIdentifier>
-    </Filter>
-    <Filter Include="XUSG\Advanced">
-      <UniqueIdentifier>{c593ed88-7b4c-4c7e-bdd2-fea0664a597d}</UniqueIdentifier>
     </Filter>
     <Filter Include="Shaders\Denoiser">
       <UniqueIdentifier>{459ae949-f6f1-483b-bfc0-7fc83ef5572d}</UniqueIdentifier>
@@ -101,12 +92,6 @@
     <ClInclude Include="Content\RayTracer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="XUSG\Core\XUSG.h">
-      <Filter>XUSG\Core</Filter>
-    </ClInclude>
-    <ClInclude Include="XUSG\RayTracing\XUSGRayTracing.h">
-      <Filter>XUSG\RayTracing</Filter>
-    </ClInclude>
     <ClInclude Include="XUSG\Optional\XUSGObjLoader.h">
       <Filter>XUSG\Optional</Filter>
     </ClInclude>
@@ -122,14 +107,20 @@
     <ClInclude Include="Common\d3d12video.h">
       <Filter>Common\Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="XUSG\Advanced\XUSGDDSLoader.h">
-      <Filter>XUSG\Advanced</Filter>
-    </ClInclude>
     <ClInclude Include="Content\Denoiser.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Common\d3d12.h">
       <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="XUSG\Core\XUSG.h">
+      <Filter>XUSG</Filter>
+    </ClInclude>
+    <ClInclude Include="XUSG\Advanced\XUSGDDSLoader.h">
+      <Filter>XUSG</Filter>
+    </ClInclude>
+    <ClInclude Include="XUSG\RayTracing\XUSGRayTracing.h">
+      <Filter>XUSG</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
