@@ -63,7 +63,7 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	return true;
 }
 
-void Denoiser::Denoise(const CommandList* pCommandList, uint32_t numBarriers,
+void Denoiser::Denoise(CommandList* pCommandList, uint32_t numBarriers,
 	ResourceBarrier* pBarriers, bool useSharedMem)
 {
 	m_frameParity = !m_frameParity;
@@ -81,7 +81,7 @@ void Denoiser::Denoise(const CommandList* pCommandList, uint32_t numBarriers,
 	temporalSS(pCommandList);
 }
 
-void Denoiser::ToneMap(const CommandList* pCommandList, const Descriptor& rtv,
+void Denoiser::ToneMap(CommandList* pCommandList, const Descriptor& rtv,
 	uint32_t numBarriers, ResourceBarrier* pBarriers)
 {
 	// Bind the heaps, acceleration structure and dispatch rays.
@@ -378,7 +378,7 @@ bool Denoiser::createDescriptorTables()
 	return true;
 }
 
-void Denoiser::reflectionSpatialFilter(const CommandList* pCommandList, uint32_t numBarriers,
+void Denoiser::reflectionSpatialFilter(CommandList* pCommandList, uint32_t numBarriers,
 	ResourceBarrier* pBarriers, bool useSharedMem)
 {
 	// Horizontal pass
@@ -428,7 +428,7 @@ void Denoiser::reflectionSpatialFilter(const CommandList* pCommandList, uint32_t
 	}
 }
 
-void Denoiser::diffuseSpatialFilter(const CommandList* pCommandList, uint32_t numBarriers,
+void Denoiser::diffuseSpatialFilter(CommandList* pCommandList, uint32_t numBarriers,
 	ResourceBarrier* pBarriers, bool useSharedMem)
 {
 	// Horizontal pass
@@ -479,7 +479,7 @@ void Denoiser::diffuseSpatialFilter(const CommandList* pCommandList, uint32_t nu
 	}
 }
 
-void Denoiser::temporalSS(const CommandList* pCommandList)
+void Denoiser::temporalSS(CommandList* pCommandList)
 {
 	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, 0, 0);

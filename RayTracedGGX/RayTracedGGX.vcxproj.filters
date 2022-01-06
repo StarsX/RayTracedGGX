@@ -124,12 +124,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="Content\Shaders\PSGBuffer.hlsl">
-      <Filter>Shaders\Renderer</Filter>
-    </FxCompile>
-    <FxCompile Include="Content\Shaders\VSBasePass.hlsl">
-      <Filter>Shaders\Renderer</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\PSToneMap.hlsl">
       <Filter>Shaders\Postprocess</Filter>
     </FxCompile>
@@ -151,9 +145,6 @@
     <FxCompile Include="Content\Shaders\CSSpatial_V_Refl_S.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
-    <FxCompile Include="Content\Shaders\VSDepth.hlsl">
-      <Filter>Shaders\Renderer</Filter>
-    </FxCompile>
     <FxCompile Include="Content\Shaders\CSSpatial_H_Diff.hlsl">
       <Filter>Shaders\Denoiser</Filter>
     </FxCompile>
@@ -165,6 +156,12 @@
     </FxCompile>
     <FxCompile Include="Content\Shaders\CSSpatial_V_Diff_S.hlsl">
       <Filter>Shaders\Denoiser</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\PSVisibility.hlsl">
+      <Filter>Shaders\Renderer</Filter>
+    </FxCompile>
+    <FxCompile Include="Content\Shaders\VSVisibility.hlsl">
+      <Filter>Shaders\Renderer</Filter>
     </FxCompile>
   </ItemGroup>
   <ItemGroup>

@@ -28,10 +28,10 @@ public:
 		uint8_t maxGBufferMips = 1);
 	void SetMetallic(uint32_t meshIdx, float metallic);
 	void UpdateFrame(uint8_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
-	void Render(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void Render(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void UpdateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-	void RenderGeometry(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-	void RayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void RenderVisibility(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void RayTrace(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	const XUSG::Texture2D::uptr* GetRayTracingOutputs() const;
 	const XUSG::RenderTarget::uptr* GetGBuffers() const;
@@ -42,8 +42,7 @@ public:
 protected:
 	enum PipelineLayoutIndex : uint8_t
 	{
-		Z_PREPASS_LAYOUT,
-		GBUFFER_PASS_LAYOUT,
+		VISIBILITY_LAYOUT,
 		RT_GLOBAL_LAYOUT,
 		RAY_GEN_LAYOUT,
 
@@ -52,8 +51,7 @@ protected:
 
 	enum PipelineIndex : uint8_t
 	{
-		Z_PREPASS,
-		GBUFFER_PASS,
+		VISIBILITY,
 		RAY_TRACING,
 
 		NUM_PIPELINE
@@ -62,19 +60,17 @@ protected:
 	enum GlobalPipelineLayoutSlot : uint8_t
 	{
 		OUTPUT_VIEW,
-		SHADER_RESOURCES,
-		ACCELERATION_STRUCTURE = SHADER_RESOURCES,
+		ACCELERATION_STRUCTURE,
 		SAMPLER,
 		INDEX_BUFFERS,
 		VERTEX_BUFFERS,
 		MATERIALS,
 		CONSTANTS,
-		G_BUFFERS
+		SHADER_RESOURCES
 	};
 
 	enum GBuffer : uint8_t
 	{
-		BASE_COLOR,
 		NORMAL,
 		ROUGH_METAL,
 		VELOCITY,
@@ -86,7 +82,7 @@ protected:
 	{
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
-		SRV_TABLE_GB,
+		SRV_TABLE_RO,
 
 		NUM_SRV_TABLE
 	};
@@ -109,12 +105,11 @@ protected:
 	bool createPipelineLayouts();
 	bool createPipelines(XUSG::Format rtFormat, XUSG::Format dsFormat);
 	bool createDescriptorTables();
-	bool buildAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList,
+	bool buildAccelerationStructures(XUSG::RayTracing::CommandList* pCommandList,
 		XUSG::RayTracing::GeometryBuffer* pGeometries);
 	bool buildShaderTables();
 
-	void zPrepass(const XUSG::CommandList* pCommandList, uint8_t frameIndex);
-	void gbufferPass(const XUSG::CommandList* pCommandList, uint8_t frameIndex, bool depthClear = false);
+	void visibility(XUSG::CommandList* pCommandList, uint8_t frameIndex);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	XUSG::RayTracing::Device::sptr m_device;
@@ -142,17 +137,18 @@ protected:
 	XUSG::IndexBuffer::uptr		m_indexBuffers[NUM_MESH];
 
 	XUSG::Texture2D::uptr		m_outputViews[NUM_HIT_GROUP];
+	XUSG::RenderTarget::uptr	m_visBuffer;
 	XUSG::RenderTarget::uptr	m_gbuffers[NUM_GBUFFER];
 	XUSG::DepthStencil::sptr	m_depth;
 
-	XUSG::ConstantBuffer::uptr	m_cbBasePass[NUM_MESH];
+	XUSG::ConstantBuffer::uptr	m_cbPerOjects[NUM_MESH];
 	XUSG::ConstantBuffer::uptr	m_cbMaterials;
 	XUSG::ConstantBuffer::uptr	m_cbRaytracing;
 
 	XUSG::Resource::uptr		m_scratch;
 	XUSG::Resource::uptr		m_instances[FrameCount];
 
-	XUSG::ShaderResource::sptr	m_lightProbe;
+	XUSG::Texture::sptr			m_lightProbe;
 
 	// Shader tables
 	static const wchar_t* HitGroupNames[NUM_HIT_GROUP];

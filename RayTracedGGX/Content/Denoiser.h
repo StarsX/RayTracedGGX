@@ -16,9 +16,9 @@ public:
 	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height, XUSG::Format rtFormat,
 		const XUSG::Texture2D::uptr* inputViews, const XUSG::RenderTarget::uptr* pGbuffers,
 		const XUSG::DepthStencil::sptr& depth, uint8_t maxMips = 1);
-	void Denoise(const XUSG::CommandList* pCommandList, uint32_t numBarriers,
+	void Denoise(XUSG::CommandList* pCommandList, uint32_t numBarriers,
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem = false);
-	void ToneMap(const XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
+	void ToneMap(XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
 protected:
@@ -59,7 +59,6 @@ protected:
 
 	enum GBuffer : uint8_t
 	{
-		BASE_COLOR,
 		NORMAL,
 		ROUGH_METAL,
 		VELOCITY,
@@ -118,11 +117,11 @@ protected:
 	bool createPipelines(XUSG::Format rtFormat);
 	bool createDescriptorTables();
 
-	void reflectionSpatialFilter(const XUSG::CommandList* pCommandList, uint32_t numBarriers,
+	void reflectionSpatialFilter(XUSG::CommandList* pCommandList, uint32_t numBarriers,
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
-	void diffuseSpatialFilter(const XUSG::CommandList* pCommandList, uint32_t numBarriers,
+	void diffuseSpatialFilter(XUSG::CommandList* pCommandList, uint32_t numBarriers,
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
-	void temporalSS(const XUSG::CommandList* pCommandList);
+	void temporalSS(XUSG::CommandList* pCommandList);
 
 	XUSG::Device::sptr m_device;
 

@@ -5,6 +5,7 @@
 #include "BRDFModels.hlsli"
 #include "Material.hlsli"
 
+#define PRIMITIVE_BITS 24
 #define MAX_RECURSION_DEPTH	1
 
 typedef RaytracingAccelerationStructure RaytracingAS;
@@ -27,6 +28,13 @@ struct Vertex
 	float3	Nrm;
 };
 
+struct Attrib
+{
+	float3	Pos;
+	float3	Nrm;
+	float2	UV;
+};
+
 struct RayPayload
 {
 	float3	Color;
@@ -35,14 +43,18 @@ struct RayPayload
 
 struct GlobalConstants
 {
-	float3x3 WorldITs[2];
-	uint	FrameIndex;
+	float4x4 WorldViewProjs[NUM_MESH];
+	float4x4 WorldViewProjsPrev[NUM_MESH];
+	float4x3 Worlds[NUM_MESH];
+	float3x3 WorldITs[NUM_MESH];
+	uint FrameIndex;
 };
 
 struct RayGenConstants
 {
 	matrix	ProjToWorld;
 	float3	EyePt;
+	float2	ProjBias;
 };
 
 //--------------------------------------------------------------------------------------
@@ -54,13 +66,13 @@ ConstantBuffer<RayGenConstants> l_rayGen	: register (b2);
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
-RWTexture2D<float3>			g_renderTargets[NUM_HIT_GROUP] : register (u0);
+RWTexture2D<float3>			g_rwRenderTargets[NUM_HIT_GROUP] : register (u0);
+RWTexture2D<float4>			g_rwNormal		: register (u2);
+RWTexture2D<float2>			g_rwRoughMetal	: register (u3);
+RWTexture2D<float2>			g_rwVelocity	: register (u4);
 RaytracingAS				g_scene			: register (t0);
-Texture2D					g_txBaseColor	: register (t1);
-Texture2D					g_txNormal		: register (t2);
-Texture2D<float2>			g_txRoughMetal	: register (t3);
-Texture2D<float>			g_txDepth		: register (t4);
-TextureCube<float3>			g_txEnv			: register (t5);
+Texture2D<uint>				g_txVisiblity	: register (t1);
+TextureCube<float3>			g_txEnv			: register (t2);
 
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register (t0, space1);
@@ -190,58 +202,45 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, uint hit
 	{
 		payload.Color = 0.0;
 		payload.RecursionDepth = currentRayRecursionDepth;
-		//TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
-		// Note: make sure to enable face culling so as to avoid surface face fighting.
-		TraceRay(g_scene, RAY_FLAG_CULL_BACK_FACING_TRIANGLES, ~0, hitGroup, 1, 0, ray, payload);
+		TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
 	}
 
 	return payload;
 }
 
 //--------------------------------------------------------------------------------------
-// Generate a ray in world space for a primary-surface pixel corresponding to an index
-// from the dispatched 2D grid.
+// Calculate barycentrics
+// http://filmicworlds.com/blog/visibility-buffer-rendering-with-material-graphs/
 //--------------------------------------------------------------------------------------
-bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out float3 P, out float4 color)
+float2 calcBarycentrics(float4 p[3], float2 ndc)
 {
-	const float4 norm = g_txNormal[index];
+	const float3 invW = 1.0 / float3(p[0].w, p[1].w, p[2].w);
 
-	float2 screenPos = (index + 0.5) / dim * 2.0 - 1.0;
-	screenPos.y = -screenPos.y; // Invert Y for Y-up-style NDC.
+	const float2 ndc0 = p[0].xy * invW.x;
+	const float2 ndc1 = p[1].xy * invW.y;
+	const float2 ndc2 = p[2].xy * invW.z;
 
-	if (norm.w > 0.0)
-	{
-		const float depth = g_txDepth[index];
-		color = g_txBaseColor[index];
+	const float invDet = 1.0 / determinant(float2x2(ndc2 - ndc1, ndc0 - ndc1));
+	const float3 dPdx = float3(ndc1.y - ndc2.y, ndc2.y - ndc0.y, ndc0.y - ndc1.y) * invDet;
+	const float3 dPdy = float3(ndc2.x - ndc1.x, ndc0.x - ndc2.x, ndc1.x - ndc0.x) * invDet;
 
-		// Unproject the pixel coordinate into a ray.
-		const float4 world = mul(float4(screenPos, depth, 1.0), l_rayGen.ProjToWorld);
+	const float2 deltaVec = ndc - ndc0;
+	const float interpInvW = (invW.x + deltaVec.x * dot(invW, dPdx) + deltaVec.y * dot(invW, dPdy));
+	const float interpW = 1.0 / interpInvW;
 
-		P = world.xyz / world.w;
-		N = normalize(norm.xyz - 0.5);
-		V = normalize(l_rayGen.EyePt - P);
+	float2 barycentrics;
+	barycentrics.x = interpW * (deltaVec.x * dPdx.y * invW.y + deltaVec.y * dPdy.y * invW.y);
+	barycentrics.y = interpW * (deltaVec.x * dPdx.z * invW.z + deltaVec.y * dPdy.z * invW.z);
 
-		return true;
-	}
-	else
-	{
-		// Unproject the pixel coordinate into a ray.
-		const float4 world = mul(float4(screenPos, 0.0, 1.0), l_rayGen.ProjToWorld);
-
-		P = world.xyz / world.w;
-		V = normalize(l_rayGen.EyePt - P);
-
-		return false;
-	}
+	return barycentrics;
 }
 
 //--------------------------------------------------------------------------------------
-// Get IA-style inputs
+// Get triangle vertices
 //--------------------------------------------------------------------------------------
-Vertex getInput(float2 barycentrics)
+void getVertices(out Vertex vertices[3], uint meshIdx, uint primIdx)
 {
-	const uint meshIdx = InstanceIndex();
-	const uint baseIdx = PrimitiveIndex() * 3;
+	const uint baseIdx = primIdx * 3;
 	const uint3 indices =
 	{
 		g_indexBuffers[NonUniformResourceIndex(meshIdx)][baseIdx],
@@ -250,31 +249,96 @@ Vertex getInput(float2 barycentrics)
 	};
 
 	// Retrieve corresponding vertex normals for the triangle vertices.
-	Vertex vertices[3] =
+	[unroll]
+	for (uint i = 0; i < 3; ++i)
+		vertices[i] = g_vertexBuffers[NonUniformResourceIndex(meshIdx)][indices[i]];
+}
+
+//--------------------------------------------------------------------------------------
+// Interpolate attributes
+//--------------------------------------------------------------------------------------
+Attrib interpAttrib(Vertex vertices[3], float2 barycentrics)
+{
+	const float3 baryWeights = float3(1.0 - (barycentrics.x + barycentrics.y), barycentrics.xy);
+
+	Attrib attrib;
+	attrib.Pos =
+		baryWeights[0] * vertices[0].Pos +
+		baryWeights[1] * vertices[1].Pos +
+		baryWeights[2] * vertices[2].Pos;
+
+	attrib.Nrm =
+		baryWeights[0] * vertices[0].Nrm +
+		baryWeights[1] * vertices[1].Nrm +
+		baryWeights[2] * vertices[2].Nrm;
+
+	attrib.UV = getUV(attrib.Nrm, attrib.Pos, float3(1.0, 0.2, 1.0));
+	/*attrib.UV =
+		baryWeights[0] * vertices[0].UV +
+		baryWeights[1] * vertices[1].UV +
+		baryWeights[2] * vertices[2].UV;*/
+
+	return attrib;
+}
+
+//--------------------------------------------------------------------------------------
+// Generate a ray in world space for a primary-surface pixel corresponding to an index
+// from the dispatched 2D grid.
+//--------------------------------------------------------------------------------------
+bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out float3 P,
+	out float4 color, out float2 rghMtl, out float2 velocity)
+{
+	uint visibility = g_txVisiblity[index];
+	float2 screenPos = (index + 0.5) / dim * 2.0 - 1.0;
+	screenPos.y = -screenPos.y; // Invert Y for Y-up-style NDC.
+	screenPos -= l_rayGen.ProjBias;
+
+	if (visibility > 0)
 	{
-		g_vertexBuffers[NonUniformResourceIndex(meshIdx)][indices[0]],
-		g_vertexBuffers[NonUniformResourceIndex(meshIdx)][indices[1]],
-		g_vertexBuffers[NonUniformResourceIndex(meshIdx)][indices[2]]
-	};
+		// Decode visibility
+		--visibility;
+		const uint instanceIdx = visibility >> PRIMITIVE_BITS;
+		const uint primitiveIdx = (visibility & ((1 << PRIMITIVE_BITS) - 1));
 
-	const float3 baryWeights =
+		// Fetch vertices
+		Vertex vertices[3];
+		getVertices(vertices, instanceIdx, primitiveIdx);
+
+		// Calculate barycentrics
+		float4 p[3];
+		[unroll]
+		for (uint i = 0; i < 3; ++i)
+			p[i] = mul(float4(vertices[i].Pos, 1.0), g_cb.WorldViewProjs[instanceIdx]);
+		const float2 barycentrics = calcBarycentrics(p, screenPos);
+
+		// Interpolate triangle sample attributes
+		Attrib attrib = interpAttrib(vertices, barycentrics);
+		color = getBaseColor(instanceIdx, attrib.UV);
+		rghMtl = getRoughMetal(instanceIdx, attrib.UV);
+
+		// Calculate velocity (motion vector)
+		const float4 pos = float4(attrib.Pos, 1.0);
+		const float4 hPosPrev = mul(pos, g_cb.WorldViewProjsPrev[instanceIdx]);
+		velocity = (screenPos - hPosPrev.xy / hPosPrev.w) * float2(0.5, -0.5);
+
+		P = mul(pos, g_cb.Worlds[instanceIdx]);
+		N = normalize(mul(attrib.Nrm, g_cb.WorldITs[instanceIdx]));
+		V = normalize(l_rayGen.EyePt - P);
+
+		return true;
+	}
+	else
 	{
-		1.0 - (barycentrics.x + barycentrics.y),
-		barycentrics.xy
-	};
+		// Unproject the pixel coordinate into a ray.
+		const float4 world = mul(float4(screenPos, 0.0, 1.0), l_rayGen.ProjToWorld);
+		velocity = 0.0;
 
-	Vertex input;
-	input.Pos =
-		baryWeights.x * vertices[0].Pos +
-		baryWeights.y * vertices[1].Pos +
-		baryWeights.z * vertices[2].Pos;
+		P = world.xyz / world.w;
+		N = 0.0;
+		V = normalize(l_rayGen.EyePt - P);
 
-	input.Nrm =
-		baryWeights.x * vertices[0].Nrm +
-		baryWeights.y * vertices[1].Nrm +
-		baryWeights.z * vertices[2].Nrm;
-
-	return input;
+		return false;
+	}
 }
 
 //--------------------------------------------------------------------------------------
@@ -373,8 +437,8 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 			NoL = dot(N, ray.Direction);
 			if (NoL > 0.0)
 			{
-				// Set TMin to a zero value to avoid aliasing artifacts along contact areas.
-				ray.TMin = 0.0;
+				// Set TMin to an offset to avoid aliasing artifacts along contact areas.
+				ray.TMin = 1e-5;
 				ray.TMax = 10000.0;
 			}
 		}
@@ -382,7 +446,7 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		{
 			// Trace a diffuse ray.
 			ray.Direction = computeDirectionCos(N, xi);
-			ray.TMin = 0.0;
+			ray.TMin = 1e-5;
 			ray.TMax = 10000.0;
 			NoL = rghMtl.y < 1.0 ? 1.0 : 0.0;
 		}
@@ -444,17 +508,20 @@ void raygenMain()
 	// Generate a ray corresponding to an index from a primary surface.
 	float3 N, V, P;
 	float4 color;
-	const bool hit = getPrimarySurface(index, dim, N, V, P, color);
+	float2 rghMtl, velocity;
+	const bool hit = getPrimarySurface(index, dim, N, V, P, color, rghMtl, velocity);
 
-	const float2 rghMtl = hit ? g_txRoughMetal[index] : 0.0;
+	g_rwNormal[index] = float4(N * 0.5 + 0.5, hit ? 1.0 : 0.0);
+	if (hit) g_rwRoughMetal[index] = rghMtl;
+	g_rwVelocity[index] = velocity;
 
 	RayPayload payload = computeLighting(hit, rghMtl, N, V, P, color, HIT_GROUP_REFLECTION);
-	g_renderTargets[HIT_GROUP_REFLECTION][index] = payload.Color;	// Write the raytraced color to the output texture.
+	g_rwRenderTargets[HIT_GROUP_REFLECTION][index] = payload.Color;		// Write the raytraced color to the output texture.
 
 	if (rghMtl.y < 1.0)
 	{
 		payload = computeLighting(hit, rghMtl, N, V, P, color, HIT_GROUP_DIFFUSE);
-		g_renderTargets[HIT_GROUP_DIFFUSE][index] = payload.Color;	// Write the raytraced color to the output texture.
+		g_rwRenderTargets[HIT_GROUP_DIFFUSE][index] = payload.Color;	// Write the raytraced color to the output texture.
 	}
 }
 
@@ -464,17 +531,18 @@ void raygenMain()
 [shader("closesthit")]
 void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 {
-	Vertex input = getInput(attr.barycentrics);
+	Vertex vertices[3];
+	getVertices(vertices, InstanceIndex(), PrimitiveIndex());
+	Attrib attrib = interpAttrib(vertices, attr.barycentrics);
 
 	const uint instanceIdx = InstanceIndex();
-	const float3 N = normalize(mul(input.Nrm, g_cb.WorldITs[instanceIdx]));
+	const float3 N = normalize(mul(attrib.Nrm, g_cb.WorldITs[instanceIdx]));
 	const float3 V = -WorldRayDirection();
 	const float3 P = hitWorldPosition();
 
-	const float2 uv = input.Pos.xz * 0.5 + 0.5;
-	const float2 rghMtl = getRoughMetal(instanceIdx, uv);
+	const float2 rghMtl = getRoughMetal(instanceIdx, attrib.UV);
 	const uint hitGroup = rghMtl.y > 0.5 ? HIT_GROUP_REFLECTION : HIT_GROUP_DIFFUSE;
-	const float4 color = getBaseColor(instanceIdx, uv);
+	const float4 color = getBaseColor(instanceIdx, attrib.UV);
 
 	// Trace a reflection ray.
 	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, 1);
@@ -483,17 +551,18 @@ void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 [shader("closesthit")]
 void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 {
-	Vertex input = getInput(attr.barycentrics);
+	Vertex vertices[3];
+	getVertices(vertices, InstanceIndex(), PrimitiveIndex());
+	Attrib attrib = interpAttrib(vertices, attr.barycentrics);
 
 	const uint instanceIdx = InstanceIndex();
-	const float3 N = normalize(mul(input.Nrm, g_cb.WorldITs[instanceIdx]));
+	const float3 N = normalize(mul(attrib.Nrm, g_cb.WorldITs[instanceIdx]));
 	const float3 V = -WorldRayDirection();
 	const float3 P = hitWorldPosition();
 
-	const float2 uv = input.Pos.xz * 0.5 + 0.5;
-	const float2 rghMtl = getRoughMetal(instanceIdx, uv);
+	const float2 rghMtl = getRoughMetal(instanceIdx, attrib.UV);
 	const uint hitGroup = rghMtl.y > 0.5 ? HIT_GROUP_REFLECTION : HIT_GROUP_DIFFUSE;
-	float4 color = getBaseColor(instanceIdx, uv);
+	float4 color = getBaseColor(instanceIdx, attrib.UV);
 	color.xyz *= hitGroup ? 1.0 - rghMtl.y : 1.0;
 
 	// Trace a diffuse ray.

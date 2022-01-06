@@ -13,6 +13,15 @@ cbuffer cbPerObject : register (b0)
 	float2 g_roughMetals[NUM_MESH];
 };
 
+float2 getUV(float3 norm, float3 pos, float3 scl)
+{
+	float2 uv = abs(norm.x) * pos.yz * scl.yz;
+	uv += abs(norm.y) * pos.zx * scl.zx;
+	uv += abs(norm.z) * pos.xy * scl.xy;
+
+	return uv * 0.5 + 0.5;
+}
+
 min16float4 getBaseColor(uint instanceIdx, float2 uv)
 {
 	return min16float4(g_baseColors[instanceIdx]);

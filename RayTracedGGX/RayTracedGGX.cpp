@@ -502,7 +502,7 @@ void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
 	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
-	m_rayTracer->RenderGeometry(pCommandList, m_frameIndex);
+	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex);
 
 	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
