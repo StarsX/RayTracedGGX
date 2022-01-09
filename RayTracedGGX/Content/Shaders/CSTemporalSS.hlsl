@@ -68,9 +68,9 @@ SamplerState g_smpLinear;
 //--------------------------------------------------------------------------------------
 HALF3 rgbToYCoCg(HALF3 rgb)
 {
-	const min16float y = dot(rgb, HALF3(1.0, 2.0, 1.0));
-	const min16float co = dot(rgb, HALF3(2.0, 0.0, -2.0));
-	const min16float cg = dot(rgb, HALF3(-1.0, 2.0, -1.0));
+	const HALF y = dot(rgb, HALF3(1.0, 2.0, 1.0));
+	const HALF co = dot(rgb, HALF3(2.0, 0.0, -2.0));
+	const HALF cg = dot(rgb, HALF3(-1.0, 2.0, -1.0));
 
 	return HALF3(y, co, cg);
 }
@@ -80,13 +80,13 @@ HALF3 rgbToYCoCg(HALF3 rgb)
 //--------------------------------------------------------------------------------------
 HALF3 yCoCgToRGB(HALF3 yCoCg)
 {
-	const min16float y = yCoCg.x * 0.25;
-	const min16float co = yCoCg.y * 0.25;
-	const min16float cg = yCoCg.z * 0.25;
+	const HALF y = yCoCg.x * 0.25;
+	const HALF co = yCoCg.y * 0.25;
+	const HALF cg = yCoCg.z * 0.25;
 
-	const min16float r = y + co - cg;
-	const min16float g = y + cg;
-	const min16float b = y - co - cg;
+	const HALF r = y + co - cg;
+	const HALF g = y + cg;
+	const HALF b = y - co - cg;
 
 	return HALF3(r, g, b);
 }
