@@ -17,13 +17,14 @@ typedef min16float3	HALF3;
 typedef min16float4	HALF4;
 #endif
 
-#define	_VARIANCE_AABB_	1
+#define _VARIANCE_AABB_	1
+#define _USE_YCOCG_		1
 
-#define	NUM_NEIGHBORS	8
-#define	NUM_SAMPLES		(NUM_NEIGHBORS + 1)
-#define	NUM_NEIGHBORS_H	4
+#define NUM_NEIGHBORS	8
+#define NUM_SAMPLES		(NUM_NEIGHBORS + 1)
+#define NUM_NEIGHBORS_H	4
 
-#define GET_LUMA(v)		dot(v, g_lumBase)
+#define GET_LUMA4(v)	dot(v, g_luma4Base)
 
 //--------------------------------------------------------------------------------------
 // Constants
@@ -32,7 +33,7 @@ static const uint g_historyBits = 4;
 static const uint g_historyMask = (1 << g_historyBits) - 1;
 static const float g_historyMax = g_historyMask;
 
-static const HALF3 g_lumBase = { 0.25, 0.5, 0.25 };
+static const HALF3 g_luma4Base = { 1.0, 2.0, 1.0 };
 static const int2 g_texOffsets[] =
 {
 	int2(-1, 0), int2(1, 0), int2(0, -1), int2(0, 1),
@@ -42,10 +43,20 @@ static const int2 g_texOffsets[] =
 //--------------------------------------------------------------------------------------
 // Texture and buffers
 //--------------------------------------------------------------------------------------
+#ifdef _R11G11B10_
+RWTexture2D<float3>	g_rwRenderTarget;
+RWTexture2D<float>	g_rwMetaData;
+Texture2D<float3>	g_txCurrent;
+Texture2D<float3>	g_txHistory;
+Texture2D<float2>	g_txVelocity;
+Texture2D<float>	g_txMasks;
+Texture2D<float>	g_txHistMeta;
+#else
 RWTexture2D<float4>	g_rwRenderTarget;
 Texture2D			g_txCurrent;
 Texture2D			g_txHistory;
 Texture2D<float2>	g_txVelocity;
+#endif
 
 //--------------------------------------------------------------------------------------
 // Sampler
@@ -53,21 +64,58 @@ Texture2D<float2>	g_txVelocity;
 SamplerState g_smpLinear;
 
 //--------------------------------------------------------------------------------------
+// RGB to YCgCo
+//--------------------------------------------------------------------------------------
+HALF3 rgbToYCoCg(HALF3 rgb)
+{
+	const min16float y = dot(rgb, HALF3(1.0, 2.0, 1.0));
+	const min16float co = dot(rgb, HALF3(2.0, 0.0, -2.0));
+	const min16float cg = dot(rgb, HALF3(-1.0, 2.0, -1.0));
+
+	return HALF3(y, co, cg);
+}
+
+//--------------------------------------------------------------------------------------
+// YCgCo to RGB
+//--------------------------------------------------------------------------------------
+HALF3 yCoCgToRGB(HALF3 yCoCg)
+{
+	const min16float y = yCoCg.x * 0.25;
+	const min16float co = yCoCg.y * 0.25;
+	const min16float cg = yCoCg.z * 0.25;
+
+	const min16float r = y + co - cg;
+	const min16float g = y + cg;
+	const min16float b = y - co - cg;
+
+	return HALF3(r, g, b);
+}
+
+//--------------------------------------------------------------------------------------
 // A fast invertible tone map that preserves color (Reinhard)
 //--------------------------------------------------------------------------------------
 HALF3 TM(float3 hdr)
 {
-	const HALF3 rgb = HALF3(hdr);
+	HALF3 color = HALF3(hdr);
+#if _USE_YCOCG_
+	color = rgbToYCoCg(color);
+#endif
 
-	return rgb / (1.0 + dot(rgb, g_lumBase));
+	return color / (4.0 + GET_LUMA4(color));
 }
 
 //--------------------------------------------------------------------------------------
 // Inverse of preceding function
 //--------------------------------------------------------------------------------------
-HALF3 ITM(HALF3 rgb)
+HALF3 ITM(HALF3 color)
 {
-	return rgb / max(1.0 - dot(rgb, g_lumBase), 1e-4);
+	color *= 4.0 / max(1.0 - GET_LUMA4(color), 1e-4);
+
+#if _USE_YCOCG_
+	return yCoCgToRGB(color);
+#else
+	return color;
+#endif
 }
 
 //--------------------------------------------------------------------------------------
@@ -133,9 +181,9 @@ HALF4 NeighborMinMax(out HALF4 neighborMin, out HALF4 neighborMax,
 	//[unroll]
 	for (i = 0; i < NUM_NEIGHBORS; ++i)
 	{
-		HALF4 neighbor = HALF4(neighbors[i]);
-		neighbor.xyz = TM(neighbor.xyz);
-		neighbor.w = neighbor.w < 0.5 ? 0.0 : 1.0;
+		HALF4 neighbor;
+		neighbor.xyz = TM(neighbors[i].xyz);
+		neighbor.w = neighbors[i].w < 0.5 ? 0.0 : 1.0;
 		current += neighbor * weights[i];
 
 #if	_VARIANCE_AABB_
@@ -153,16 +201,14 @@ HALF4 NeighborMinMax(out HALF4 neighborMin, out HALF4 neighborMax,
 	const HALF3 gsigma = gamma * sigma;
 	neighborMin.xyz = mu - gsigma;
 	neighborMax.xyz = mu + gsigma;
-	neighborMin.w = GET_LUMA(mu - sigma);
-	neighborMax.w = GET_LUMA(mu + sigma);
+	neighborMin.w = GET_LUMA4(mu - sigma);
+	neighborMax.w = GET_LUMA4(mu + sigma);
 #else
-	neighborMin.w = GET_LUMA(neighborMin.xyz);
-	neighborMax.w = GET_LUMA(neighborMax.xyz);
+	neighborMin.w = GET_LUMA4(neighborMin.xyz);
+	neighborMax.w = GET_LUMA4(neighborMax.xyz);
 #endif
 
-	current /= 4.0;
-
-	return current;
+	return current / 4.0;
 }
 
 //--------------------------------------------------------------------------------------
@@ -207,28 +253,42 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	// Compute color-space AABB
 	HALF4 neighborMin, neighborMax;
 	const HALF4 currentTM = HALF4(TM(current.xyz), current.w);
-	//const HALF gamma = historyBlur > 0.0 || current.w <= 0.0 ? 1.0 : 16.0;
-	HALF gamma = clamp(8.0 / historyBlur, 1.0, 32.0);
-	gamma = current.w <= 0.0 ? 1.0 : gamma;
+#ifdef _FORCE_TIGHT_CLIP_
+	const HALF gamma = 1.0;
+#elif defined(_DENOISE_)
+	const HALF gamma = current.w <= 0.0 ? 1.0 : clamp(8.0 / historyBlur, 1.0, 32.0);
+#elif defined(_ALPHA_AS_ID_)
+	const HALF gamma = historyBlur > 0.0 || current.w <= 0.0 ? 1.0 : 16.0;
+#else
+	const HALF gamma = historyBlur > 0.0 || current.w < 1.0 ? 1.0 : 16.0;
+#endif
 	HALF4 filtered = NeighborMinMax(neighborMin, neighborMax, currentTM, DTid, gamma);
-
+	
 	// Saturate history blurs
 	curHistoryBlur = saturate(curHistoryBlur);
 	historyBlur = saturate(historyBlur);
 
 	// Clip historical color
 	HALF3 historyTM = TM(history.xyz);
+#if _USE_YCOCG_
+	historyTM = clamp(historyTM, neighborMin.xyz, neighborMax.xyz);
+#else
 	historyTM = clipColor(historyTM, neighborMin.xyz, neighborMax.xyz);
+#endif
 	const HALF contrast = neighborMax.w - neighborMin.w;
 
 	// Add aliasing
+#if _USE_YCOCG_
+	static const HALF lumContrastFactor = 32.0 * 4.0;
+#else
 	static const HALF lumContrastFactor = 32.0;
+#endif
 	HALF addAlias = historyBlur * 0.5 + 0.25;
 	addAlias = saturate(addAlias + 1.0 / (1.0 + contrast * lumContrastFactor));
 	filtered.xyz = lerp(filtered.xyz, currentTM.xyz, addAlias);
 
 	// Calculate blend factor
-	const HALF lumHist = GET_LUMA(historyTM);
+	const HALF lumHist = GET_LUMA4(historyTM);
 	const HALF distToClamp = min(abs(neighborMin.w - lumHist), abs(neighborMax.w - lumHist));
 #if 0
 	const float historyAmt = 1.0 / history.w + historyBlur / 8.0;
@@ -236,14 +296,18 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	HALF blend = historyFactor / (distToClamp + contrast);
 #else
 	const HALF historyAmt = min(HALF(1.0 / history.w + historyBlur / 8.0), 1.0);
-	HALF blend = 0.0625 / lerp(2.0, distToClamp + contrast, historyAmt);
+	HALF blend = 0.25 / lerp(8.0, distToClamp + contrast, historyAmt);
 #endif
 	blend = min(blend, 0.25);
 
-	//HALF3 result = HALF3(current.xyz);
-	HALF3 result = ITM(lerp(historyTM, currentTM.xyz, blend));
+	HALF3 result = ITM(lerp(historyTM, filtered.xyz, blend));
 	result = any(isnan(result)) ? ITM(filtered.xyz) : result;
 	history.w = min(history.w / g_historyMax, 1.0 - curHistoryBlur);
 
+#ifdef _R11G11B10_
+	g_rwRenderTarget[DTid] = result;
+	g_rwMetaData[DTid] = history.w;
+#else
 	g_rwRenderTarget[DTid] = float4(result, history.w);
+#endif
 }
