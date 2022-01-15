@@ -10,7 +10,7 @@
 class Denoiser
 {
 public:
-	Denoiser(const XUSG::Device::sptr& device);
+	Denoiser();
 	virtual ~Denoiser();
 
 	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height, XUSG::Format rtFormat,
@@ -122,8 +122,6 @@ protected:
 	void diffuseSpatialFilter(XUSG::CommandList* pCommandList, uint32_t numBarriers,
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
 	void temporalSS(XUSG::CommandList* pCommandList);
-
-	XUSG::Device::sptr m_device;
 
 	uint8_t						m_frameParity;
 	DirectX::XMUINT2			m_viewport;

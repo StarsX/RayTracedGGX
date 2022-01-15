@@ -18,7 +18,7 @@ public:
 		NUM_MESH
 	};
 
-	RayTracer(const XUSG::RayTracing::Device::sptr& device);
+	RayTracer();
 	virtual ~RayTracer();
 
 	bool Init(XUSG::RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
@@ -27,7 +27,8 @@ public:
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f),
 		uint8_t maxGBufferMips = 1);
 	void SetMetallic(uint32_t meshIdx, float metallic);
-	void UpdateFrame(uint8_t frameIndex, DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
+	void UpdateFrame(const XUSG::RayTracing::Device* pDevice, uint8_t frameIndex,
+		DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
 	void Render(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void UpdateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void RenderVisibility(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
@@ -95,24 +96,21 @@ protected:
 		NUM_HIT_GROUP
 	};
 
-	bool createVB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numVert,
-		uint32_t stride, const uint8_t* pData, std::vector<XUSG::Resource::uptr>& uploaders);
-	bool createIB(XUSG::RayTracing::CommandList* pCommandList, uint32_t numIndices,
+	bool createVB(XUSG::CommandList* pCommandList, uint32_t numVert, uint32_t stride,
+		const uint8_t* pData, std::vector<XUSG::Resource::uptr>& uploaders);
+	bool createIB(XUSG::CommandList* pCommandList, uint32_t numIndices,
 		const uint32_t* pData, std::vector<XUSG::Resource::uptr>& uploaders);
-	bool createGroundMesh(XUSG::RayTracing::CommandList* pCommandList,
-		std::vector<XUSG::Resource::uptr>& uploaders);
+	bool createGroundMesh(XUSG::CommandList* pCommandList, std::vector<XUSG::Resource::uptr>& uploaders);
 	bool createInputLayout();
-	bool createPipelineLayouts();
+	bool createPipelineLayouts(const XUSG::RayTracing::Device* pDevice);
 	bool createPipelines(XUSG::Format rtFormat, XUSG::Format dsFormat);
 	bool createDescriptorTables();
 	bool buildAccelerationStructures(XUSG::RayTracing::CommandList* pCommandList,
 		XUSG::RayTracing::GeometryBuffer* pGeometries);
-	bool buildShaderTables();
+	bool buildShaderTables(const XUSG::RayTracing::Device* pDevice);
 
 	void visibility(XUSG::CommandList* pCommandList, uint8_t frameIndex);
 	void rayTrace(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-
-	XUSG::RayTracing::Device::sptr m_device;
 
 	uint32_t			m_numIndices[NUM_MESH];
 

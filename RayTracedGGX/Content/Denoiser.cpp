@@ -8,15 +8,10 @@ using namespace std;
 using namespace DirectX;
 using namespace XUSG;
 
-Denoiser::Denoiser(const Device::sptr& device) :
-	m_device(device),
+Denoiser::Denoiser() :
 	m_frameParity(0)
 {
 	m_shaderPool = ShaderPool::MakeUnique();
-	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(device.get());
-	m_computePipelineCache = Compute::PipelineCache::MakeUnique(device.get());
-	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(device.get());
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(device.get(), L"DenoiserDescriptorTableCache");
 }
 
 Denoiser::~Denoiser()
@@ -27,6 +22,12 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 	const Texture2D::uptr* inputViews, const RenderTarget::uptr* pGbuffers,
 	const DepthStencil::sptr& depth, uint8_t maxMips)
 {
+	const auto pDevice = pCommandList->GetDevice();
+	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(pDevice);
+	m_computePipelineCache = Compute::PipelineCache::MakeUnique(pDevice);
+	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(pDevice);
+	m_descriptorTableCache = DescriptorTableCache::MakeUnique(pDevice, L"DenoiserDescriptorTableCache");
+
 	m_viewport = XMUINT2(width, height);
 	m_inputViews = inputViews;
 	m_pGbuffers = pGbuffers;
@@ -45,12 +46,12 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 
 	for (auto& outputView : m_outputViews) outputView = Texture2D::MakeUnique();
 	for (uint8_t i = UAV_TSS; i <= UAV_TSS1; ++i)
-		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
+		N_RETURN(m_outputViews[i]->Create(pDevice, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 			(min)(mipCount, maxMips), 1, false, MemoryFlag::NONE, namesUAV[i]), false);
 
 	for (uint8_t i = UAV_FLT_RFL; i <= UAV_FLT_DFF; ++i)
-		N_RETURN(m_outputViews[i]->Create(m_device.get(), width, height,
+		N_RETURN(m_outputViews[i]->Create(pDevice, width, height,
 			Format::R16G16B16A16_FLOAT, 1, ResourceFlag::ALLOW_UNORDERED_ACCESS,
 			min<uint8_t>(mipCount - 1, maxMips), 1, false, MemoryFlag::NONE,
 			namesUAV[i]), false);
