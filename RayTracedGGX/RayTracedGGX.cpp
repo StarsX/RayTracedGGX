@@ -95,7 +95,7 @@ void RayTracedGGX::LoadPipeline()
 		ThrowIfFailed(factory->EnumAdapters1(i, &dxgiAdapter));
 		EnableDirectXRaytracing(dxgiAdapter.get());
 		
-		m_device = RayTracing::Device::MakeShared();
+		m_device = RayTracing::Device::MakeUnique();
 		hr = m_device->Create(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0);
 		N_RETURN(m_device->CreateInterface(createDeviceFlags), ThrowIfFailed(E_FAIL));
 	}
@@ -166,12 +166,12 @@ void RayTracedGGX::LoadAssets()
 
 	// Create ray tracing interfaces
 	for (auto& commandList : m_commandLists)
-		N_RETURN(commandList->CreateInterface(m_device.get()), ThrowIfFailed(E_FAIL));
+		N_RETURN(commandList->CreateInterface(), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracer
 	vector<Resource::uptr> uploaders(0);
 	{
-		m_rayTracer = make_unique<RayTracer>(m_device);
+		m_rayTracer = make_unique<RayTracer>();
 		if (!m_rayTracer) ThrowIfFailed(E_FAIL);
 
 		GeometryBuffer geometries[RayTracer::NUM_MESH];
@@ -181,7 +181,7 @@ void RayTracedGGX::LoadAssets()
 
 	// Create denoiser
 	{
-		m_denoiser = make_unique<Denoiser>(m_device);
+		m_denoiser = make_unique<Denoiser>();
 		if (!m_denoiser) ThrowIfFailed(E_FAIL);
 
 		if (!m_denoiser->Init(pCommandList, m_width, m_height, Format::R8G8B8A8_UNORM,
@@ -248,7 +248,7 @@ void RayTracedGGX::OnUpdate()
 	const auto eyePt = XMLoadFloat3(&m_eyePt);
 	const auto view = XMLoadFloat4x4(&m_view);
 	const auto proj = XMLoadFloat4x4(&m_proj);
-	m_rayTracer->UpdateFrame(m_frameIndex, eyePt, view * proj, timeStep);
+	m_rayTracer->UpdateFrame(m_device.get(), m_frameIndex, eyePt, view * proj, timeStep);
 }
 
 // Render the scene.
