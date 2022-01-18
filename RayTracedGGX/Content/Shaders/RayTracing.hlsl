@@ -291,7 +291,6 @@ bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 	uint visibility = g_txVisiblity[index];
 	float2 screenPos = (index + 0.5) / dim * 2.0 - 1.0;
 	screenPos.y = -screenPos.y; // Invert Y for Y-up-style NDC.
-	screenPos -= l_rayGen.ProjBias;
 
 	if (visibility > 0)
 	{
@@ -309,6 +308,7 @@ bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 		[unroll]
 		for (uint i = 0; i < 3; ++i)
 			p[i] = mul(float4(vertices[i].Pos, 1.0), g_cb.WorldViewProjs[instanceIdx]);
+		screenPos -= l_rayGen.ProjBias;
 		const float2 barycentrics = calcBarycentrics(p, screenPos);
 
 		// Interpolate triangle sample attributes

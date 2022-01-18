@@ -306,9 +306,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	HALF blend = 0.25 / lerp(8.0, distToClamp + contrast, historyAmt);
 #endif
 	blend = min(blend, 0.25);
-#ifndef _DENOISE_
 	blend = filtered.w > 0.0 ? blend : 1.0;
-#endif
 
 	HALF3 result = ITM(lerp(historyTM, filtered.xyz, blend));
 	result = any(isnan(result)) ? ITM(filtered.xyz) : result;
