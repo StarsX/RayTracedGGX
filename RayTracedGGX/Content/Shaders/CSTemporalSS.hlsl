@@ -204,12 +204,16 @@ HALF4 NeighborMinMax(out HALF4 neighborMin, out HALF4 neighborMax,
 #endif
 	}
 
+	current /= 4.0;
+
 #if	_VARIANCE_AABB_
 	mu /= NUM_SAMPLES;
 	const HALF3 sigma = sqrt(abs(m2 / NUM_SAMPLES - mu * mu));
 	const HALF3 gsigma = gamma * sigma;
 	neighborMin.xyz = mu - gsigma;
 	neighborMax.xyz = mu + gsigma;
+	neighborMin.xyz = min(neighborMin.xyz, current.xyz);
+	neighborMax.xyz = max(neighborMax.xyz, current.xyz);
 	neighborMin.w = GET_LUMA4(mu - sigma);
 	neighborMax.w = GET_LUMA4(mu + sigma);
 #else
@@ -217,7 +221,7 @@ HALF4 NeighborMinMax(out HALF4 neighborMin, out HALF4 neighborMax,
 	neighborMax.w = GET_LUMA4(neighborMax.xyz);
 #endif
 
-	return current / 4.0;
+	return current;
 }
 
 //--------------------------------------------------------------------------------------
