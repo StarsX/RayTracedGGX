@@ -266,7 +266,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	// Compute color-space AABB
 	HALF4 neighborMin, neighborMax;
 	const HALF4 currentTM = HALF4(TM(current.xyz), current.w);
-#if defined(_DENOISE_)
+#ifdef _DENOISE_
 	const HALF gamma = current.w <= 0.0 ? 1.0 : clamp(8.0 / historyBlur, 1.0, 32.0);
 #elif defined(_ALPHA_AS_ID_)
 	const HALF gamma = historyBlur > 0.0 || current.w <= 0.0 ? 1.0 : 16.0;

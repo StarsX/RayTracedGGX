@@ -10,7 +10,7 @@
 RWTexture2D<float3>	g_renderTarget;
 Texture2D			g_txNormal;
 Texture2D<float2>	g_txRoughMetal;
-//Texture2D<float>	g_txDepth : register (t3);
+//Texture2D<float>	g_txDepth : register (t4);
 
 groupshared uint4 g_srcMtlNrms[SHARED_MEM_SIZE];
 //groupshared float g_depths[SHARED_MEM_SIZE];
@@ -54,6 +54,8 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	float3 mu = 0.0;
 	float wsum = 0.0;
 
+	const float depthC = 0.0, depth = 0.0;
+
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
@@ -61,9 +63,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		const float4 srcMtl = unpack(g_srcMtlNrms[j].xy);
 		const float4 norm = unpack(g_srcMtlNrms[j].zw);
 
-		const float w = (norm.w > 0.0 && srcMtl.w < 1.0 ? 1.0 : 0.0)
-			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
-			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
+		const float w = DiffuseWeight(normC.xyz, norm, depthC, depth, srcMtl.w);
 		mu += srcMtl.xyz * w;
 		wsum += w;
 	}

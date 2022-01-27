@@ -21,7 +21,12 @@ float3 TM(float3 hdr)
 //--------------------------------------------------------------------------------------
 float3 ITM(float3 rgb)
 {
-	return rgb / max(1.0 - dot(rgb, g_lumBase), 1e-4);
+	return rgb / (1.0 - dot(rgb, g_lumBase));
+}
+
+float RadianceWeight(float3 radianceC, float3 radiance)
+{
+	return max(exp(-0.65 * length(radianceC - radiance)), 1.0e-2);
 }
 
 float NormalWeight(float3 normC, float3 norm, float sigma)
@@ -29,9 +34,19 @@ float NormalWeight(float3 normC, float3 norm, float sigma)
 	return pow(max(dot(normC, norm), 0.0), sigma);
 }
 
+float DepthWeight(float depthC, float depth, float sigma)
+{
+	return exp(-abs(depthC - depth) * depthC * sigma);
+}
+
 float RoughnessWeight(float roughC, float rough, float sigmaMin, float sigmaMax)
 {
 	return 1.0 - smoothstep(sigmaMin, sigmaMax, abs(rough - roughC));
+}
+
+float RoughnessSigma(float roughness)
+{
+	return 320.0 * roughness * roughness * roughness;
 }
 
 float Gaussian(float x, float m, float sigma)
@@ -40,11 +55,6 @@ float Gaussian(float x, float m, float sigma)
 	const float a = r * r / (sigma * sigma);
 
 	return exp(-0.5 * a);
-}
-
-float RoughnessSigma(float roughness)
-{
-	return 320.0 * roughness * roughness * roughness;
 }
 
 float3 Denoise(float3 src, float3 mu, float roughness)

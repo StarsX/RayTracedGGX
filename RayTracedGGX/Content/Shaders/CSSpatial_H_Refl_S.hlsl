@@ -57,6 +57,8 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	float3 mu = 0.0;
 	float wsum = 0.0;
 
+	const float depthC = 0.0, depth = 0.0;
+
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
@@ -64,11 +66,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		const float4 srcRgh = unpack(g_srcRghNrms[j].xy);
 		const float4 norm = unpack(g_srcRghNrms[j].zw);
 
-		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
-			* Gaussian(radius, i, a)
-			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N)
-			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
-			* RoughnessWeight(roughness, srcRgh.w, 0.0, 0.5);
+		const float w = ReflectionWeight(normC.xyz, norm, roughness, srcRgh.w, depthC, depth, radius, i, a);
 		mu += srcRgh.xyz * w;
 		wsum += w;
 	}

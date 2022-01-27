@@ -414,7 +414,7 @@ float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
 	//return Hammersley(s, numSamples);
 }
 
-RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P, float4 color, uint hitGroup, uint recursionDepth = 0)
+RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P, float4 color, uint hitGroup, float t = 0.0, uint recursionDepth = 0)
 {
 	RayDesc ray;
 	ray.Origin = P;
@@ -431,7 +431,7 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		{
 			// Trace a reflection ray.
 			const float a = rghMtl.x * rghMtl.x;
-			H = computeDirectionGGX(a, N, xi);
+			H = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionGGX(a, N, xi) : N;
 
 			ray.Direction = reflect(-V, H);
 			NoL = dot(N, ray.Direction);
@@ -491,7 +491,7 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		payload.Color *= albedo * (1.0 - 0.04);
 	}
 
-	payload.Color *= recursionDepth > 0 ? exp(-0.15 * RayTCurrent()) : 1.0;
+	payload.Color *= recursionDepth > 0 ? exp(-0.15 * t) : 1.0;
 
 	return payload;
 }
@@ -545,7 +545,7 @@ void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 	const float4 color = getBaseColor(instanceIdx, attrib.UV);
 
 	// Trace a reflection ray.
-	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, 1);
+	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, RayTCurrent(), 1);
 }
 
 [shader("closesthit")]
@@ -566,7 +566,7 @@ void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 	color.xyz *= hitGroup ? 1.0 - rghMtl.y : 1.0;
 
 	// Trace a diffuse ray.
-	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, 1);
+	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, RayTCurrent(), 1);
 }
 
 //--------------------------------------------------------------------------------------

@@ -26,6 +26,8 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	float3 mu = 0.0;
 	float wsum = 0.0;
 
+	const float depthC = 0.0, depth = 0.0;
+
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
@@ -40,8 +42,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		src = TM(src);
-		const float w = NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
-			//* Gaussian(depthC, depth, SIGMA_Z);
+		const float w = DiffuseWeight(normC.xyz, norm.xyz, depthC, depth);
 		mu += src * w;
 		wsum += w;
 	}

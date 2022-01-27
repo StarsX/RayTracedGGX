@@ -35,21 +35,19 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
+	const float depthC = 0.0, depth = 0.0;
+
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
 		const uint2 index = uint2(DTid.x, DTid.y + i - radius);
 		float4 norm = g_txNormal[index];
-		float3 avg = g_txAverage[index];
+		const float3 avg = g_txAverage[index];
 		//const float depth = g_txDepth[index];
 		const float rgh = g_txRoughness[index];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
-		const float w = (norm.w > 0.0 ? 1.0 : 0.0)
-			* Gaussian(radius, i, a)
-			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N)
-			//* Gaussian(depthC, depth, SIGMA_Z);
-			* RoughnessWeight(roughness, rgh, 0.0, 0.5);
+		const float w = ReflectionWeight(normC.xyz, norm, roughness, rgh, depthC, depth, radius, i, a);
 		mu += avg * w;
 		wsum += w;
 	}

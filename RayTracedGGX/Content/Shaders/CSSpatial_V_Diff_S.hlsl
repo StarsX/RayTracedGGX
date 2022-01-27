@@ -65,6 +65,8 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
+	const float depthC = 0.0, depth = 0.0;
+
 	[unroll]
 	for (uint i = 0; i < sampleCount; ++i)
 	{
@@ -72,9 +74,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		const float4 avgMtl = unpack(g_avgMtlNrms[j].xy);
 		const float4 norm = unpack(g_avgMtlNrms[j].zw);
 
-		const float w = (norm.w > 0.0 && avgMtl.w < 1.0 ? 1.0 : 0.0)
-			* NormalWeight(normC.xyz, norm.xyz, SIGMA_N);
-			//* Gaussian(depthC, g_depths[j], SIGMA_Z);
+		const float w = DiffuseWeight(normC.xyz, norm, depthC, depth, avgMtl.w);
 		mu += avgMtl.xyz * w;
 		wsum += w;
 	}
