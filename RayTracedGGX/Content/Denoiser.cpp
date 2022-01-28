@@ -42,8 +42,7 @@ bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, 
 		L"FilteredOut1"
 	};
 
-	const uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
-
+	const uint8_t mipCount = CalculateMipLevels(width, height);
 	for (auto& outputView : m_outputViews) outputView = Texture2D::MakeUnique();
 	for (uint8_t i = UAV_TSS; i <= UAV_TSS1; ++i)
 		N_RETURN(m_outputViews[i]->Create(pDevice, width, height,

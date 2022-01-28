@@ -105,7 +105,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	N_RETURN(m_visBuffer->Create(pDevice, width, height, Format::R32_UINT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, MemoryFlag::NONE, L"VisibilityBuffer"), false);
 
-	uint8_t mipCount = max<uint8_t>(Log2((max)(width, height)), 0) + 1;
+	uint8_t mipCount = CalculateMipLevels(width, height);
 	mipCount = (min)(mipCount, maxGBufferMips);
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
 	N_RETURN(m_gbuffers[NORMAL]->Create(pDevice, width, height, Format::R10G10B10A2_UNORM, 1,
