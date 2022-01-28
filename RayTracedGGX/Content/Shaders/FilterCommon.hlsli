@@ -46,7 +46,7 @@ float RoughnessWeight(float roughC, float rough, float sigmaMin, float sigmaMax)
 
 float RoughnessSigma(float roughness)
 {
-	return 320.0 * roughness * roughness * roughness;
+	return 320.0 * roughness * roughness;
 }
 
 float Gaussian(float x, float m, float sigma)

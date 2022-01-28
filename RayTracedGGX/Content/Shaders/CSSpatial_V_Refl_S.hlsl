@@ -80,7 +80,8 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	}
 
 	mu /= wsum;
-	const float3 result = Denoise(src, mu, roughness);
+	const float3 result = mu;
+	//const float3 result = Denoise(src, mu, roughness);
 
 	g_renderTarget[DTid] = float4(ITM(result), 1.0);
 }
