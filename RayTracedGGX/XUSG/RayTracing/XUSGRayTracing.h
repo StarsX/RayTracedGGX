@@ -21,7 +21,7 @@ namespace XUSG
 			PERFORM_UPDATE = (1 << 5)
 		};
 
-		DEFINE_ENUM_FLAG_OPERATORS(BuildFlag);
+		XUSG_DEF_ENUM_FLAG_OPERATORS(BuildFlag);
 
 		enum class GeometryFlag
 		{
@@ -30,7 +30,17 @@ namespace XUSG
 			NO_DUPLICATE_ANYHIT_INVOCATION = (1 << 1)
 		};
 
-		DEFINE_ENUM_FLAG_OPERATORS(GeometryFlag);
+		XUSG_DEF_ENUM_FLAG_OPERATORS(GeometryFlag);
+
+		enum class InstanceFlag {
+			NONE = 0,
+			TRIANGLE_CULL_DISABLE = (1 << 0),
+			TRIANGLE_FRONT_COUNTERCLOCKWISE = (1 << 1),
+			FORCE_OPAQUE = (1 << 2),
+			FORCE_NON_OPAQUE = (1 << 3)
+		};
+
+		XUSG_DEF_ENUM_FLAG_OPERATORS(InstanceFlag);
 
 		enum class HitGroupType : uint8_t
 		{
@@ -63,14 +73,14 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Device
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE Device :
+		class XUSG_INTERFACE Device :
 			public virtual XUSG::Device
 		{
 		public:
 			//Device();
 			virtual ~Device() {};
 
-#if ENABLE_DXR_FALLBACK
+#if XUSG_ENABLE_DXR_FALLBACK
 			virtual bool CreateInterface(uint8_t flags) = 0;
 #else
 			virtual bool CreateInterface() = 0;
@@ -90,7 +100,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		class CommandList;
 
-		class DLL_INTERFACE AccelerationStructure
+		class XUSG_INTERFACE AccelerationStructure
 		{
 		public:
 			//AccelerationStructure();
@@ -101,7 +111,7 @@ namespace XUSG
 			virtual uint32_t GetResultDataMaxSize() const = 0;
 			virtual uint32_t GetScratchDataMaxSize() const = 0;
 			virtual uint32_t GetUpdateScratchDataSize() const = 0;
-#if ENABLE_DXR_FALLBACK
+#if XUSG_ENABLE_DXR_FALLBACK
 			virtual const WRAPPED_GPU_POINTER& GetResultPointer() const = 0;
 
 			static uint32_t GetUAVCount();
@@ -120,14 +130,14 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Bottom-level acceleration structure
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE BottomLevelAS :
+		class XUSG_INTERFACE BottomLevelAS :
 			public virtual AccelerationStructure
 		{
 		public:
 			//BottomLevelAS();
 			virtual ~BottomLevelAS() {}
 
-			virtual bool PreBuild(const Device* pDevice, uint32_t numDescs, const GeometryBuffer& geometries,
+			virtual bool PreBuild(const Device* pDevice, uint32_t numGeometries, const GeometryBuffer& geometries,
 				uint32_t descriptorIndex, BuildFlag flags = BuildFlag::PREFER_FAST_TRACE) = 0;
 			virtual void Build(CommandList* pCommandList, const Resource* pScratch,
 				const DescriptorPool& descriptorPool, bool update = false) = 0;
@@ -150,14 +160,24 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Top-level acceleration structure
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE TopLevelAS :
+		class XUSG_INTERFACE TopLevelAS :
 			public virtual AccelerationStructure
 		{
 		public:
+			struct InstanceDesc
+			{
+				const float* pTransform;
+				unsigned int InstanceID : 24;
+				unsigned int InstanceMask : 8;
+				unsigned int InstanceContributionToHitGroupIndex : 24;
+				unsigned int Flags : 8;
+				const BottomLevelAS* pBottomLevelAS;
+			};
+
 			//TopLevelAS();
 			virtual ~TopLevelAS() {}
 
-			virtual bool PreBuild(const Device* pDevice, uint32_t numDescs, uint32_t descriptorIndex,
+			virtual bool PreBuild(const Device* pDevice, uint32_t numInstances, uint32_t descriptorIndex,
 				BuildFlag flags = BuildFlag::PREFER_FAST_TRACE) = 0;
 			virtual void Build(const CommandList* pCommandList, const Resource* pScratch,
 				const Resource* pInstanceDescs, const DescriptorPool& descriptorPool, bool update = false) = 0;
@@ -165,6 +185,9 @@ namespace XUSG
 			static void SetInstances(const Device* pDevice, Resource* pInstances,
 				uint32_t numInstances, const BottomLevelAS* const* ppBottomLevelASs,
 				float* const* transforms, XUSG::API api = XUSG::API::DIRECTX_12);
+			static void SetInstances(const Device* pDevice, Resource* pInstances,
+				uint32_t numInstances, const InstanceDesc* pInstanceDescs,
+				XUSG::API api = XUSG::API::DIRECTX_12);
 
 			using uptr = std::unique_ptr<TopLevelAS>;
 			using sptr = std::shared_ptr<TopLevelAS>;
@@ -176,7 +199,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Shader record
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE ShaderRecord
+		class XUSG_INTERFACE ShaderRecord
 		{
 		public:
 			//ShaderRecord(const Device* pDevice, const Pipeline& pipeline, const void* shader,
@@ -207,7 +230,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Shader table
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE ShaderTable
+		class XUSG_INTERFACE ShaderTable
 		{
 		public:
 			//ShaderTable();
@@ -235,7 +258,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Command list
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE CommandList :
+		class XUSG_INTERFACE CommandList :
 			public virtual XUSG::CommandList
 		{
 		public:
@@ -268,7 +291,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Pipeline layout
 		//--------------------------------------------------------------------------------------
-		class DLL_INTERFACE PipelineLayout :
+		class XUSG_INTERFACE PipelineLayout :
 			public virtual Util::PipelineLayout
 		{
 		public:
@@ -292,7 +315,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		class PipelineCache;
 
-		class DLL_INTERFACE State
+		class XUSG_INTERFACE State
 		{
 		public:
 			//State();
@@ -320,7 +343,7 @@ namespace XUSG
 			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
 		};
 
-		class DLL_INTERFACE PipelineCache
+		class XUSG_INTERFACE PipelineCache
 		{
 		public:
 			//PipelineCache();
