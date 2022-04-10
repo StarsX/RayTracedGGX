@@ -19,7 +19,7 @@
 #define WIN32_LEAN_AND_MEAN             // Exclude rarely-used stuff from Windows headers.
 #endif
 
-#define DLL_INTERFACE __declspec(dllimport)
+#define XUSG_INTERFACE __declspec(dllimport)
 
 #include <windows.h>
 
@@ -55,4 +55,4 @@
 #endif
 #endif  // _DEBUG
 
-#define ENABLE_DXR_FALLBACK	1
+#define XUSG_ENABLE_DXR_FALLBACK	1

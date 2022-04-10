@@ -175,11 +175,11 @@ float3 computeDirectionCos(float3 normal, float2 xi)
 //--------------------------------------------------------------------------------------
 // Retrieve hit world position.
 //--------------------------------------------------------------------------------------
-float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0)
+float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0, float level = 0.0)
 {
 #if 1
 	return ((abs(ddx) + abs(ddy) > 0.0 ? g_txEnv.SampleGrad(g_sampler, dir, ddx, ddy) :
-		g_txEnv.SampleLevel(g_sampler, dir, 0.0)));// *1.5;
+		g_txEnv.SampleLevel(g_sampler, dir, level)));// *1.5;
 #else
 	const float3 sunDir = normalize(float3(-1.0, 1.0, -1.0));
 	const float sumAmt = saturate(dot(dir, sunDir));
@@ -192,12 +192,13 @@ float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0)
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
-RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, uint hitGroup, float3 ddx = 0.0, float3 ddy = 0.0)
+RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, uint hitGroup,
+	float3 ddx = 0.0, float3 ddy = 0.0, float level = 0.0)
 {
 	RayPayload payload;
 
 	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH)
-		payload.Color = environment(ray.Direction, ddx, ddy);
+		payload.Color = environment(ray.Direction, ddx, ddy, level);
 	else
 	{
 		payload.Color = 0.0;
@@ -414,14 +415,24 @@ float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
 	//return Hammersley(s, numSamples);
 }
 
-RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P, float4 color, uint hitGroup, float t = 0.0, uint recursionDepth = 0)
+float getIrradianceApproxLevel()
+{
+	float2 texSize;
+	float numLevels;
+	g_txEnv.GetDimensions(0, texSize.x, texSize.y, numLevels);
+
+	return numLevels - 2.5;
+}
+
+RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
+	float4 color, uint hitGroup, float t = 0.0, uint recursionDepth = 0)
 {
 	RayDesc ray;
 	ray.Origin = P;
 	ray.TMin = ray.TMax = 0.0;
 
 	float3 H;
-	float NoL;
+	float NoL, a = 1.0;
 
 	if (hit)
 	{
@@ -430,7 +441,7 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		if (hitGroup == HIT_GROUP_REFLECTION)
 		{
 			// Trace a reflection ray.
-			const float a = rghMtl.x * rghMtl.x;
+			a = rghMtl.x * rghMtl.x;
 			H = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionGGX(a, N, xi) : N;
 
 			ray.Direction = reflect(-V, H);
@@ -445,7 +456,7 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		else
 		{
 			// Trace a diffuse ray.
-			ray.Direction = computeDirectionCos(N, xi);
+			ray.Direction = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionCos(N, xi) : N;
 			ray.TMin = 1e-5;
 			ray.TMax = 10000.0;
 			NoL = rghMtl.y < 1.0 ? 1.0 : 0.0;
@@ -453,9 +464,10 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 	}
 	else ray.Direction = -V;
 
-	const float3 dLdx = dFdx(ray.Direction);
-	const float3 dLdy = dFdy(ray.Direction);
-	RayPayload payload = traceRadianceRay(ray, recursionDepth, hitGroup, dLdx, dLdy);
+	const float3 dLdx = recursionDepth < MAX_RECURSION_DEPTH ? dFdx(ray.Direction) : 0.0;
+	const float3 dLdy = recursionDepth < MAX_RECURSION_DEPTH ? dFdy(ray.Direction) : 0.0;
+	const float level = recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : getIrradianceApproxLevel() * a;
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, hitGroup, dLdx, dLdy, level);
 
 	if (!hit && hitGroup == HIT_GROUP_REFLECTION) return payload;
 	else if (NoL <= 0.0 || (!hit && hitGroup == HIT_GROUP_DIFFUSE)) return (RayPayload)0;
@@ -489,9 +501,10 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 		//const float pdf = NoL / PI;
 		//payload.Color *= brdf * NoL / pdf;
 		payload.Color *= albedo * (1.0 - 0.04);
+		payload.Color *= recursionDepth < MAX_RECURSION_DEPTH ? 1.0 : PI;
 	}
 
-	payload.Color *= recursionDepth > 0 ? exp(-0.15 * t) : 1.0;
+	//payload.Color *= recursionDepth > 0 ? exp(-0.15 * t) : 1.0;
 
 	return payload;
 }
@@ -575,6 +588,9 @@ void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 [shader("miss")]
 void missMain(inout RayPayload payload)
 {
-	payload.Color = environment(WorldRayDirection());
-	//payload.Color = environment(WorldRayDirection() + WorldRayOrigin() * 0.01);
+	const float3 L = WorldRayDirection();
+	const float3 dLdx = dFdx(L);
+	const float3 dLdy = dFdy(L);
+	payload.Color = environment(L, dLdx, dLdy);
+	//payload.Color = environment(L + WorldRayOrigin() * 0.01);
 }

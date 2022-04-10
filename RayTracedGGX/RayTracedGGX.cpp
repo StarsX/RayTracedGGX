@@ -97,7 +97,7 @@ void RayTracedGGX::LoadPipeline()
 		
 		m_device = RayTracing::Device::MakeUnique();
 		hr = m_device->Create(dxgiAdapter.get(), D3D_FEATURE_LEVEL_11_0);
-		N_RETURN(m_device->CreateInterface(createDeviceFlags), ThrowIfFailed(E_FAIL));
+		XUSG_N_RETURN(m_device->CreateInterface(createDeviceFlags), ThrowIfFailed(E_FAIL));
 	}
 
 	dxgiAdapter->GetDesc1(&dxgiAdapterDesc);
@@ -112,13 +112,13 @@ void RayTracedGGX::LoadPipeline()
 	{
 		auto& commandQueue = m_commandQueues[n];
 		commandQueue = CommandQueue::MakeUnique();
-		N_RETURN(commandQueue->Create(m_device.get(), commandListTypes[n], CommandQueueFlag::NONE,
+		XUSG_N_RETURN(commandQueue->Create(m_device.get(), commandListTypes[n], CommandQueueFlag::NONE,
 			0, 0, commandQueueNames[n]), ThrowIfFailed(E_FAIL));
 	}
 
 	// Describe and create the swap chain.
 	m_swapChain = SwapChain::MakeUnique();
-	N_RETURN(m_swapChain->Create(factory.get(), Win32Application::GetHwnd(), m_commandQueues[UNIVERSAL].get(),
+	XUSG_N_RETURN(m_swapChain->Create(factory.get(), Win32Application::GetHwnd(), m_commandQueues[UNIVERSAL].get(),
 		FrameCount, m_width, m_height, Format::R8G8B8A8_UNORM), ThrowIfFailed(E_FAIL));
 
 	// This sample does not support fullscreen transitions.
@@ -131,18 +131,18 @@ void RayTracedGGX::LoadPipeline()
 	for (uint8_t n = 0; n < FrameCount; ++n)
 	{
 		m_renderTargets[n] = RenderTarget::MakeUnique();
-		N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.get(), m_swapChain.get(), n), ThrowIfFailed(E_FAIL));
+		XUSG_N_RETURN(m_renderTargets[n]->CreateFromSwapChain(m_device.get(), m_swapChain.get(), n), ThrowIfFailed(E_FAIL));
 
 		for (uint8_t i = 0; i < COMMAND_ALLOCATOR_COUNT; ++i) m_commandAllocators[i][n] = CommandAllocator::MakeUnique();
-		N_RETURN(m_commandAllocators[ALLOCATOR_UPDATE_AS][n]->Create(m_device.get(), CommandListType::COMPUTE,
+		XUSG_N_RETURN(m_commandAllocators[ALLOCATOR_UPDATE_AS][n]->Create(m_device.get(), CommandListType::COMPUTE,
 			(L"UpdateASAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_commandAllocators[ALLOCATOR_GEOMETRY][n]->Create(m_device.get(), CommandListType::DIRECT,
+		XUSG_N_RETURN(m_commandAllocators[ALLOCATOR_GEOMETRY][n]->Create(m_device.get(), CommandListType::DIRECT,
 			(L"GeometryAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_commandAllocators[ALLOCATOR_GRAPHICS][n]->Create(m_device.get(), CommandListType::DIRECT,
+		XUSG_N_RETURN(m_commandAllocators[ALLOCATOR_GRAPHICS][n]->Create(m_device.get(), CommandListType::DIRECT,
 			(L"RayTracingAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_commandAllocators[ALLOCATOR_COMPUTE][n]->Create(m_device.get(), CommandListType::COMPUTE,
+		XUSG_N_RETURN(m_commandAllocators[ALLOCATOR_COMPUTE][n]->Create(m_device.get(), CommandListType::COMPUTE,
 			(L"ComputeAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
-		N_RETURN(m_commandAllocators[ALLOCATOR_IMAGE][n]->Create(m_device.get(), CommandListType::DIRECT,
+		XUSG_N_RETURN(m_commandAllocators[ALLOCATOR_IMAGE][n]->Create(m_device.get(), CommandListType::DIRECT,
 			(L"ImageAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
 	}
 }
@@ -153,20 +153,20 @@ void RayTracedGGX::LoadAssets()
 	// Create the command lists.
 	m_commandLists[UNIVERSAL] = RayTracing::CommandList::MakeUnique();
 	const auto& pCommandList = m_commandLists[UNIVERSAL].get();
-	N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::DIRECT,
+	XUSG_N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::DIRECT,
 		m_commandAllocators[ALLOCATOR_GEOMETRY][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
 
 	{
 		m_commandLists[COMPUTE] = RayTracing::CommandList::MakeUnique();
 		const auto& pCommandList = m_commandLists[COMPUTE].get();
-		N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::COMPUTE,
+		XUSG_N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::COMPUTE,
 			m_commandAllocators[ALLOCATOR_COMPUTE][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
-		N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+		XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 	}
 
 	// Create ray tracing interfaces
 	for (auto& commandList : m_commandLists)
-		N_RETURN(commandList->CreateInterface(), ThrowIfFailed(E_FAIL));
+		XUSG_N_RETURN(commandList->CreateInterface(), ThrowIfFailed(E_FAIL));
 
 	// Create ray tracer
 	vector<Resource::uptr> uploaders(0);
@@ -190,7 +190,7 @@ void RayTracedGGX::LoadAssets()
 	}
 
 	// Close the command list and execute it to begin the initial GPU setup.
-	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 	m_commandQueues[UNIVERSAL]->ExecuteCommandList(pCommandList);
 
 	// Create synchronization objects and wait until assets have been uploaded to the GPU.
@@ -198,7 +198,7 @@ void RayTracedGGX::LoadAssets()
 		if (!m_fence)
 		{
 			m_fence = Fence::MakeUnique();
-			N_RETURN(m_fence->Create(m_device.get(), m_fenceValues[m_frameIndex]++, FenceFlag::NONE, L"Fence"), ThrowIfFailed(E_FAIL));
+			XUSG_N_RETURN(m_fence->Create(m_device.get(), m_fenceValues[m_frameIndex]++, FenceFlag::NONE, L"Fence"), ThrowIfFailed(E_FAIL));
 		}
 
 		// Create an event handle to use for frame synchronization.
@@ -214,7 +214,7 @@ void RayTracedGGX::LoadAssets()
 	if (!m_semaphore.Fence)
 	{
 		m_semaphore.Fence = Fence::MakeUnique();
-		N_RETURN(m_semaphore.Fence->Create(m_device.get(), m_semaphore.Value, FenceFlag::NONE, L"Semaphore"), ThrowIfFailed(E_FAIL));
+		XUSG_N_RETURN(m_semaphore.Fence->Create(m_device.get(), m_semaphore.Value, FenceFlag::NONE, L"Semaphore"), ThrowIfFailed(E_FAIL));
 	}
 
 	// Projection
@@ -261,8 +261,8 @@ void RayTracedGGX::OnRender()
 			const auto commandType = COMPUTE;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateUpdateASCommandList(commandType);
-			N_RETURN(commandQueue->SubmitCommandList(m_commandLists[commandType].get(), &m_semaphore, 1), ThrowIfFailed(E_FAIL)); // Execute the command lists.
-			N_RETURN(commandQueue->Signal(m_semaphore.Fence.get(), ++m_semaphore.Value), ThrowIfFailed(E_FAIL));
+			XUSG_N_RETURN(commandQueue->SubmitCommandList(m_commandLists[commandType].get(), &m_semaphore, 1), ThrowIfFailed(E_FAIL)); // Execute the command lists.
+			XUSG_N_RETURN(commandQueue->Signal(m_semaphore.Fence.get(), ++m_semaphore.Value), ThrowIfFailed(E_FAIL));
 		}
 
 		// Record all the commands we need to render the scene into the command list.
@@ -278,8 +278,8 @@ void RayTracedGGX::OnRender()
 			const auto commandType = UNIVERSAL;
 			const auto commandQueue = m_commandQueues[commandType].get();
 			PopulateRayTraceCommandList(commandType);
-			N_RETURN(commandQueue->SubmitCommandList(m_commandLists[commandType].get(), &m_semaphore, 1), ThrowIfFailed(E_FAIL)); // Execute the command lists.
-			N_RETURN(commandQueue->Signal(m_semaphore.Fence.get(), ++m_semaphore.Value), ThrowIfFailed(E_FAIL));
+			XUSG_N_RETURN(commandQueue->SubmitCommandList(m_commandLists[commandType].get(), &m_semaphore, 1), ThrowIfFailed(E_FAIL)); // Execute the command lists.
+			XUSG_N_RETURN(commandQueue->Signal(m_semaphore.Fence.get(), ++m_semaphore.Value), ThrowIfFailed(E_FAIL));
 		}
 
 		// Record all the commands we need to render the scene into the command list.
@@ -300,7 +300,7 @@ void RayTracedGGX::OnRender()
 	}
 
 	// Present the frame.
-	N_RETURN(m_swapChain->Present(0, 0), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(m_swapChain->Present(0, 0), ThrowIfFailed(E_FAIL));
 
 	MoveToNextFrame();
 }
@@ -441,13 +441,13 @@ void RayTracedGGX::PopulateCommandList()
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	const auto commandAllocator = m_commandAllocators[ALLOCATOR_GRAPHICS][m_frameIndex].get();
-	N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	const auto pCommandList = m_commandLists[UNIVERSAL].get();
-	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
@@ -464,7 +464,7 @@ void RayTracedGGX::PopulateCommandList()
 	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::PRESENT);
 	pCommandList->Barrier(numBarriers, barriers);
 
-	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
 
 void RayTracedGGX::PopulateUpdateASCommandList(CommandType commandType)
@@ -473,18 +473,18 @@ void RayTracedGGX::PopulateUpdateASCommandList(CommandType commandType)
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	const auto commandAllocator = m_commandAllocators[ALLOCATOR_UPDATE_AS][m_frameIndex].get();
-	N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	const auto pCommandList = m_commandLists[commandType].get();
-	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 
-	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
 
 void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
@@ -493,18 +493,18 @@ void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	const auto commandAllocator = m_commandAllocators[ALLOCATOR_GEOMETRY][m_frameIndex].get();
-	N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	const auto pCommandList = m_commandLists[commandType].get();
-	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
 	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex);
 
-	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
 
 void RayTracedGGX::PopulateRayTraceCommandList(CommandType commandType)
@@ -513,18 +513,18 @@ void RayTracedGGX::PopulateRayTraceCommandList(CommandType commandType)
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	const auto commandAllocator = m_commandAllocators[ALLOCATOR_GRAPHICS][m_frameIndex].get();
-	N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	const auto pCommandList = m_commandLists[commandType].get();
-	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
 	m_rayTracer->RayTrace(pCommandList, m_frameIndex);
 
-	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
 
 void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
@@ -533,13 +533,13 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 	// command lists have finished execution on the GPU; apps should use 
 	// fences to determine GPU execution progress.
 	const auto commandAllocator = m_commandAllocators[ALLOCATOR_IMAGE][m_frameIndex].get();
-	N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(commandAllocator->Reset(), ThrowIfFailed(E_FAIL));
 
 	// However, when ExecuteCommandList() is called on a particular command 
 	// list, that command list can then be reset at any time and must be before 
 	// re-recording.
 	const auto pCommandList = m_commandLists[commandType].get();
-	N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
 	ResourceBarrier barriers[3];
@@ -553,17 +553,17 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::PRESENT);
 	pCommandList->Barrier(numBarriers, barriers);
 
-	N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
 
 // Wait for pending GPU work to complete.
 void RayTracedGGX::WaitForGpu()
 {
 	// Schedule a Signal command in the queue.
-	N_RETURN(m_commandQueues[UNIVERSAL]->Signal(m_fence.get(), m_fenceValues[m_frameIndex]), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(m_commandQueues[UNIVERSAL]->Signal(m_fence.get(), m_fenceValues[m_frameIndex]), ThrowIfFailed(E_FAIL));
 
 	// Wait until the fence has been processed, and increment the fence value for the current frame.
-	N_RETURN(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex]++, m_fenceEvent), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex]++, m_fenceEvent), ThrowIfFailed(E_FAIL));
 	WaitForSingleObject(m_fenceEvent, INFINITE);
 }
 
@@ -572,7 +572,7 @@ void RayTracedGGX::MoveToNextFrame()
 {
 	// Schedule a Signal command in the queue.
 	const auto currentFenceValue = m_fenceValues[m_frameIndex];
-	N_RETURN(m_commandQueues[UNIVERSAL]->Signal(m_fence.get(), currentFenceValue), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(m_commandQueues[UNIVERSAL]->Signal(m_fence.get(), currentFenceValue), ThrowIfFailed(E_FAIL));
 
 	// Update the frame index.
 	m_frameIndex = m_swapChain->GetCurrentBackBufferIndex();
@@ -580,7 +580,7 @@ void RayTracedGGX::MoveToNextFrame()
 	// If the next frame is not ready to be rendered yet, wait until it is ready.
 	if (m_fence->GetCompletedValue() < m_fenceValues[m_frameIndex])
 	{
-		N_RETURN(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent), ThrowIfFailed(E_FAIL));
+		XUSG_N_RETURN(m_fence->SetEventOnCompletion(m_fenceValues[m_frameIndex], m_fenceEvent), ThrowIfFailed(E_FAIL));
 		WaitForSingleObject(m_fenceEvent, INFINITE);
 	}
 

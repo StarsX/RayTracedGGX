@@ -86,38 +86,38 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	// Load inputs
 	ObjLoader objLoader;
 	if (!objLoader.Import(fileName, true, true)) return false;
-	N_RETURN(createVB(pCommandList, objLoader.GetNumVertices(), objLoader.GetVertexStride(), objLoader.GetVertices(), uploaders), false);
-	N_RETURN(createIB(pCommandList, objLoader.GetNumIndices(), objLoader.GetIndices(), uploaders), false);
+	XUSG_N_RETURN(createVB(pCommandList, objLoader.GetNumVertices(), objLoader.GetVertexStride(), objLoader.GetVertices(), uploaders), false);
+	XUSG_N_RETURN(createIB(pCommandList, objLoader.GetNumIndices(), objLoader.GetIndices(), uploaders), false);
 
-	N_RETURN(createGroundMesh(pCommandList, uploaders), false);
+	XUSG_N_RETURN(createGroundMesh(pCommandList, uploaders), false);
 
 	// Create output views
 	for (uint8_t i = 0; i < NUM_HIT_GROUP; ++i)
 	{
 		auto& outputView = m_outputViews[i];
 		outputView = Texture2D::MakeUnique();
-		N_RETURN(outputView->Create(pDevice, width, height, Format::R11G11B10_FLOAT, 1,
+		XUSG_N_RETURN(outputView->Create(pDevice, width, height, Format::R11G11B10_FLOAT, 1,
 			ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, false, MemoryFlag::NONE,
 			(L"RayTracingOut" + to_wstring(i)).c_str()), false);
 	}
 
 	m_visBuffer = RenderTarget::MakeUnique();
-	N_RETURN(m_visBuffer->Create(pDevice, width, height, Format::R32_UINT,
+	XUSG_N_RETURN(m_visBuffer->Create(pDevice, width, height, Format::R32_UINT,
 		1, ResourceFlag::NONE, 1, 1, nullptr, false, MemoryFlag::NONE, L"VisibilityBuffer"), false);
 
 	uint8_t mipCount = CalculateMipLevels(width, height);
 	mipCount = (min)(mipCount, maxGBufferMips);
 	for (auto& renderTarget : m_gbuffers) renderTarget = RenderTarget::MakeUnique();
-	N_RETURN(m_gbuffers[NORMAL]->Create(pDevice, width, height, Format::R10G10B10A2_UNORM, 1,
+	XUSG_N_RETURN(m_gbuffers[NORMAL]->Create(pDevice, width, height, Format::R10G10B10A2_UNORM, 1,
 		ResourceFlag::ALLOW_UNORDERED_ACCESS, mipCount, 1, nullptr, false, MemoryFlag::NONE, L"Normal"), false);
-	N_RETURN(m_gbuffers[ROUGH_METAL]->Create(pDevice, width, height, Format::R8G8_UNORM, 1,
+	XUSG_N_RETURN(m_gbuffers[ROUGH_METAL]->Create(pDevice, width, height, Format::R8G8_UNORM, 1,
 		ResourceFlag::ALLOW_UNORDERED_ACCESS, mipCount, 1, nullptr, false, MemoryFlag::NONE, L"RoughnessMetallic"), false);
-	N_RETURN(m_gbuffers[VELOCITY]->Create(pDevice, width, height, Format::R16G16_FLOAT, 1,
+	XUSG_N_RETURN(m_gbuffers[VELOCITY]->Create(pDevice, width, height, Format::R16G16_FLOAT, 1,
 		ResourceFlag::ALLOW_UNORDERED_ACCESS, 1, 1, nullptr, false, MemoryFlag::NONE, L"Velocity"), false);
 
 	const auto dsFormat = Format::D24_UNORM_S8_UINT;
 	m_depth = DepthStencil::MakeShared();
-	N_RETURN(m_depth->Create(pDevice, width, height, dsFormat, ResourceFlag::NONE,
+	XUSG_N_RETURN(m_depth->Create(pDevice, width, height, dsFormat, ResourceFlag::NONE,
 		1, 1, 1, 1.0f, 0, false, MemoryFlag::NONE, L"Depth"), false);
 
 	// Constant buffers
@@ -125,16 +125,16 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 	{
 		auto& cbBasePass = m_cbPerOjects[i];
 		cbBasePass = ConstantBuffer::MakeUnique();
-		N_RETURN(cbBasePass->Create(pDevice, sizeof(CBPerObject[FrameCount]), FrameCount, nullptr,
+		XUSG_N_RETURN(cbBasePass->Create(pDevice, sizeof(CBPerObject[FrameCount]), FrameCount, nullptr,
 			MemoryType::UPLOAD, MemoryFlag::NONE, (L"CBBasePass" + to_wstring(i)).c_str()), false);
 	}
 
 	m_cbRaytracing = ConstantBuffer::MakeUnique();
-	N_RETURN(m_cbRaytracing->Create(pDevice, sizeof(CBGlobal[FrameCount]), FrameCount,
+	XUSG_N_RETURN(m_cbRaytracing->Create(pDevice, sizeof(CBGlobal[FrameCount]), FrameCount,
 		nullptr, MemoryType::UPLOAD, MemoryFlag::NONE, L"CBGlobal"), false);
 
 	m_cbMaterials = ConstantBuffer::MakeUnique();
-	N_RETURN(m_cbMaterials->Create(pDevice, sizeof(CBMaterial), 1,
+	XUSG_N_RETURN(m_cbMaterials->Create(pDevice, sizeof(CBMaterial), 1,
 		nullptr, MemoryType::UPLOAD, MemoryFlag::NONE, L"CBMaterial"), false);
 	{
 		const auto pCbData = reinterpret_cast<CBMaterial*>(m_cbMaterials->Map());
@@ -152,18 +152,18 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint
 		DDS::AlphaMode alphaMode;
 
 		uploaders.emplace_back(Resource::MakeUnique());
-		N_RETURN(textureLoader.CreateTextureFromFile(pCommandList, envFileName,
+		XUSG_N_RETURN(textureLoader.CreateTextureFromFile(pCommandList, envFileName,
 			8192, false, m_lightProbe, uploaders.back().get(), &alphaMode), false);
 	}
 
 	// Create raytracing pipelines
-	N_RETURN(createInputLayout(), false);
-	N_RETURN(createPipelineLayouts(pDevice), false);
-	N_RETURN(createPipelines(rtFormat, dsFormat), false);
+	XUSG_N_RETURN(createInputLayout(), false);
+	XUSG_N_RETURN(createPipelineLayouts(pDevice), false);
+	XUSG_N_RETURN(createPipelines(rtFormat, dsFormat), false);
 
 	// Build acceleration structures
-	N_RETURN(buildAccelerationStructures(pCommandList, pGeometries), false);
-	N_RETURN(buildShaderTables(pDevice), false);
+	XUSG_N_RETURN(buildAccelerationStructures(pCommandList, pGeometries), false);
+	XUSG_N_RETURN(buildShaderTables(pDevice), false);
 
 	return true;
 }
@@ -241,7 +241,7 @@ void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex
 	for (uint8_t i = 0; i < VELOCITY; ++i)
 		numBarriers = m_gbuffers[i]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
-		numBarriers, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
+		numBarriers, XUSG_BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
 	pCommandList->Barrier(numBarriers, barriers);
 }
 
@@ -299,7 +299,7 @@ void RayTracer::RayTrace(RayTracing::CommandList* pCommandList, uint8_t frameInd
 
 	ResourceBarrier barriers[4];
 	auto numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
-		0, BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
+		0, XUSG_BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
 	for (uint8_t i = 0; i < VELOCITY; ++i)
 		numBarriers = m_gbuffers[i]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	pCommandList->Barrier(numBarriers, barriers);
@@ -325,7 +325,7 @@ bool RayTracer::createVB(XUSG::CommandList* pCommandList, uint32_t numVert,
 {
 	auto& vertexBuffer = m_vertexBuffers[MODEL_OBJ];
 	vertexBuffer = VertexBuffer::MakeUnique();
-	N_RETURN(vertexBuffer->Create(pCommandList->GetDevice(), numVert, sizeof(Vertex),
+	XUSG_N_RETURN(vertexBuffer->Create(pCommandList->GetDevice(), numVert, sizeof(Vertex),
 		ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1,
 		nullptr, 1, nullptr, MemoryFlag::NONE, L"MeshVB"), false);
 	uploaders.emplace_back(Resource::MakeUnique());
@@ -342,7 +342,7 @@ bool RayTracer::createIB(XUSG::CommandList* pCommandList, uint32_t numIndices,
 	auto& indexBuffers = m_indexBuffers[MODEL_OBJ];
 	const uint32_t byteWidth = sizeof(uint32_t) * numIndices;
 	indexBuffers = IndexBuffer::MakeUnique();
-	N_RETURN(indexBuffers->Create(pCommandList->GetDevice(), byteWidth, Format::R32_UINT, ResourceFlag::NONE,
+	XUSG_N_RETURN(indexBuffers->Create(pCommandList->GetDevice(), byteWidth, Format::R32_UINT, ResourceFlag::NONE,
 		MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, MemoryFlag::NONE, L"MeshIB"), false);
 	uploaders.emplace_back(Resource::MakeUnique());
 
@@ -392,12 +392,12 @@ bool RayTracer::createGroundMesh(XUSG::CommandList* pCommandList, vector<Resourc
 
 		auto& vertexBuffer = m_vertexBuffers[GROUND];
 		vertexBuffer = VertexBuffer::MakeUnique();
-		N_RETURN(vertexBuffer->Create(pDevice, static_cast<uint32_t>(size(vertices)),
+		XUSG_N_RETURN(vertexBuffer->Create(pDevice, static_cast<uint32_t>(size(vertices)),
 			sizeof(Vertex), ResourceFlag::NONE, MemoryType::DEFAULT, 1, nullptr, 1, nullptr,
 			1, nullptr, MemoryFlag::NONE, L"GroundVB"), false);
 		uploaders.push_back(Resource::MakeUnique());
 
-		N_RETURN(vertexBuffer->Upload(pCommandList, uploaders.back().get(), vertices,
+		XUSG_N_RETURN(vertexBuffer->Upload(pCommandList, uploaders.back().get(), vertices,
 			sizeof(vertices), 0, ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -429,11 +429,11 @@ bool RayTracer::createGroundMesh(XUSG::CommandList* pCommandList, vector<Resourc
 
 		auto& indexBuffers = m_indexBuffers[GROUND];
 		indexBuffers = IndexBuffer::MakeUnique();
-		N_RETURN(indexBuffers->Create(pDevice, sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
+		XUSG_N_RETURN(indexBuffers->Create(pDevice, sizeof(indices), Format::R32_UINT, ResourceFlag::NONE,
 			MemoryType::DEFAULT, 1, nullptr, 1, nullptr, 1, nullptr, MemoryFlag::NONE, L"GroundIB"), false);
 		uploaders.push_back(Resource::MakeUnique());
 
-		N_RETURN(indexBuffers->Upload(pCommandList, uploaders.back().get(), indices,
+		XUSG_N_RETURN(indexBuffers->Upload(pCommandList, uploaders.back().get(), indices,
 			sizeof(indices), 0, ResourceState::NON_PIXEL_SHADER_RESOURCE), false);
 	}
 
@@ -449,7 +449,7 @@ bool RayTracer::createInputLayout()
 		{ "NORMAL",		0, Format::R32G32B32_FLOAT,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
 	};
 
-	X_RETURN(m_pInputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
+	XUSG_X_RETURN(m_pInputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
 
 	return true;
 }
@@ -460,8 +460,8 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::VS);
-		pipelineLayout->SetConstants(1, SizeOfInUint32(uint32_t), 0, 0, Shader::Stage::PS);
-		X_RETURN(m_pipelineLayouts[VISIBILITY_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
+		pipelineLayout->SetConstants(1, XUSG_SizeOfInUint32(uint32_t), 0, 0, Shader::Stage::PS);
+		XUSG_X_RETURN(m_pipelineLayouts[VISIBILITY_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"VisibilityPipelineLayout"), false);
 	}
 
@@ -477,7 +477,7 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 		pipelineLayout->SetRootCBV(MATERIALS, 0);
 		pipelineLayout->SetRootCBV(CONSTANTS, 1);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 1);
-		X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
+		XUSG_X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			pDevice, m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
 			L"RayTracerVGlobalPipelineLayout"), false);
 	}
@@ -486,8 +486,8 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 	// This is a pipeline layout that enables a shader to have unique arguments that come from shader tables.
 	{
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
-		pipelineLayout->SetConstants(0, SizeOfInUint32(RayGenConstants), 2);
-		X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout->GetPipelineLayout(
+		pipelineLayout->SetConstants(0, XUSG_SizeOfInUint32(RayGenConstants), 2);
+		XUSG_X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout->GetPipelineLayout(
 			pDevice, m_pipelineLayoutCache.get(), PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
 			L"RayTracerRayGenPipelineLayout"), false);
 	}
@@ -503,8 +503,8 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 
 	// Visibility-buffer pass
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::VS, vsIndex, L"VSVisibility.cso"), false);
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::PS, psIndex, L"PSVisibility.cso"), false);
+		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::VS, vsIndex, L"VSVisibility.cso"), false);
+		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::PS, psIndex, L"PSVisibility.cso"), false);
 
 		const auto state = Graphics::State::MakeUnique();
 		state->IASetInputLayout(m_pInputLayout);
@@ -515,12 +515,12 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 		state->OMSetNumRenderTargets(1);
 		state->OMSetRTVFormat(0, Format::R32_UINT);
 		state->OMSetDSVFormat(dsFormat);
-		X_RETURN(m_pipelines[VISIBILITY], state->GetPipeline(m_graphicsPipelineCache.get(), L"VisibilityPass"), false);
+		XUSG_X_RETURN(m_pipelines[VISIBILITY], state->GetPipeline(m_graphicsPipelineCache.get(), L"VisibilityPass"), false);
 	}
 
 	// Ray tracing pass
 	{
-		N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"RayTracing.cso"), false);
+		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"RayTracing.cso"), false);
 
 		const auto state = RayTracing::State::MakeUnique();
 		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
@@ -531,7 +531,7 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state->SetGlobalPipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 		state->SetMaxRecursionDepth(1);
-		X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(m_rayTracingPipelineCache.get(), L"Raytracing"), false);
+		XUSG_X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(m_rayTracingPipelineCache.get(), L"Raytracing"), false);
 	}
 
 	return true;
@@ -549,7 +549,7 @@ bool RayTracer::createDescriptorTables()
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		const auto asTable = descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get());
-		N_RETURN(asTable, false);
+		XUSG_N_RETURN(asTable, false);
 	}
 
 	// Output UAVs
@@ -564,7 +564,7 @@ bool RayTracer::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Index buffer SRVs
@@ -573,7 +573,7 @@ bool RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_indexBuffers[i]->GetSRV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Vertex buffer SRVs
@@ -582,7 +582,7 @@ bool RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i]->GetSRV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// Ray-tracing SRVs
@@ -594,7 +594,7 @@ bool RayTracer::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		X_RETURN(m_srvTables[SRV_TABLE_RO], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_RO], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
 	// RTV table and framebuffer
@@ -609,7 +609,7 @@ bool RayTracer::createDescriptorTables()
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		const auto samplerAnisoWrap = SamplerPreset::ANISOTROPIC_WRAP;
 		descriptorTable->SetSamplers(0, 1, &samplerAnisoWrap, m_descriptorTableCache.get());
-		X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(m_descriptorTableCache.get()), false);
 	}
 
 	return true;
@@ -638,10 +638,10 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		m_bottomLevelASs[i] = BottomLevelAS::MakeUnique();
-		N_RETURN(m_bottomLevelASs[i]->PreBuild(pDevice, 1, pGeometries[i], bottomLevelASIndex + i), false);
+		XUSG_N_RETURN(m_bottomLevelASs[i]->PreBuild(pDevice, 1, pGeometries[i], bottomLevelASIndex + i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
-	N_RETURN(m_topLevelAS->PreBuild(pDevice, NUM_MESH, topLevelASIndex,
+	XUSG_N_RETURN(m_topLevelAS->PreBuild(pDevice, NUM_MESH, topLevelASIndex,
 		BuildFlag::ALLOW_UPDATE | BuildFlag::PREFER_FAST_TRACE), false);
 
 	// Create scratch buffer
@@ -649,10 +649,10 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	for (const auto& bottomLevelAS : m_bottomLevelASs)
 		scratchSize = (max)(bottomLevelAS->GetScratchDataMaxSize(), scratchSize);
 	m_scratch = Resource::MakeUnique();
-	N_RETURN(AccelerationStructure::AllocateUAVBuffer(pDevice, m_scratch.get(), scratchSize), false);
+	XUSG_N_RETURN(AccelerationStructure::AllocateUAVBuffer(pDevice, m_scratch.get(), scratchSize), false);
 
 	// Get descriptor pool and create descriptor tables
-	N_RETURN(createDescriptorTables(), false);
+	XUSG_N_RETURN(createDescriptorTables(), false);
 	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
@@ -691,24 +691,24 @@ bool RayTracer::buildShaderTables(const RayTracing::Device* pDevice)
 	{
 		// Ray gen shader table
 		m_rayGenShaderTables[i] = ShaderTable::MakeUnique();
-		N_RETURN(m_rayGenShaderTables[i]->Create(pDevice, 1, shaderIDSize + sizeof(cbRayGen),
+		XUSG_N_RETURN(m_rayGenShaderTables[i]->Create(pDevice, 1, shaderIDSize + sizeof(cbRayGen),
 			(L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
-		N_RETURN(m_rayGenShaderTables[i]->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
+		XUSG_N_RETURN(m_rayGenShaderTables[i]->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 			m_pipelines[RAY_TRACING], RaygenShaderName, &cbRayGen, sizeof(cbRayGen)).get()), false);
 	}
 
 	// Hit group shader table
 	m_hitGroupShaderTable = ShaderTable::MakeUnique();
-	N_RETURN(m_hitGroupShaderTable->Create(pDevice, 2, shaderIDSize, L"HitGroupShaderTable"), false);
-	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
+	XUSG_N_RETURN(m_hitGroupShaderTable->Create(pDevice, 2, shaderIDSize, L"HitGroupShaderTable"), false);
+	XUSG_N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 		m_pipelines[RAY_TRACING], HitGroupNames[HIT_GROUP_REFLECTION]).get()), false);
-	N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
+	XUSG_N_RETURN(m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 		m_pipelines[RAY_TRACING], HitGroupNames[HIT_GROUP_DIFFUSE]).get()), false);
 
 	// Miss shader table
 	m_missShaderTable = ShaderTable::MakeUnique();
-	N_RETURN(m_missShaderTable->Create(pDevice, 1, shaderIDSize, L"MissShaderTable"), false);
-	N_RETURN(m_missShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
+	XUSG_N_RETURN(m_missShaderTable->Create(pDevice, 1, shaderIDSize, L"MissShaderTable"), false);
+	XUSG_N_RETURN(m_missShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 		m_pipelines[RAY_TRACING], MissShaderName).get()), false);
 
 	return true;
