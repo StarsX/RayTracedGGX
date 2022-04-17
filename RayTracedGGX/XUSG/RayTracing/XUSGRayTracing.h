@@ -80,11 +80,7 @@ namespace XUSG
 			//Device();
 			virtual ~Device() {};
 
-#if XUSG_ENABLE_DXR_FALLBACK
-			virtual bool CreateInterface(uint8_t flags) = 0;
-#else
-			virtual bool CreateInterface() = 0;
-#endif
+			virtual bool CreateInterface(uint8_t flags = 0) = 0;
 
 			virtual void* GetRTHandle() const = 0;
 
@@ -111,13 +107,12 @@ namespace XUSG
 			virtual uint32_t GetResultDataMaxSize() const = 0;
 			virtual uint32_t GetScratchDataMaxSize() const = 0;
 			virtual uint32_t GetUpdateScratchDataSize() const = 0;
-#if XUSG_ENABLE_DXR_FALLBACK
-			virtual const WRAPPED_GPU_POINTER& GetResultPointer() const = 0;
+
+			virtual uint64_t GetResultPointer() const = 0;
 
 			static uint32_t GetUAVCount();
 
 			static void SetUAVCount(uint32_t numUAVs);
-#endif
 			static void SetFrameCount(uint32_t frameCount);
 
 			static bool AllocateUAVBuffer(const Device* pDevice, Resource* pResource,
@@ -202,29 +197,31 @@ namespace XUSG
 		class XUSG_INTERFACE ShaderRecord
 		{
 		public:
-			//ShaderRecord(const Device* pDevice, const Pipeline& pipeline, const void* shader,
+			//ShaderRecord(const void* pShaderID, uint32_t shaderIDSize,
 				//const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
-			//ShaderRecord(void* pShaderID, uint32_t shaderIDSize,
+			//ShaderRecord(const Device* pDevice, const Pipeline& pipeline, const void* shader,
 				//const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0);
 			virtual ~ShaderRecord() {}
 
 			virtual void CopyTo(void* dest) const = 0;
+
+			static const void* GetShaderID(const Pipeline& pipeline, const void* shader, XUSG::API api = XUSG::API::DIRECTX_12);
 
 			static uint32_t GetShaderIDSize(const Device* pDevice, XUSG::API api = XUSG::API::DIRECTX_12);
 
 			using uptr = std::unique_ptr<ShaderRecord>;
 			using sptr = std::shared_ptr<ShaderRecord>;
 
+			static uptr MakeUnique(void* pShaderID, uint32_t shaderIDSize, const void* pLocalDescriptorArgs = nullptr,
+				uint32_t localDescriptorArgSize = 0, XUSG::API api = XUSG::API::DIRECTX_12);
+			static sptr MakeShared(void* pShaderID, uint32_t shaderIDSize, const void* pLocalDescriptorArgs = nullptr,
+				uint32_t localDescriptorArgSize = 0, XUSG::API api = XUSG::API::DIRECTX_12);
 			static uptr MakeUnique(const Device* pDevice, const Pipeline& pipeline, const void* shader,
 				const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0,
 				XUSG::API api = XUSG::API::DIRECTX_12);
 			static sptr MakeShared(const Device* pDevice, const Pipeline& pipeline, const void* shader,
 				const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0,
 				XUSG::API api = XUSG::API::DIRECTX_12);
-			static uptr MakeUnique(void* pShaderID, uint32_t shaderIDSize, const void* pLocalDescriptorArgs = nullptr,
-				uint32_t localDescriptorArgSize = 0, XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(void* pShaderID, uint32_t shaderIDSize, const void* pLocalDescriptorArgs = nullptr,
-				uint32_t localDescriptorArgSize = 0, XUSG::API api = XUSG::API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -274,6 +271,9 @@ namespace XUSG
 
 			virtual void SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool* pDescriptorPools) const = 0;
 			virtual void SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS* pTopLevelAS) const = 0;
+			virtual void SetRayTracingPipeline(const Pipeline& pipeline) const = 0;
+			virtual void DispatchRays(uint32_t width, uint32_t height, uint32_t depth,
+					const ShaderTable* pHitGroup, const ShaderTable* pMiss, const ShaderTable* pRayGen) const = 0;
 			virtual void DispatchRays(const Pipeline& pipeline, uint32_t width, uint32_t height, uint32_t depth,
 				const ShaderTable* pHitGroup, const ShaderTable* pMiss, const ShaderTable* pRayGen) const = 0;
 
@@ -321,7 +321,7 @@ namespace XUSG
 			//State();
 			virtual ~State() {}
 
-			virtual void SetShaderLibrary(Blob shaderLib) = 0;
+			virtual void SetShaderLibrary(const Blob& shaderLib) = 0;
 			virtual void SetHitGroup(uint32_t index, const void* hitGroup, const void* closestHitShader,
 				const void* anyHitShader = nullptr, const void* intersectionShader = nullptr,
 				HitGroupType type = HitGroupType::TRIANGLES) = 0;

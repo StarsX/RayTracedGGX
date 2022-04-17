@@ -192,8 +192,8 @@ float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0, float level =
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
-RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, uint hitGroup,
-	float3 ddx = 0.0, float3 ddy = 0.0, float level = 0.0)
+RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 color,
+	uint hitGroup, float3 ddx = 0.0, float3 ddy = 0.0, float level = 0.0)
 {
 	RayPayload payload;
 
@@ -201,9 +201,9 @@ RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, uint hit
 		payload.Color = environment(ray.Direction, ddx, ddy, level);
 	else
 	{
-		payload.Color = 0.0;
+		payload.Color = color;
 		payload.RecursionDepth = currentRayRecursionDepth;
-		TraceRay(g_scene, RAY_FLAG_NONE, ~0, 0, 1, 0, ray, payload);
+		TraceRay(g_scene, RAY_FLAG_NONE, ~0, hitGroup, 1, 0, ray, payload);
 	}
 
 	return payload;
@@ -421,11 +421,11 @@ float getIrradianceApproxLevel()
 	float numLevels;
 	g_txEnv.GetDimensions(0, texSize.x, texSize.y, numLevels);
 
-	return numLevels - 2.5;
+	return numLevels - 1.5;
 }
 
 RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
-	float4 color, uint hitGroup, float t = 0.0, uint recursionDepth = 0)
+	float4 color, uint hitGroup, float3 interColor = 0.0, float t = 0.0, uint recursionDepth = 0)
 {
 	RayDesc ray;
 	ray.Origin = P;
@@ -466,11 +466,18 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 
 	const float3 dLdx = recursionDepth < MAX_RECURSION_DEPTH ? dFdx(ray.Direction) : 0.0;
 	const float3 dLdy = recursionDepth < MAX_RECURSION_DEPTH ? dFdy(ray.Direction) : 0.0;
-	const float level = recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : getIrradianceApproxLevel() * a;
-	RayPayload payload = traceRadianceRay(ray, recursionDepth, hitGroup, dLdx, dLdy, level);
+	const float levelMax = getIrradianceApproxLevel();
+	const float level = recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : levelMax * a;
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, color.xyz * rghMtl.y, hitGroup, dLdx, dLdy, level);
 
 	if (!hit && hitGroup == HIT_GROUP_REFLECTION) return payload;
 	else if (NoL <= 0.0 || (!hit && hitGroup == HIT_GROUP_DIFFUSE)) return (RayPayload)0;
+
+	const float VoL = dot(V, ray.Direction);
+	const float interOcc = saturate(VoL - 0.25);
+	interColor *= environment(V, 0.0, 0.0, levelMax) / PI;
+	payload.Color *= recursionDepth < MAX_RECURSION_DEPTH ? 1.0 : 1.0 - interOcc;
+	payload.Color += recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : interOcc * interColor;
 
 	if (hitGroup == HIT_GROUP_REFLECTION)
 	{
@@ -495,16 +502,14 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 	else
 	{
 		// BRDF
+		//payload.Color = payload.Color.x < 0.0 ? payload.Color : environment(N, 0.0, 0.0, 10.0);
 		const float3 albedo = color.xyz;
 		//const float NoL = dot(N, ray.Direction);
 		//const float3 brdf = albedo / PI;
 		//const float pdf = NoL / PI;
 		//payload.Color *= brdf * NoL / pdf;
-		payload.Color *= albedo * (1.0 - 0.04);
-		payload.Color *= recursionDepth < MAX_RECURSION_DEPTH ? 1.0 : PI;
+		payload.Color *= recursionDepth > 0 ? albedo : albedo * (1.0 - 0.04);
 	}
-
-	//payload.Color *= recursionDepth > 0 ? exp(-0.15 * t) : 1.0;
 
 	return payload;
 }
@@ -534,6 +539,7 @@ void raygenMain()
 	if (rghMtl.y < 1.0)
 	{
 		payload = computeLighting(hit, rghMtl, N, V, P, color, HIT_GROUP_DIFFUSE);
+		//payload.Color *= 1.0 - saturate(dot(N, float3(0.0, -1.0, 0.0)));
 		g_rwRenderTargets[HIT_GROUP_DIFFUSE][index] = payload.Color;	// Write the raytraced color to the output texture.
 	}
 }
@@ -544,11 +550,13 @@ void raygenMain()
 [shader("closesthit")]
 void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 {
+	if (all(payload.Color <= 0.0)) return;
+
 	Vertex vertices[3];
-	getVertices(vertices, InstanceIndex(), PrimitiveIndex());
+	const uint instanceIdx = InstanceIndex();
+	getVertices(vertices, instanceIdx, PrimitiveIndex());
 	Attrib attrib = interpAttrib(vertices, attr.barycentrics);
 
-	const uint instanceIdx = InstanceIndex();
 	const float3 N = normalize(mul(attrib.Nrm, g_cb.WorldITs[instanceIdx]));
 	const float3 V = -WorldRayDirection();
 	const float3 P = hitWorldPosition();
@@ -558,17 +566,17 @@ void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 	const float4 color = getBaseColor(instanceIdx, attrib.UV);
 
 	// Trace a reflection ray.
-	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, RayTCurrent(), 1);
+	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, payload.Color, RayTCurrent(), 1);
 }
 
 [shader("closesthit")]
 void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 {
 	Vertex vertices[3];
-	getVertices(vertices, InstanceIndex(), PrimitiveIndex());
+	const uint instanceIdx = InstanceIndex();
+	getVertices(vertices, instanceIdx, PrimitiveIndex());
 	Attrib attrib = interpAttrib(vertices, attr.barycentrics);
 
-	const uint instanceIdx = InstanceIndex();
 	const float3 N = normalize(mul(attrib.Nrm, g_cb.WorldITs[instanceIdx]));
 	const float3 V = -WorldRayDirection();
 	const float3 P = hitWorldPosition();
@@ -579,7 +587,9 @@ void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 	color.xyz *= hitGroup ? 1.0 - rghMtl.y : 1.0;
 
 	// Trace a diffuse ray.
-	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, RayTCurrent(), 1);
+	const float t = RayTCurrent();
+	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, payload.Color, t, 1);
+	//payload.Color *= exp(-0.15 * t);
 }
 
 //--------------------------------------------------------------------------------------
