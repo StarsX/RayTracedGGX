@@ -125,6 +125,9 @@
     <ClInclude Include="XUSG\Advanced\XUSGHalton.h">
       <Filter>XUSG</Filter>
     </ClInclude>
+    <ClInclude Include="XUSG\Ultimate\XUSGUltimate.h">
+      <Filter>XUSG</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="Content\Shaders\PSToneMap.hlsl">

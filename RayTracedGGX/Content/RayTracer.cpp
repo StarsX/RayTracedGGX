@@ -526,7 +526,7 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
 		state->SetHitGroup(HIT_GROUP_REFLECTION, HitGroupNames[HIT_GROUP_REFLECTION], ClosestHitShaderNames[HIT_GROUP_REFLECTION]);
 		state->SetHitGroup(HIT_GROUP_DIFFUSE, HitGroupNames[HIT_GROUP_DIFFUSE], ClosestHitShaderNames[HIT_GROUP_DIFFUSE]);
-		state->SetShaderConfig(sizeof(XMFLOAT4), sizeof(XMFLOAT2));
+		state->SetShaderConfig(sizeof(float[4]), sizeof(float[2]));
 		state->SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state->SetGlobalPipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);

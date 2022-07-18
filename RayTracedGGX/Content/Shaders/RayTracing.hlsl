@@ -83,6 +83,7 @@ StructuredBuffer<Vertex>	g_vertexBuffers[]	: register (t0, space2);
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler : register (s0);
 
+#if 0
 static const uint g_waveXSize = 8;
 
 float3 dFdx(float3 f)
@@ -106,6 +107,7 @@ float3 dFdy(float3 f)
 
 	return f1 - f0;
 }
+#endif
 
 //--------------------------------------------------------------------------------------
 // Compute direction in local space
@@ -116,6 +118,17 @@ float3 computeLocalDirectionGGX(float a, float2 xi)
 
 	// Only near the specular direction according to the roughness for importance sampling
 	const float cosTheta = sqrt((1.0 - xi.y) / (1.0 + (a * a - 1.0) * xi.y));
+	const float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
+
+	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
+}
+
+float3 computeLocalDirectionUS(float2 xi)
+{
+	const float phi = 2.0 * PI * xi.x;
+
+	// Only near the specular direction according to the roughness for importance sampling
+	const float cosTheta = 1.0 - 2.0 * xi.y;;
 	const float sinTheta = sqrt(1.0 - cosTheta * cosTheta);
 
 	return float3(cos(phi) * sinTheta, sin(phi) * sinTheta, cosTheta);
@@ -159,9 +172,8 @@ float3 computeDirectionGGX(float a, float3 normal, float2 xi)
 // Compute local direction first and transform it to world space
 float3 computeDirectionCos(float3 normal, float2 xi)
 {
-	//const float3 localDir = float3(0.0.xx, 1.0);
 #if 1
-	const float3 localDir = computeLocalDirectionCos(xi);
+	const float3 localDir = computeLocalDirectionUS(xi);
 
 	return normalize(normal + localDir);
 #else
@@ -175,11 +187,10 @@ float3 computeDirectionCos(float3 normal, float2 xi)
 //--------------------------------------------------------------------------------------
 // Retrieve hit world position.
 //--------------------------------------------------------------------------------------
-float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0, float level = 0.0)
+float3 environment(float3 dir, float level = 0.0)
 {
 #if 1
-	return ((abs(ddx) + abs(ddy) > 0.0 ? g_txEnv.SampleGrad(g_sampler, dir, ddx, ddy) :
-		g_txEnv.SampleLevel(g_sampler, dir, level)));// *1.5;
+	return g_txEnv.SampleLevel(g_sampler, dir, level);// *1.5;
 #else
 	const float3 sunDir = normalize(float3(-1.0, 1.0, -1.0));
 	const float sumAmt = saturate(dot(dir, sunDir));
@@ -192,13 +203,13 @@ float3 environment(float3 dir, float3 ddx = 0.0, float3 ddy = 0.0, float level =
 }
 
 // Trace a radiance ray into the scene and returns a shaded color.
-RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth, float3 color,
-	uint hitGroup, float3 ddx = 0.0, float3 ddy = 0.0, float level = 0.0)
+RayPayload traceRadianceRay(RayDesc ray, uint currentRayRecursionDepth,
+	float3 color, uint hitGroup, float level)
 {
 	RayPayload payload;
 
 	if (currentRayRecursionDepth >= MAX_RECURSION_DEPTH)
-		payload.Color = environment(ray.Direction, ddx, ddy, level);
+		payload.Color = environment(ray.Direction, level);
 	else
 	{
 		payload.Color = color;
@@ -415,36 +426,48 @@ float2 getSampleParam(uint2 index, uint2 dim, uint numSamples = 256)
 	//return Hammersley(s, numSamples);
 }
 
-float getIrradianceApproxLevel()
+float3 getCubemapDimensions(TextureCube<float3> cubemap)
 {
-	float2 texSize;
-	float numLevels;
-	g_txEnv.GetDimensions(0, texSize.x, texSize.y, numLevels);
+	float3 dim;
+	cubemap.GetDimensions(0, dim.x, dim.y, dim.z);
 
-	return numLevels - 1.5;
+	return dim;
+}
+
+float calcCubemapMipFromRoughness(float rgh, float mipCount)
+{
+	// Level starting from 1x1 mip
+	const float level = 3.0 - 1.15 * log2(rgh);
+
+	return mipCount - 1.0 - level;
 }
 
 RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
 	float4 color, uint hitGroup, float3 interColor = 0.0, float t = 0.0, uint recursionDepth = 0)
 {
+	const float3 cubemapDim = getCubemapDimensions(g_txEnv);
+	const float levelDiffuse = cubemapDim.z - 1.25;
+
 	RayDesc ray;
 	ray.Origin = P;
 	ray.TMin = ray.TMax = 0.0;
 
 	float3 H;
-	float NoL, a = 1.0;
+	float NoL, level = 0.0;
 
 	if (hit)
 	{
 		const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
+		level = calcCubemapMipFromRoughness(rghMtl.x, cubemapDim.z);
 
 		if (hitGroup == HIT_GROUP_REFLECTION)
 		{
 			// Trace a reflection ray.
-			a = rghMtl.x * rghMtl.x;
+			const float a = rghMtl.x * rghMtl.x;
 			H = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionGGX(a, N, xi) : N;
 
-			ray.Direction = reflect(-V, H);
+			const float3 R = reflect(-V, H);
+			ray.Direction = recursionDepth < MAX_RECURSION_DEPTH ? R : lerp(N, R, (1.0 - a) * (sqrt(1.0 - a) + a));
 			NoL = dot(N, ray.Direction);
 			if (NoL > 0.0)
 			{
@@ -460,44 +483,48 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 			ray.TMin = 1e-5;
 			ray.TMax = 10000.0;
 			NoL = rghMtl.y < 1.0 ? 1.0 : 0.0;
+
+			level = recursionDepth < MAX_RECURSION_DEPTH ? level : levelDiffuse;
 		}
 	}
 	else ray.Direction = -V;
 
-	const float3 dLdx = recursionDepth < MAX_RECURSION_DEPTH ? dFdx(ray.Direction) : 0.0;
-	const float3 dLdy = recursionDepth < MAX_RECURSION_DEPTH ? dFdy(ray.Direction) : 0.0;
-	const float levelMax = getIrradianceApproxLevel();
-	const float level = recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : levelMax * a;
-	RayPayload payload = traceRadianceRay(ray, recursionDepth, color.xyz * rghMtl.y, hitGroup, dLdx, dLdy, level);
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, color.xyz * rghMtl.y, hitGroup, level);
 
 	if (!hit && hitGroup == HIT_GROUP_REFLECTION) return payload;
 	else if (NoL <= 0.0 || (!hit && hitGroup == HIT_GROUP_DIFFUSE)) return (RayPayload)0;
 
+#if 0
 	const float VoL = dot(V, ray.Direction);
 	const float interOcc = saturate(VoL - 0.25);
-	interColor *= environment(V, 0.0, 0.0, levelMax) / PI;
+	interColor *= environment(V, levelDiffuse) / PI;
 	payload.Color *= recursionDepth < MAX_RECURSION_DEPTH ? 1.0 : 1.0 - interOcc;
 	payload.Color += recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : interOcc * interColor;
+#endif
 
 	if (hitGroup == HIT_GROUP_REFLECTION)
 	{
-		// Calculate fresnel
 		const float3 f0 = lerp(0.04, color.xyz, rghMtl.y);
-		const float VoH = saturate(dot(V, H));
-		const float3 F = F_Schlick(f0, VoH);
-
-		// Visibility factor
 		const float NoV = saturate(dot(N, V));
-		const float vis = Vis_Smith(rghMtl.x, NoV, NoL);
 
-		// BRDF
-		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-		//const float NoH = saturate(dot(N, H));
-		const float NoH = saturate(dot(N, H));
-		// pdf = D * NoH / (4 * VoH)
-		payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
-		// pdf = D * NoH
-		//payload.Color *= F * NoL * vis / NoH;
+		if (recursionDepth < MAX_RECURSION_DEPTH)
+		{
+			// Calculate fresnel
+			const float VoH = saturate(dot(V, H));
+			const float3 F = F_Schlick(f0, VoH);
+
+			// Visibility factor
+			const float vis = Vis_Smith(rghMtl.x, NoV, NoL);
+
+			// BRDF
+			// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
+			const float NoH = saturate(dot(N, H));
+			// pdf = D * NoH / (4 * VoH)
+			payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
+			// pdf = D * NoH
+			//payload.Color *= F * NoL * vis / NoH;
+		}
+		else payload.Color *= EnvBRDFApprox(f0, rghMtl.x, NoV); // pdf = 1
 	}
 	else
 	{
@@ -599,8 +626,6 @@ void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 void missMain(inout RayPayload payload)
 {
 	const float3 L = WorldRayDirection();
-	const float3 dLdx = dFdx(L);
-	const float3 dLdy = dFdy(L);
-	payload.Color = environment(L, dLdx, dLdy);
+	payload.Color = environment(L);
 	//payload.Color = environment(L + WorldRayOrigin() * 0.01);
 }

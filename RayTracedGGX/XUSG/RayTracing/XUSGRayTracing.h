@@ -4,7 +4,7 @@
 
 #pragma once
 
-#include "Core/XUSG.h"
+#include "Ultimate/XUSGUltimate.h"
 
 namespace XUSG
 {
@@ -117,9 +117,9 @@ namespace XUSG
 
 			static bool AllocateUAVBuffer(const Device* pDevice, Resource* pResource,
 				size_t byteWidth, ResourceState dstState = ResourceState::UNORDERED_ACCESS,
-				XUSG::API api = XUSG::API::DIRECTX_12);
+				API api = API::DIRECTX_12);
 			static bool AllocateUploadBuffer(const Device* pDevice, Resource* pResource,
-				size_t byteWidth, void* pData, XUSG::API api = XUSG::API::DIRECTX_12);
+				size_t byteWidth, void* pData, API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -140,16 +140,16 @@ namespace XUSG
 			static void SetTriangleGeometries(GeometryBuffer& geometries, uint32_t numGeometries, Format vertexFormat,
 				const VertexBufferView* pVBs, const IndexBufferView* pIBs = nullptr,
 				const GeometryFlag* pGeometryFlags = nullptr, const ResourceView* pTransforms = nullptr,
-				XUSG::API api = XUSG::API::DIRECTX_12);
+				API api = API::DIRECTX_12);
 			static void SetAABBGeometries(GeometryBuffer& geometries, uint32_t numGeometries,
 				const VertexBufferView* pVBs, const GeometryFlag* pGeometryFlags = nullptr,
-				XUSG::API api = XUSG::API::DIRECTX_12);
+				API api = API::DIRECTX_12);
 
 			using uptr = std::unique_ptr<BottomLevelAS>;
 			using sptr = std::shared_ptr<BottomLevelAS>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -179,16 +179,16 @@ namespace XUSG
 
 			static void SetInstances(const Device* pDevice, Resource* pInstances,
 				uint32_t numInstances, const BottomLevelAS* const* ppBottomLevelASs,
-				float* const* transforms, XUSG::API api = XUSG::API::DIRECTX_12);
+				float* const* transforms, API api = API::DIRECTX_12);
 			static void SetInstances(const Device* pDevice, Resource* pInstances,
 				uint32_t numInstances, const InstanceDesc* pInstanceDescs,
-				XUSG::API api = XUSG::API::DIRECTX_12);
+				API api = API::DIRECTX_12);
 
 			using uptr = std::unique_ptr<TopLevelAS>;
 			using sptr = std::shared_ptr<TopLevelAS>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -205,23 +205,23 @@ namespace XUSG
 
 			virtual void CopyTo(void* dest) const = 0;
 
-			static const void* GetShaderID(const Pipeline& pipeline, const void* shader, XUSG::API api = XUSG::API::DIRECTX_12);
+			static const void* GetShaderID(const Pipeline& pipeline, const void* shader, API api = API::DIRECTX_12);
 
-			static uint32_t GetShaderIDSize(const Device* pDevice, XUSG::API api = XUSG::API::DIRECTX_12);
+			static uint32_t GetShaderIDSize(const Device* pDevice, API api = API::DIRECTX_12);
 
 			using uptr = std::unique_ptr<ShaderRecord>;
 			using sptr = std::shared_ptr<ShaderRecord>;
 
 			static uptr MakeUnique(void* pShaderID, uint32_t shaderIDSize, const void* pLocalDescriptorArgs = nullptr,
-				uint32_t localDescriptorArgSize = 0, XUSG::API api = XUSG::API::DIRECTX_12);
+				uint32_t localDescriptorArgSize = 0, API api = API::DIRECTX_12);
 			static sptr MakeShared(void* pShaderID, uint32_t shaderIDSize, const void* pLocalDescriptorArgs = nullptr,
-				uint32_t localDescriptorArgSize = 0, XUSG::API api = XUSG::API::DIRECTX_12);
+				uint32_t localDescriptorArgSize = 0, API api = API::DIRECTX_12);
 			static uptr MakeUnique(const Device* pDevice, const Pipeline& pipeline, const void* shader,
 				const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0,
-				XUSG::API api = XUSG::API::DIRECTX_12);
+				API api = API::DIRECTX_12);
 			static sptr MakeShared(const Device* pDevice, const Pipeline& pipeline, const void* shader,
 				const void* pLocalDescriptorArgs = nullptr, uint32_t localDescriptorArgSize = 0,
-				XUSG::API api = XUSG::API::DIRECTX_12);
+				API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -248,15 +248,15 @@ namespace XUSG
 			using uptr = std::unique_ptr<ShaderTable>;
 			using sptr = std::shared_ptr<ShaderTable>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
 		// Command list
 		//--------------------------------------------------------------------------------------
 		class XUSG_INTERFACE CommandList :
-			public virtual XUSG::CommandList
+			public virtual Ultimate::CommandList
 		{
 		public:
 			//CommandList();
@@ -271,6 +271,7 @@ namespace XUSG
 
 			virtual void SetDescriptorPools(uint32_t numDescriptorPools, const DescriptorPool* pDescriptorPools) const = 0;
 			virtual void SetTopLevelAccelerationStructure(uint32_t index, const TopLevelAS* pTopLevelAS) const = 0;
+			virtual void SetTopLevelAccelerationStructure(uint32_t index, uint64_t topLevelASPtr) const = 0;
 			virtual void SetRayTracingPipeline(const Pipeline& pipeline) const = 0;
 			virtual void DispatchRays(uint32_t width, uint32_t height, uint32_t depth,
 					const ShaderTable* pHitGroup, const ShaderTable* pMiss, const ShaderTable* pRayGen) const = 0;
@@ -282,10 +283,10 @@ namespace XUSG
 			using uptr = std::unique_ptr<CommandList>;
 			using sptr = std::shared_ptr<CommandList>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
-			static uptr MakeUnique(XUSG::CommandList* pCommandList, const RayTracing::Device* pDevice, XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::CommandList* pCommandList, const RayTracing::Device* pDevice, XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
+			static uptr MakeUnique(XUSG::CommandList* pCommandList, const RayTracing::Device* pDevice, API api = API::DIRECTX_12);
+			static sptr MakeShared(XUSG::CommandList* pCommandList, const RayTracing::Device* pDevice, API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -306,8 +307,8 @@ namespace XUSG
 			using uptr = std::unique_ptr<PipelineLayout>;
 			using sptr = std::shared_ptr<PipelineLayout>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
 		};
 
 		//--------------------------------------------------------------------------------------
@@ -339,8 +340,8 @@ namespace XUSG
 			using uptr = std::unique_ptr<State>;
 			using sptr = std::shared_ptr<State>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
 		};
 
 		class XUSG_INTERFACE PipelineCache
@@ -359,10 +360,10 @@ namespace XUSG
 			using uptr = std::unique_ptr<PipelineCache>;
 			using sptr = std::shared_ptr<PipelineCache>;
 
-			static uptr MakeUnique(XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(XUSG::API api = XUSG::API::DIRECTX_12);
-			static uptr MakeUnique(const Device* pDevice, XUSG::API api = XUSG::API::DIRECTX_12);
-			static sptr MakeShared(const Device* pDevice, XUSG::API api = XUSG::API::DIRECTX_12);
+			static uptr MakeUnique(API api = API::DIRECTX_12);
+			static sptr MakeShared(API api = API::DIRECTX_12);
+			static uptr MakeUnique(const Device* pDevice, API api = API::DIRECTX_12);
+			static sptr MakeShared(const Device* pDevice, API api = API::DIRECTX_12);
 		};
 	}
 }
