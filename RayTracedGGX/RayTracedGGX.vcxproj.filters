@@ -95,16 +95,10 @@
     <ClInclude Include="XUSG\Optional\XUSGObjLoader.h">
       <Filter>XUSG\Optional</Filter>
     </ClInclude>
-    <ClInclude Include="Common\d3d12_1.h">
-      <Filter>Common\Header Files</Filter>
-    </ClInclude>
     <ClInclude Include="Common\D3D12RaytracingFallback.h">
       <Filter>Common\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Common\D3D12RaytracingHelpers.hpp">
-      <Filter>Common\Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="Common\d3d12video.h">
       <Filter>Common\Header Files</Filter>
     </ClInclude>
     <ClInclude Include="Content\Denoiser.h">
@@ -127,6 +121,12 @@
     </ClInclude>
     <ClInclude Include="XUSG\Ultimate\XUSGUltimate.h">
       <Filter>XUSG</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\d3dcommon.h">
+      <Filter>Common\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Common\dxgiformat.h">
+      <Filter>Common\Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
