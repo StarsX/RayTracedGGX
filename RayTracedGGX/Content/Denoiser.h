@@ -13,9 +13,9 @@ public:
 	Denoiser();
 	virtual ~Denoiser();
 
-	bool Init(XUSG::CommandList* pCommandList, uint32_t width, uint32_t height, XUSG::Format rtFormat,
-		const XUSG::Texture2D::uptr* inputViews, const XUSG::RenderTarget::uptr* pGbuffers,
-		const XUSG::DepthStencil::sptr& depth, uint8_t maxMips = 1);
+	bool Init(XUSG::CommandList* pCommandList, const XUSG::DescriptorTableCache::sptr& descriptorTableCache,
+		uint32_t width, uint32_t height, XUSG::Format rtFormat, const XUSG::Texture2D::uptr* inputViews,
+		const XUSG::RenderTarget::uptr* pGbuffers, const XUSG::DepthStencil::sptr& depth, uint8_t maxMips = 1);
 	void Denoise(XUSG::CommandList* pCommandList, uint32_t numBarriers,
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem = false);
 	void ToneMap(XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
@@ -37,8 +37,7 @@ protected:
 	{
 		OUTPUT_VIEW,
 		SHADER_RESOURCES,
-		G_BUFFERS,
-		SAMPLER = G_BUFFERS
+		G_BUFFERS
 	};
 
 	enum PipelineIndex : uint8_t
@@ -131,7 +130,6 @@ protected:
 
 	XUSG::DescriptorTable		m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable		m_uavTables[NUM_UAV_TABLE];
-	XUSG::DescriptorTable		m_samplerTable;
 
 	XUSG::Texture2D::uptr			m_outputViews[NUM_UAV];
 	XUSG::DepthStencil::sptr		m_depth;
@@ -142,5 +140,5 @@ protected:
 	XUSG::Graphics::PipelineCache::uptr	m_graphicsPipelineCache;
 	XUSG::Compute::PipelineCache::uptr	m_computePipelineCache;
 	XUSG::PipelineLayoutCache::uptr		m_pipelineLayoutCache;
-	XUSG::DescriptorTableCache::uptr	m_descriptorTableCache;
+	XUSG::DescriptorTableCache::sptr	m_descriptorTableCache;
 };

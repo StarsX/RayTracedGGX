@@ -21,8 +21,8 @@ public:
 	RayTracer();
 	virtual ~RayTracer();
 
-	bool Init(XUSG::RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
-		std::vector<XUSG::Resource::uptr>& uploaders, XUSG::RayTracing::GeometryBuffer* pGeometries,
+	bool Init(XUSG::RayTracing::CommandList* pCommandList, const XUSG::DescriptorTableCache::sptr& descriptorTableCache,
+		uint32_t width, uint32_t height, std::vector<XUSG::Resource::uptr>& uploaders, XUSG::RayTracing::GeometryBuffer* pGeometries,
 		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
 		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f),
 		uint8_t maxGBufferMips = 1);
@@ -62,7 +62,6 @@ protected:
 	{
 		OUTPUT_VIEW,
 		ACCELERATION_STRUCTURE,
-		SAMPLER,
 		INDEX_BUFFERS,
 		VERTEX_BUFFERS,
 		MATERIALS,
@@ -128,7 +127,6 @@ protected:
 
 	XUSG::DescriptorTable		m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable		m_uavTable;
-	XUSG::DescriptorTable		m_samplerTable;
 	XUSG::Framebuffer			m_framebuffer;
 
 	XUSG::VertexBuffer::uptr	m_vertexBuffers[NUM_MESH];
@@ -162,5 +160,5 @@ protected:
 	XUSG::Graphics::PipelineCache::uptr		m_graphicsPipelineCache;
 	XUSG::Compute::PipelineCache::uptr		m_computePipelineCache;
 	XUSG::PipelineLayoutCache::uptr			m_pipelineLayoutCache;
-	XUSG::DescriptorTableCache::uptr		m_descriptorTableCache;
+	XUSG::DescriptorTableCache::sptr		m_descriptorTableCache;
 };

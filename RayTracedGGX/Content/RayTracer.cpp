@@ -68,17 +68,16 @@ RayTracer::~RayTracer()
 {
 }
 
-bool RayTracer::Init(RayTracing::CommandList* pCommandList, uint32_t width, uint32_t height,
-	vector<Resource::uptr>& uploaders, GeometryBuffer* pGeometries, const char* fileName,
-	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale,
-	uint8_t maxGBufferMips)
+bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTableCache::sptr& descriptorTableCache,
+	uint32_t width, uint32_t height, vector<Resource::uptr>& uploaders, GeometryBuffer* pGeometries, const char* fileName,
+	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale, uint8_t maxGBufferMips)
 {
 	const auto pDevice = pCommandList->GetRTDevice();
 	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(pDevice);
 	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(pDevice);
 	m_computePipelineCache = Compute::PipelineCache::MakeUnique(pDevice);
 	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(pDevice);
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(pDevice, L"RayTracerDescriptorTableCache");
+	m_descriptorTableCache = descriptorTableCache;
 
 	m_viewport = XMUINT2(width, height);
 	m_posScale = posScale;
@@ -264,14 +263,6 @@ void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCom
 
 void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
-	// Bind the heaps
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
 	visibility(pCommandList, frameIndex);
 
 	// Set barriers
@@ -287,14 +278,6 @@ void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t 
 
 void RayTracer::RayTrace(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
-	// Bind the heaps
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
 	rayTrace(pCommandList, frameIndex);
 
 	ResourceBarrier barriers[4];
@@ -456,6 +439,8 @@ bool RayTracer::createInputLayout()
 
 bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 {
+	const auto& sampler = m_descriptorTableCache->GetSampler(SamplerPreset::ANISOTROPIC_WRAP);
+
 	// This is a pipeline layout for visibility-buffer pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
@@ -471,12 +456,12 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 5, 0);
 		pipelineLayout->SetRootSRV(ACCELERATION_STRUCTURE, 0, 0, DescriptorFlag::DATA_STATIC);
-		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
 		pipelineLayout->SetRange(INDEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 1);
 		pipelineLayout->SetRange(VERTEX_BUFFERS, DescriptorType::SRV, NUM_MESH, 0, 2);
 		pipelineLayout->SetRootCBV(MATERIALS, 0);
 		pipelineLayout->SetRootCBV(CONSTANTS, 1);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 1);
+		pipelineLayout->SetStaticSamplers(&sampler, 1, 0);
 		XUSG_X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			pDevice, m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
 			L"RayTracerVGlobalPipelineLayout"), false);
@@ -602,14 +587,6 @@ bool RayTracer::createDescriptorTables()
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_visBuffer->GetRTV());
 		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableCache.get(), & m_depth->GetDSV());
-	}
-
-	// Create the sampler
-	{
-		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		const auto samplerAnisoWrap = SamplerPreset::ANISOTROPIC_WRAP;
-		descriptorTable->SetSamplers(0, 1, &samplerAnisoWrap, m_descriptorTableCache.get());
-		XUSG_X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(m_descriptorTableCache.get()), false);
 	}
 
 	return true;
@@ -762,7 +739,6 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t fr
 	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTable);
 	pCommandList->SetTopLevelAccelerationStructure(ACCELERATION_STRUCTURE, m_topLevelAS.get());
-	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 	pCommandList->SetComputeDescriptorTable(INDEX_BUFFERS, m_srvTables[SRV_TABLE_IB]);
 	pCommandList->SetComputeDescriptorTable(VERTEX_BUFFERS, m_srvTables[SRV_TABLE_VB]);
 	pCommandList->SetComputeRootConstantBufferView(MATERIALS, m_cbMaterials.get());

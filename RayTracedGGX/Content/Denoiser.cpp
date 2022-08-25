@@ -18,15 +18,15 @@ Denoiser::~Denoiser()
 {
 }
 
-bool Denoiser::Init(CommandList* pCommandList, uint32_t width, uint32_t height, Format rtFormat,
-	const Texture2D::uptr* inputViews, const RenderTarget::uptr* pGbuffers,
-	const DepthStencil::sptr& depth, uint8_t maxMips)
+bool Denoiser::Init(CommandList* pCommandList, const DescriptorTableCache::sptr& descriptorTableCache,
+	uint32_t width, uint32_t height, Format rtFormat, const Texture2D::uptr* inputViews,
+	const RenderTarget::uptr* pGbuffers, const DepthStencil::sptr& depth, uint8_t maxMips)
 {
 	const auto pDevice = pCommandList->GetDevice();
 	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(pDevice);
 	m_computePipelineCache = Compute::PipelineCache::MakeUnique(pDevice);
 	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(pDevice);
-	m_descriptorTableCache = DescriptorTableCache::MakeUnique(pDevice, L"DenoiserDescriptorTableCache");
+	m_descriptorTableCache = descriptorTableCache;
 
 	m_viewport = XMUINT2(width, height);
 	m_inputViews = inputViews;
@@ -68,14 +68,7 @@ void Denoiser::Denoise(CommandList* pCommandList, uint32_t numBarriers,
 {
 	m_frameParity = !m_frameParity;
 
-	// Bind the heaps, acceleration structure and dispatch rays.
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
+	// Bind the acceleration structure, and dispatch rays.
 	reflectionSpatialFilter(pCommandList, numBarriers, pBarriers, useSharedMem);
 	diffuseSpatialFilter(pCommandList, numBarriers, pBarriers, useSharedMem);
 	temporalSS(pCommandList);
@@ -84,14 +77,7 @@ void Denoiser::Denoise(CommandList* pCommandList, uint32_t numBarriers,
 void Denoiser::ToneMap(CommandList* pCommandList, const Descriptor& rtv,
 	uint32_t numBarriers, ResourceBarrier* pBarriers)
 {
-	// Bind the heaps, acceleration structure and dispatch rays.
-	const DescriptorPool descriptorPools[] =
-	{
-		m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL),
-		m_descriptorTableCache->GetDescriptorPool(SAMPLER_POOL)
-	};
-	pCommandList->SetDescriptorPools(static_cast<uint32_t>(size(descriptorPools)), descriptorPools);
-
+	// Bind the acceleration structure, and dispatch rays.
 	numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(
 		pBarriers, ResourceState::PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	pCommandList->Barrier(numBarriers, pBarriers);
@@ -118,6 +104,8 @@ void Denoiser::ToneMap(CommandList* pCommandList, const Descriptor& rtv,
 
 bool Denoiser::createPipelineLayouts()
 {
+	const auto& sampler = m_descriptorTableCache->GetSampler(SamplerPreset::LINEAR_CLAMP);
+
 	// This is a pipeline layout for spatial horizontal pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
@@ -153,7 +141,7 @@ bool Denoiser::createPipelineLayouts()
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRange(OUTPUT_VIEW, DescriptorType::UAV, 1, 0, 0, DescriptorFlag::DATA_STATIC_WHILE_SET_AT_EXECUTE);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 3, 0);
-		pipelineLayout->SetRange(SAMPLER, DescriptorType::SAMPLER, 1, 0);
+		pipelineLayout->SetStaticSamplers(&sampler, 1, 0);
 		XUSG_X_RETURN(m_pipelineLayouts[TEMPORAL_SS_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
 			PipelineLayoutFlag::NONE, L"TemporalSSPipelineLayout"), false);
 	}
@@ -367,14 +355,6 @@ bool Denoiser::createDescriptorTables()
 		XUSG_X_RETURN(m_srvTables[SRV_TABLE_TM + i], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 	}
 
-	// Create the sampler
-	{
-		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		const auto samplerLinearClamp = SamplerPreset::LINEAR_CLAMP;
-		descriptorTable->SetSamplers(0, 1, &samplerLinearClamp, m_descriptorTableCache.get());
-		XUSG_X_RETURN(m_samplerTable, descriptorTable->GetSamplerTable(m_descriptorTableCache.get()), false);
-	}
-
 	return true;
 }
 
@@ -492,7 +472,6 @@ void Denoiser::temporalSS(CommandList* pCommandList)
 	pCommandList->SetComputePipelineLayout(m_pipelineLayouts[TEMPORAL_SS_LAYOUT]);
 	pCommandList->SetComputeDescriptorTable(OUTPUT_VIEW, m_uavTables[UAV_TABLE_TSS + m_frameParity]);
 	pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_TSS + m_frameParity]);
-	pCommandList->SetComputeDescriptorTable(SAMPLER, m_samplerTable);
 
 	pCommandList->SetPipelineState(m_pipelines[TEMPORAL_SS]);
 	pCommandList->Dispatch(XUSG_DIV_UP(m_viewport.x, 8), XUSG_DIV_UP(m_viewport.y, 8), 1);

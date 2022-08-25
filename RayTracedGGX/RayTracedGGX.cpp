@@ -145,6 +145,9 @@ void RayTracedGGX::LoadPipeline()
 		XUSG_N_RETURN(m_commandAllocators[ALLOCATOR_IMAGE][n]->Create(m_device.get(), CommandListType::DIRECT,
 			(L"ImageAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
 	}
+
+	// Create descriptor table cache.
+	m_descriptorTableCache = DescriptorTableCache::MakeShared(m_device.get(), L"DescriptorTableCache");
 }
 
 // Load the sample assets.
@@ -171,22 +174,18 @@ void RayTracedGGX::LoadAssets()
 	// Create ray tracer
 	vector<Resource::uptr> uploaders(0);
 	{
-		m_rayTracer = make_unique<RayTracer>();
-		if (!m_rayTracer) ThrowIfFailed(E_FAIL);
-
 		GeometryBuffer geometries[RayTracer::NUM_MESH];
-		if (!m_rayTracer->Init(pCommandList, m_width, m_height, uploaders, geometries, m_meshFileName.c_str(),
-			m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale)) ThrowIfFailed(E_FAIL);
+		m_rayTracer = make_unique<RayTracer>();
+		XUSG_N_RETURN(m_rayTracer->Init(pCommandList, m_descriptorTableCache, m_width, m_height, uploaders, geometries,
+			m_meshFileName.c_str(), m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale), ThrowIfFailed(E_FAIL));
 	}
 
 	// Create denoiser
 	{
 		m_denoiser = make_unique<Denoiser>();
-		if (!m_denoiser) ThrowIfFailed(E_FAIL);
-
-		if (!m_denoiser->Init(pCommandList, m_width, m_height, Format::R8G8B8A8_UNORM,
-			m_rayTracer->GetRayTracingOutputs(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()))
-			ThrowIfFailed(E_FAIL);
+		XUSG_N_RETURN(m_denoiser->Init(pCommandList, m_descriptorTableCache, m_width, m_height, Format::R8G8B8A8_UNORM,
+			m_rayTracer->GetRayTracingOutputs(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()),
+			ThrowIfFailed(E_FAIL));
 	}
 
 	// Close the command list and execute it to begin the initial GPU setup.
@@ -450,6 +449,10 @@ void RayTracedGGX::PopulateCommandList()
 	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
+	// Bind the descritpor pool
+	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	pCommandList->SetDescriptorPools(1, &descriptorPool);
+
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 	m_rayTracer->Render(pCommandList, m_frameIndex);
 
@@ -482,6 +485,10 @@ void RayTracedGGX::PopulateUpdateASCommandList(CommandType commandType)
 	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
+	// Bind the descritpor pool
+	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	pCommandList->SetDescriptorPools(1, &descriptorPool);
+
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
@@ -502,6 +509,10 @@ void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
 	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
+	// Bind the descritpor pool
+	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	pCommandList->SetDescriptorPools(1, &descriptorPool);
+
 	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex);
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
@@ -522,6 +533,10 @@ void RayTracedGGX::PopulateRayTraceCommandList(CommandType commandType)
 	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
+	// Bind the descritpor pool
+	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	pCommandList->SetDescriptorPools(1, &descriptorPool);
+
 	m_rayTracer->RayTrace(pCommandList, m_frameIndex);
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
@@ -542,6 +557,10 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
+	// Bind the descritpor pool
+	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	pCommandList->SetDescriptorPools(1, &descriptorPool);
+
 	ResourceBarrier barriers[3];
 	auto numBarriers = 0u;
 	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
