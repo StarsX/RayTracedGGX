@@ -5,7 +5,6 @@
 #pragma once
 
 #include "Core/XUSG.h"
-#include "RayTracing/XUSGRayTracing.h"
 
 class Denoiser
 {
