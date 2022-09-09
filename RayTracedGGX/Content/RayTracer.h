@@ -58,6 +58,11 @@ protected:
 		NUM_PIPELINE
 	};
 
+	enum CSIndex : uint8_t
+	{
+		CS_RAY_TRACING
+	};
+
 	enum GlobalPipelineLayoutSlot : uint8_t
 	{
 		OUTPUT_VIEW,
@@ -104,6 +109,7 @@ protected:
 	bool createPipelineLayouts(const XUSG::RayTracing::Device* pDevice);
 	bool createPipelines(XUSG::Format rtFormat, XUSG::Format dsFormat);
 	bool createDescriptorTables();
+	virtual bool createOutViewTable();
 	bool buildAccelerationStructures(XUSG::RayTracing::CommandList* pCommandList,
 		XUSG::RayTracing::GeometryBuffer* pGeometries);
 	bool buildShaderTables(const XUSG::RayTracing::Device* pDevice);

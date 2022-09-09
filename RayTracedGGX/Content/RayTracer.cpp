@@ -464,7 +464,7 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 		pipelineLayout->SetStaticSamplers(&sampler, 1, 0);
 		XUSG_X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			pDevice, m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
-			L"RayTracerVGlobalPipelineLayout"), false);
+			L"RayTracerGlobalPipelineLayout"), false);
 	}
 
 	// Local pipeline layout for RayGen shader
@@ -484,7 +484,6 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 {
 	auto vsIndex = 0u;
 	auto psIndex = 0u;
-	auto csIndex = 0u;
 
 	// Visibility-buffer pass
 	{
@@ -505,10 +504,10 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 
 	// Ray tracing pass
 	{
-		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, csIndex, L"RayTracing.cso"), false);
+		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, CS_RAY_TRACING, L"RayTracing.cso"), false);
 
 		const auto state = RayTracing::State::MakeUnique();
-		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, csIndex++));
+		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, CS_RAY_TRACING));
 		state->SetHitGroup(HIT_GROUP_REFLECTION, HitGroupNames[HIT_GROUP_REFLECTION], ClosestHitShaderNames[HIT_GROUP_REFLECTION]);
 		state->SetHitGroup(HIT_GROUP_DIFFUSE, HitGroupNames[HIT_GROUP_DIFFUSE], ClosestHitShaderNames[HIT_GROUP_DIFFUSE]);
 		state->SetShaderConfig(sizeof(float[4]), sizeof(float[2]));
@@ -538,19 +537,7 @@ bool RayTracer::createDescriptorTables()
 	}
 
 	// Output UAVs
-	{
-		const Descriptor descriptors[] =
-		{
-			m_outputViews[HIT_GROUP_REFLECTION]->GetUAV(),
-			m_outputViews[HIT_GROUP_DIFFUSE]->GetUAV(),
-			m_gbuffers[NORMAL]->GetUAV(),
-			m_gbuffers[ROUGH_METAL]->GetUAV(),
-			m_gbuffers[VELOCITY]->GetUAV()
-		};
-		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		XUSG_X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
-	}
+	XUSG_N_RETURN(createOutViewTable(), false);
 
 	// Index buffer SRVs
 	{
@@ -588,6 +575,24 @@ bool RayTracer::createDescriptorTables()
 		descriptorTable->SetDescriptors(0, 1, &m_visBuffer->GetRTV());
 		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableCache.get(), & m_depth->GetDSV());
 	}
+
+	return true;
+}
+
+bool RayTracer::createOutViewTable()
+{
+	// Output UAVs
+	const Descriptor descriptors[] =
+	{
+		m_outputViews[HIT_GROUP_REFLECTION]->GetUAV(),
+		m_outputViews[HIT_GROUP_DIFFUSE]->GetUAV(),
+		m_gbuffers[NORMAL]->GetUAV(),
+		m_gbuffers[ROUGH_METAL]->GetUAV(),
+		m_gbuffers[VELOCITY]->GetUAV()
+	};
+	const auto descriptorTable = Util::DescriptorTable::MakeUnique();
+	descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
+	XUSG_X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
 
 	return true;
 }
