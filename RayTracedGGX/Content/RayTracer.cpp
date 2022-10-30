@@ -60,7 +60,7 @@ const wchar_t* RayTracer::MissShaderName = L"missMain";
 RayTracer::RayTracer() :
 	m_instances()
 {
-	m_shaderPool = ShaderPool::MakeUnique();
+	m_shaderLib = ShaderLib::MakeUnique();
 	AccelerationStructure::SetUAVCount(NUM_HIT_GROUP + NUM_GBUFFER + NUM_MESH + 1);
 }
 
@@ -68,16 +68,16 @@ RayTracer::~RayTracer()
 {
 }
 
-bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTableCache::sptr& descriptorTableCache,
+bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTableLib::sptr& descriptorTableLib,
 	uint32_t width, uint32_t height, vector<Resource::uptr>& uploaders, GeometryBuffer* pGeometries, const char* fileName,
 	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale, uint8_t maxGBufferMips)
 {
 	const auto pDevice = pCommandList->GetRTDevice();
-	m_rayTracingPipelineCache = RayTracing::PipelineCache::MakeUnique(pDevice);
-	m_graphicsPipelineCache = Graphics::PipelineCache::MakeUnique(pDevice);
-	m_computePipelineCache = Compute::PipelineCache::MakeUnique(pDevice);
-	m_pipelineLayoutCache = PipelineLayoutCache::MakeUnique(pDevice);
-	m_descriptorTableCache = descriptorTableCache;
+	m_rayTracingPipelineCache = RayTracing::PipelineLib::MakeUnique(pDevice);
+	m_graphicsPipelineLib = Graphics::PipelineLib::MakeUnique(pDevice);
+	m_computePipelineLib = Compute::PipelineLib::MakeUnique(pDevice);
+	m_pipelineLayoutLib = PipelineLayoutLib::MakeUnique(pDevice);
+	m_descriptorTableLib = descriptorTableLib;
 
 	m_viewport = XMUINT2(width, height);
 	m_posScale = posScale;
@@ -257,7 +257,7 @@ void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCom
 	TopLevelAS::SetInstances(pCommandList->GetRTDevice(), m_instances[frameIndex].get(), NUM_MESH, pBottomLevelASs, transforms);
 
 	// Update top level AS
-	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto& descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorPool, true);
 }
 
@@ -432,21 +432,21 @@ bool RayTracer::createInputLayout()
 		{ "NORMAL",		0, Format::R32G32B32_FLOAT,	0, D3D12_APPEND_ALIGNED_ELEMENT,	InputClassification::PER_VERTEX_DATA, 0 }
 	};
 
-	XUSG_X_RETURN(m_pInputLayout, m_graphicsPipelineCache->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
+	XUSG_X_RETURN(m_pInputLayout, m_graphicsPipelineLib->CreateInputLayout(inputElements, static_cast<uint32_t>(size(inputElements))), false);
 
 	return true;
 }
 
 bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 {
-	const auto& sampler = m_descriptorTableCache->GetSampler(SamplerPreset::ANISOTROPIC_WRAP);
+	const auto& sampler = m_descriptorTableLib->GetSampler(SamplerPreset::ANISOTROPIC_WRAP);
 
 	// This is a pipeline layout for visibility-buffer pass
 	{
 		const auto pipelineLayout = Util::PipelineLayout::MakeUnique();
 		pipelineLayout->SetRootCBV(0, 0, 0, Shader::Stage::VS);
-		pipelineLayout->SetConstants(1, XUSG_SizeOfInUint32(uint32_t), 0, 0, Shader::Stage::PS);
-		XUSG_X_RETURN(m_pipelineLayouts[VISIBILITY_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutCache.get(),
+		pipelineLayout->SetConstants(1, XUSG_UINT32_SIZE_OF(uint32_t), 0, 0, Shader::Stage::PS);
+		XUSG_X_RETURN(m_pipelineLayouts[VISIBILITY_LAYOUT], pipelineLayout->GetPipelineLayout(m_pipelineLayoutLib.get(),
 			PipelineLayoutFlag::ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT, L"VisibilityPipelineLayout"), false);
 	}
 
@@ -463,7 +463,7 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 1);
 		pipelineLayout->SetStaticSamplers(&sampler, 1, 0);
 		XUSG_X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
-			pDevice, m_pipelineLayoutCache.get(), PipelineLayoutFlag::NONE,
+			pDevice, m_pipelineLayoutLib.get(), PipelineLayoutFlag::NONE,
 			L"RayTracerGlobalPipelineLayout"), false);
 	}
 
@@ -471,9 +471,9 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 	// This is a pipeline layout that enables a shader to have unique arguments that come from shader tables.
 	{
 		const auto pipelineLayout = RayTracing::PipelineLayout::MakeUnique();
-		pipelineLayout->SetConstants(0, XUSG_SizeOfInUint32(RayGenConstants), 2);
+		pipelineLayout->SetConstants(0, XUSG_UINT32_SIZE_OF(RayGenConstants), 2);
 		XUSG_X_RETURN(m_pipelineLayouts[RAY_GEN_LAYOUT], pipelineLayout->GetPipelineLayout(
-			pDevice, m_pipelineLayoutCache.get(), PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
+			pDevice, m_pipelineLayoutLib.get(), PipelineLayoutFlag::LOCAL_PIPELINE_LAYOUT,
 			L"RayTracerRayGenPipelineLayout"), false);
 	}
 
@@ -487,27 +487,28 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 
 	// Visibility-buffer pass
 	{
-		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::VS, vsIndex, L"VSVisibility.cso"), false);
-		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::PS, psIndex, L"PSVisibility.cso"), false);
+		XUSG_N_RETURN(m_shaderLib->CreateShader(Shader::Stage::VS, vsIndex, L"VSVisibility.cso"), false);
+		XUSG_N_RETURN(m_shaderLib->CreateShader(Shader::Stage::PS, psIndex, L"PSVisibility.cso"), false);
 
 		const auto state = Graphics::State::MakeUnique();
 		state->IASetInputLayout(m_pInputLayout);
 		state->SetPipelineLayout(m_pipelineLayouts[VISIBILITY_LAYOUT]);
-		state->SetShader(Shader::Stage::VS, m_shaderPool->GetShader(Shader::Stage::VS, vsIndex++));
-		state->SetShader(Shader::Stage::PS, m_shaderPool->GetShader(Shader::Stage::PS, psIndex++));
+		state->SetShader(Shader::Stage::VS, m_shaderLib->GetShader(Shader::Stage::VS, vsIndex++));
+		state->SetShader(Shader::Stage::PS, m_shaderLib->GetShader(Shader::Stage::PS, psIndex++));
 		state->IASetPrimitiveTopologyType(PrimitiveTopologyType::TRIANGLE);
 		state->OMSetNumRenderTargets(1);
 		state->OMSetRTVFormat(0, Format::R32_UINT);
 		state->OMSetDSVFormat(dsFormat);
-		XUSG_X_RETURN(m_pipelines[VISIBILITY], state->GetPipeline(m_graphicsPipelineCache.get(), L"VisibilityPass"), false);
+		XUSG_X_RETURN(m_pipelines[VISIBILITY], state->GetPipeline(m_graphicsPipelineLib.get(), L"VisibilityPass"), false);
 	}
 
 	// Ray tracing pass
 	{
-		XUSG_N_RETURN(m_shaderPool->CreateShader(Shader::Stage::CS, CS_RAY_TRACING, L"RayTracing.cso"), false);
+		XUSG_N_RETURN(m_shaderLib->CreateShader(Shader::Stage::CS, CS_RAY_TRACING, L"RayTracing.cso"), false);
+		const void* shaders[] = { RaygenShaderName, ClosestHitShaderNames[0], ClosestHitShaderNames[1], MissShaderName };
 
 		const auto state = RayTracing::State::MakeUnique();
-		state->SetShaderLibrary(m_shaderPool->GetShader(Shader::Stage::CS, CS_RAY_TRACING));
+		state->SetShaderLibrary(0, m_shaderLib->GetShader(Shader::Stage::CS, CS_RAY_TRACING), static_cast<uint32_t>(size(shaders)), shaders);
 		state->SetHitGroup(HIT_GROUP_REFLECTION, HitGroupNames[HIT_GROUP_REFLECTION], ClosestHitShaderNames[HIT_GROUP_REFLECTION]);
 		state->SetHitGroup(HIT_GROUP_DIFFUSE, HitGroupNames[HIT_GROUP_DIFFUSE], ClosestHitShaderNames[HIT_GROUP_DIFFUSE]);
 		state->SetShaderConfig(sizeof(float[4]), sizeof(float[2]));
@@ -523,7 +524,7 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 
 bool RayTracer::createDescriptorTables()
 {
-	//m_descriptorTableCache.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2);
+	//m_descriptorTableLib.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2);
 
 	// Acceleration structure UAVs
 	{
@@ -532,7 +533,7 @@ bool RayTracer::createDescriptorTables()
 		descriptors[NUM_MESH] = m_topLevelAS->GetResult()->GetUAV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		const auto asTable = descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get());
+		const auto asTable = descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get());
 		XUSG_N_RETURN(asTable, false);
 	}
 
@@ -545,7 +546,7 @@ bool RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_indexBuffers[i]->GetSRV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		XUSG_X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_IB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get()), false);
 	}
 
 	// Vertex buffer SRVs
@@ -554,7 +555,7 @@ bool RayTracer::createDescriptorTables()
 		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_vertexBuffers[i]->GetSRV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		XUSG_X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_VB], descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get()), false);
 	}
 
 	// Ray-tracing SRVs
@@ -566,14 +567,14 @@ bool RayTracer::createDescriptorTables()
 		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-		XUSG_X_RETURN(m_srvTables[SRV_TABLE_RO], descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_RO], descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get()), false);
 	}
 
 	// RTV table and framebuffer
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_visBuffer->GetRTV());
-		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableCache.get(), & m_depth->GetDSV());
+		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableLib.get(), & m_depth->GetDSV());
 	}
 
 	return true;
@@ -592,7 +593,7 @@ bool RayTracer::createOutViewTable()
 	};
 	const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 	descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
-	XUSG_X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableCache.get()), false);
+	XUSG_X_RETURN(m_uavTable, descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get()), false);
 
 	return true;
 }
@@ -635,7 +636,7 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 
 	// Get descriptor pool and create descriptor tables
 	XUSG_N_RETURN(createDescriptorTables(), false);
-	const auto& descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto& descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 
 	// Set instance
 	XMFLOAT3X4 matrices[NUM_MESH];

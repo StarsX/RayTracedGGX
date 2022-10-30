@@ -146,8 +146,8 @@ void RayTracedGGX::LoadPipeline()
 			(L"ImageAllocator" + to_wstring(n)).c_str()), ThrowIfFailed(E_FAIL));
 	}
 
-	// Create descriptor table cache.
-	m_descriptorTableCache = DescriptorTableCache::MakeShared(m_device.get(), L"DescriptorTableCache");
+	// Create descriptor-table lib.
+	m_descriptorTableLib = DescriptorTableLib::MakeShared(m_device.get(), L"DescriptorTableLib");
 }
 
 // Load the sample assets.
@@ -176,14 +176,14 @@ void RayTracedGGX::LoadAssets()
 	{
 		GeometryBuffer geometries[RayTracer::NUM_MESH];
 		m_rayTracer = make_unique<RayTracer>();
-		XUSG_N_RETURN(m_rayTracer->Init(pCommandList, m_descriptorTableCache, m_width, m_height, uploaders, geometries,
+		XUSG_N_RETURN(m_rayTracer->Init(pCommandList, m_descriptorTableLib, m_width, m_height, uploaders, geometries,
 			m_meshFileName.c_str(), m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale), ThrowIfFailed(E_FAIL));
 	}
 
 	// Create denoiser
 	{
 		m_denoiser = make_unique<Denoiser>();
-		XUSG_N_RETURN(m_denoiser->Init(pCommandList, m_descriptorTableCache, m_width, m_height, Format::R8G8B8A8_UNORM,
+		XUSG_N_RETURN(m_denoiser->Init(pCommandList, m_descriptorTableLib, m_width, m_height, Format::R8G8B8A8_UNORM,
 			m_rayTracer->GetRayTracingOutputs(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()),
 			ThrowIfFailed(E_FAIL));
 	}
@@ -450,7 +450,7 @@ void RayTracedGGX::PopulateCommandList()
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 	pCommandList->SetDescriptorPools(1, &descriptorPool);
 
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
@@ -486,7 +486,7 @@ void RayTracedGGX::PopulateUpdateASCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 	pCommandList->SetDescriptorPools(1, &descriptorPool);
 
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
@@ -510,7 +510,7 @@ void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 	pCommandList->SetDescriptorPools(1, &descriptorPool);
 
 	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex);
@@ -534,7 +534,7 @@ void RayTracedGGX::PopulateRayTraceCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 	pCommandList->SetDescriptorPools(1, &descriptorPool);
 
 	m_rayTracer->RayTrace(pCommandList, m_frameIndex);
@@ -558,7 +558,7 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableCache->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
 	pCommandList->SetDescriptorPools(1, &descriptorPool);
 
 	ResourceBarrier barriers[3];

@@ -12,7 +12,7 @@ public:
 	Denoiser();
 	virtual ~Denoiser();
 
-	bool Init(XUSG::CommandList* pCommandList, const XUSG::DescriptorTableCache::sptr& descriptorTableCache,
+	bool Init(XUSG::CommandList* pCommandList, const XUSG::DescriptorTableLib::sptr& descriptorTableLib,
 		uint32_t width, uint32_t height, XUSG::Format rtFormat, const XUSG::Texture2D::uptr* inputViews,
 		const XUSG::RenderTarget::uptr* pGbuffers, const XUSG::DepthStencil::sptr& depth, uint8_t maxMips = 1);
 	void Denoise(XUSG::CommandList* pCommandList, uint32_t numBarriers,
@@ -135,9 +135,9 @@ protected:
 	const XUSG::Texture2D::uptr*	m_inputViews;
 	const XUSG::RenderTarget::uptr* m_pGbuffers;
 
-	XUSG::ShaderPool::uptr				m_shaderPool;
-	XUSG::Graphics::PipelineCache::uptr	m_graphicsPipelineCache;
-	XUSG::Compute::PipelineCache::uptr	m_computePipelineCache;
-	XUSG::PipelineLayoutCache::uptr		m_pipelineLayoutCache;
-	XUSG::DescriptorTableCache::sptr	m_descriptorTableCache;
+	XUSG::ShaderLib::uptr				m_shaderLib;
+	XUSG::Graphics::PipelineLib::uptr	m_graphicsPipelineLib;
+	XUSG::Compute::PipelineLib::uptr	m_computePipelineLib;
+	XUSG::PipelineLayoutLib::uptr		m_pipelineLayoutLib;
+	XUSG::DescriptorTableLib::sptr		m_descriptorTableLib;
 };

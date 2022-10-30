@@ -116,7 +116,7 @@ namespace XUSG
 			static void SetFrameCount(uint32_t frameCount);
 
 			static bool AllocateUAVBuffer(const Device* pDevice, Resource* pResource,
-				size_t byteWidth, ResourceState dstState = ResourceState::UNORDERED_ACCESS,
+				size_t byteWidth, ResourceState dstState = ResourceState::COMMON,
 				API api = API::DIRECTX_12);
 			static bool AllocateUploadBuffer(const Device* pDevice, Resource* pResource,
 				size_t byteWidth, void* pData, API api = API::DIRECTX_12);
@@ -299,9 +299,9 @@ namespace XUSG
 			//PipelineLayout();
 			virtual ~PipelineLayout() {}
 
-			virtual XUSG::PipelineLayout CreatePipelineLayout(const Device* pDevice, PipelineLayoutCache* pPipelineLayoutCache,
+			virtual XUSG::PipelineLayout CreatePipelineLayout(const Device* pDevice, PipelineLayoutLib* pPipelineLayoutLib,
 				PipelineLayoutFlag flags, const wchar_t* name = nullptr) = 0;
-			virtual XUSG::PipelineLayout GetPipelineLayout(const Device* pDevice, PipelineLayoutCache* pPipelineLayoutCache,
+			virtual XUSG::PipelineLayout GetPipelineLayout(const Device* pDevice, PipelineLayoutLib* pPipelineLayoutLib,
 				PipelineLayoutFlag flags, const wchar_t* name = nullptr) = 0;
 
 			using uptr = std::unique_ptr<PipelineLayout>;
@@ -314,7 +314,7 @@ namespace XUSG
 		//--------------------------------------------------------------------------------------
 		// Pipeline state
 		//--------------------------------------------------------------------------------------
-		class PipelineCache;
+		class PipelineLib;
 
 		class XUSG_INTERFACE State
 		{
@@ -322,7 +322,8 @@ namespace XUSG
 			//State();
 			virtual ~State() {}
 
-			virtual void SetShaderLibrary(const Blob& shaderLib) = 0;
+			virtual void SetShaderLibrary(uint32_t index, const Blob& shaderLib,
+				uint32_t numShaders = 0, const void** pShaders = nullptr) = 0;
 			virtual void SetHitGroup(uint32_t index, const void* hitGroup, const void* closestHitShader,
 				const void* anyHitShader = nullptr, const void* intersectionShader = nullptr,
 				HitGroupType type = HitGroupType::TRIANGLES) = 0;
@@ -332,8 +333,8 @@ namespace XUSG
 			virtual void SetGlobalPipelineLayout(const XUSG::PipelineLayout& layout) = 0;
 			virtual void SetMaxRecursionDepth(uint32_t depth) = 0;
 
-			virtual Pipeline CreatePipeline(PipelineCache* pPipelineCache, const wchar_t* name = nullptr) = 0;
-			virtual Pipeline GetPipeline(PipelineCache* pPipelineCache, const wchar_t* name = nullptr) = 0;
+			virtual Pipeline CreatePipeline(PipelineLib* pPipelineCache, const wchar_t* name = nullptr) = 0;
+			virtual Pipeline GetPipeline(PipelineLib* pPipelineCache, const wchar_t* name = nullptr) = 0;
 
 			virtual const std::string& GetKey() = 0;
 
@@ -344,12 +345,12 @@ namespace XUSG
 			static sptr MakeShared(API api = API::DIRECTX_12);
 		};
 
-		class XUSG_INTERFACE PipelineCache
+		class XUSG_INTERFACE PipelineLib
 		{
 		public:
-			//PipelineCache();
-			//PipelineCache(const Device* pDevice);
-			virtual ~PipelineCache() {}
+			//PipelineLib();
+			//PipelineLib(const Device* pDevice);
+			virtual ~PipelineLib() {}
 
 			virtual void SetDevice(const Device* pDevice) = 0;
 			virtual void SetPipeline(const std::string& key, const Pipeline& pipeline) = 0;
@@ -357,8 +358,8 @@ namespace XUSG
 			virtual Pipeline CreatePipeline(State* pState, const wchar_t* name = nullptr) = 0;
 			virtual Pipeline GetPipeline(State* pState, const wchar_t* name = nullptr) = 0;
 
-			using uptr = std::unique_ptr<PipelineCache>;
-			using sptr = std::shared_ptr<PipelineCache>;
+			using uptr = std::unique_ptr<PipelineLib>;
+			using sptr = std::shared_ptr<PipelineLib>;
 
 			static uptr MakeUnique(API api = API::DIRECTX_12);
 			static sptr MakeShared(API api = API::DIRECTX_12);
