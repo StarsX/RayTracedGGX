@@ -60,7 +60,7 @@ const wchar_t* RayTracer::MissShaderName = L"missMain";
 RayTracer::RayTracer() :
 	m_instances()
 {
-	m_shaderLib = ShaderLib::MakeUnique();
+	m_shaderLib = ShaderLib::MakeShared();
 	AccelerationStructure::SetUAVCount(NUM_HIT_GROUP + NUM_GBUFFER + NUM_MESH + 1);
 }
 
@@ -75,8 +75,8 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTabl
 	const auto pDevice = pCommandList->GetRTDevice();
 	m_rayTracingPipelineCache = RayTracing::PipelineLib::MakeUnique(pDevice);
 	m_graphicsPipelineLib = Graphics::PipelineLib::MakeUnique(pDevice);
-	m_computePipelineLib = Compute::PipelineLib::MakeUnique(pDevice);
-	m_pipelineLayoutLib = PipelineLayoutLib::MakeUnique(pDevice);
+	m_computePipelineLib = Compute::PipelineLib::MakeShared(pDevice);
+	m_pipelineLayoutLib = PipelineLayoutLib::MakeShared(pDevice);
 	m_descriptorTableLib = descriptorTableLib;
 
 	m_viewport = XMUINT2(width, height);
@@ -164,6 +164,11 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTabl
 	XUSG_N_RETURN(buildAccelerationStructures(pCommandList, pGeometries), false);
 	XUSG_N_RETURN(buildShaderTables(pDevice), false);
 
+	// Create SH object
+	m_sphericalHarmonics = SphericalHarmonics::MakeUnique();
+	XUSG_N_RETURN(m_sphericalHarmonics->Init(pDevice, m_shaderLib, m_computePipelineLib,
+		m_pipelineLayoutLib, m_descriptorTableLib, 0), false);
+
 	return true;
 }
 
@@ -230,8 +235,20 @@ void RayTracer::UpdateFrame(const RayTracing::Device* pDevice, uint8_t frameInde
 	}
 }
 
+void RayTracer::TransformSH(XUSG::CommandList* pCommandList)
+{
+	m_sphericalHarmonics->Transform(pCommandList, m_lightProbe.get(), m_srvTables[SRV_TABLE_LP]);
+}
+
 void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
+	static auto isFirstFrame = true;
+	if (isFirstFrame)
+	{
+		TransformSH(pCommandList);
+		isFirstFrame = false;
+	}
+
 	RenderVisibility(pCommandList, frameIndex);
 	rayTrace(pCommandList, frameIndex);
 
@@ -278,6 +295,13 @@ void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t 
 
 void RayTracer::RayTrace(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
+	static auto isFirstFrame = true;
+	if (isFirstFrame)
+	{
+		TransformSH(pCommandList);
+		isFirstFrame = false;
+	}
+
 	rayTrace(pCommandList, frameIndex);
 
 	ResourceBarrier barriers[4];
@@ -461,6 +485,7 @@ bool RayTracer::createPipelineLayouts(const RayTracing::Device* pDevice)
 		pipelineLayout->SetRootCBV(MATERIALS, 0);
 		pipelineLayout->SetRootCBV(CONSTANTS, 1);
 		pipelineLayout->SetRange(SHADER_RESOURCES, DescriptorType::SRV, 2, 1);
+		pipelineLayout->SetRootSRV(SH_COEFFICIENTS, 3, 0, DescriptorFlag::DATA_STATIC);
 		pipelineLayout->SetStaticSamplers(&sampler, 1, 0);
 		XUSG_X_RETURN(m_pipelineLayouts[RT_GLOBAL_LAYOUT], pipelineLayout->GetPipelineLayout(
 			pDevice, m_pipelineLayoutLib.get(), PipelineLayoutFlag::NONE,
@@ -560,14 +585,15 @@ bool RayTracer::createDescriptorTables()
 
 	// Ray-tracing SRVs
 	{
-		const Descriptor descriptors[] =
-		{
-			m_visBuffer->GetSRV(),
-			m_lightProbe->GetSRV()
-		};
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
-		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
+		descriptorTable->SetDescriptors(0, 1, &m_visBuffer->GetSRV());
 		XUSG_X_RETURN(m_srvTables[SRV_TABLE_RO], descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get()), false);
+	}
+
+	{
+		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
+		descriptorTable->SetDescriptors(0, 1, &m_lightProbe->GetSRV());
+		XUSG_X_RETURN(m_srvTables[SRV_TABLE_LP], descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get()), false);
 	}
 
 	// RTV table and framebuffer
@@ -750,6 +776,7 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t fr
 	pCommandList->SetComputeRootConstantBufferView(MATERIALS, m_cbMaterials.get());
 	pCommandList->SetComputeRootConstantBufferView(CONSTANTS, m_cbRaytracing.get(), m_cbRaytracing->GetCBVOffset(frameIndex));
 	pCommandList->SetComputeDescriptorTable(SHADER_RESOURCES, m_srvTables[SRV_TABLE_RO]);
+	pCommandList->SetComputeRootShaderResourceView(SH_COEFFICIENTS, m_sphericalHarmonics->GetSHCoefficients().get());
 
 	// Fallback layer has no depth
 	pCommandList->DispatchRays(m_pipelines[RAY_TRACING], m_viewport.x, m_viewport.y, 1,

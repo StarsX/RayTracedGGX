@@ -2,6 +2,8 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
+#define SH_ORDER 3
+#include "SHIrradiance.hlsli"
 #include "BRDFModels.hlsli"
 #include "Material.hlsli"
 
@@ -73,6 +75,7 @@ RWTexture2D<float2>			g_rwVelocity	: register (u4);
 RaytracingAS				g_scene			: register (t0);
 Texture2D<uint>				g_txVisiblity	: register (t1);
 TextureCube<float3>			g_txEnv			: register (t2);
+StructuredBuffer<float3>	g_roSHCoeffs	: register (t3);
 
 // IA buffers
 Buffer<uint>				g_indexBuffers[]	: register (t0, space1);
@@ -442,12 +445,9 @@ float calcCubemapMipFromRoughness(float rgh, float mipCount)
 	return mipCount - 1.0 - level;
 }
 
-RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
-	float4 color, uint hitGroup, float3 interColor = 0.0, float t = 0.0, uint recursionDepth = 0)
+RayPayload computeReflection(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
+	float4 color, uint recursionDepth = 0)
 {
-	const float3 cubemapDim = getCubemapDimensions(g_txEnv);
-	const float levelDiffuse = cubemapDim.z - 1.25;
-
 	RayDesc ray;
 	ray.Origin = P;
 	ray.TMin = ray.TMax = 0.0;
@@ -457,86 +457,103 @@ RayPayload computeLighting(bool hit, float2 rghMtl, float3 N, float3 V, float3 P
 
 	if (hit)
 	{
+		const float3 cubemapDim = getCubemapDimensions(g_txEnv);
 		const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
 		level = calcCubemapMipFromRoughness(rghMtl.x, cubemapDim.z);
 
-		if (hitGroup == HIT_GROUP_REFLECTION)
-		{
-			// Trace a reflection ray.
-			const float a = rghMtl.x * rghMtl.x;
-			H = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionGGX(a, N, xi) : N;
+		// Trace a reflection ray.
+		const float a = rghMtl.x * rghMtl.x;
+		H = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionGGX(a, N, xi) : N;
 
-			const float3 R = reflect(-V, H);
-			ray.Direction = recursionDepth < MAX_RECURSION_DEPTH ? R : lerp(N, R, (1.0 - a) * (sqrt(1.0 - a) + a));
-			NoL = dot(N, ray.Direction);
-			if (NoL > 0.0)
-			{
-				// Set TMin to an offset to avoid aliasing artifacts along contact areas.
-				ray.TMin = 1e-5;
-				ray.TMax = 10000.0;
-			}
-		}
-		else
+		const float3 R = reflect(-V, H);
+		ray.Direction = recursionDepth < MAX_RECURSION_DEPTH ? R : lerp(N, R, (1.0 - a) * (sqrt(1.0 - a) + a));
+		NoL = dot(N, ray.Direction);
+		if (NoL > 0.0)
 		{
-			// Trace a diffuse ray.
-			ray.Direction = recursionDepth < MAX_RECURSION_DEPTH ? computeDirectionCos(N, xi) : N;
+			// Set TMin to an offset to avoid aliasing artifacts along contact areas.
 			ray.TMin = 1e-5;
 			ray.TMax = 10000.0;
-			NoL = rghMtl.y < 1.0 ? 1.0 : 0.0;
-
-			level = recursionDepth < MAX_RECURSION_DEPTH ? level : levelDiffuse;
 		}
 	}
 	else ray.Direction = -V;
 
-	RayPayload payload = traceRadianceRay(ray, recursionDepth, color.xyz * rghMtl.y, hitGroup, level);
+	RayPayload payload = traceRadianceRay(ray, recursionDepth, color.xyz * rghMtl.y, HIT_GROUP_REFLECTION, level);
 
-	if (!hit && hitGroup == HIT_GROUP_REFLECTION) return payload;
-	else if (NoL <= 0.0 || (!hit && hitGroup == HIT_GROUP_DIFFUSE)) return (RayPayload)0;
+	if (!hit) return payload;
+	else if (NoL <= 0.0) return (RayPayload)0;
+
+	const float3 f0 = lerp(0.04, color.xyz, rghMtl.y);
+	const float NoV = saturate(dot(N, V));
+
+	if (recursionDepth < MAX_RECURSION_DEPTH)
+	{
+		// Calculate fresnel
+		const float VoH = saturate(dot(V, H));
+		const float3 F = F_Schlick(f0, VoH);
+
+		// Visibility factor
+		const float vis = Vis_Smith(rghMtl.x, NoV, NoL);
+
+		// BRDF
+		// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
+		const float NoH = saturate(dot(N, H));
+		// pdf = D * NoH / (4 * VoH)
+		payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
+		// pdf = D * NoH
+		//payload.Color *= F * NoL * vis / NoH;
+	}
+	else payload.Color *= EnvBRDFApprox(f0, rghMtl.x, NoV); // pdf = 1
+
+	return payload;
+}
+
+RayPayload computeDiffuse(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
+	float4 color, float3 interColor = 0.0, uint recursionDepth = 0)
+{
+	RayPayload payload;
+	if (recursionDepth < MAX_RECURSION_DEPTH)
+	{
+		RayDesc ray;
+		ray.Origin = P;
+		ray.TMin = ray.TMax = 0.0;
+
+		float level = 0.0;
+
+		if (hit)
+		{
+			const float3 cubemapDim = getCubemapDimensions(g_txEnv);
+			const float2 xi = getSampleParam(DispatchRaysIndex().xy, DispatchRaysDimensions().xy);
+			level = calcCubemapMipFromRoughness(rghMtl.x, cubemapDim.z);
+
+			// Trace a diffuse ray.
+			ray.Direction = computeDirectionCos(N, xi);
+			ray.TMin = 1e-5;
+			ray.TMax = 10000.0;
+		}
+		else ray.Direction = -V;
+
+		payload = traceRadianceRay(ray, recursionDepth, color.xyz * rghMtl.y, HIT_GROUP_DIFFUSE, level);
+	}
+	else payload.Color = EvaluateSHIrradiance(g_roSHCoeffs, N).xyz / PI;
+
+	if (!hit) return (RayPayload)0;
 
 #if 0
-	const float VoL = dot(V, ray.Direction);
-	const float interOcc = saturate(VoL - 0.25);
+	const float NoV = dot(V, N);
+	const float interOcc = saturate(NoV - 0.25);
 	interColor *= environment(V, levelDiffuse) / PI;
 	payload.Color *= recursionDepth < MAX_RECURSION_DEPTH ? 1.0 : 1.0 - interOcc;
 	payload.Color += recursionDepth < MAX_RECURSION_DEPTH ? 0.0 : interOcc * interColor;
 #endif
 
-	if (hitGroup == HIT_GROUP_REFLECTION)
-	{
-		const float3 f0 = lerp(0.04, color.xyz, rghMtl.y);
-		const float NoV = saturate(dot(N, V));
-
-		if (recursionDepth < MAX_RECURSION_DEPTH)
-		{
-			// Calculate fresnel
-			const float VoH = saturate(dot(V, H));
-			const float3 F = F_Schlick(f0, VoH);
-
-			// Visibility factor
-			const float vis = Vis_Smith(rghMtl.x, NoV, NoL);
-
-			// BRDF
-			// Microfacet specular = D * F * G / (4 * NoL * NoV) = D * F * Vis
-			const float NoH = saturate(dot(N, H));
-			// pdf = D * NoH / (4 * VoH)
-			payload.Color *= NoL * F * vis * (4.0 * VoH / NoH);
-			// pdf = D * NoH
-			//payload.Color *= F * NoL * vis / NoH;
-		}
-		else payload.Color *= EnvBRDFApprox(f0, rghMtl.x, NoV); // pdf = 1
-	}
-	else
-	{
-		// BRDF
-		//payload.Color = payload.Color.x < 0.0 ? payload.Color : environment(N, 0.0, 0.0, 10.0);
-		const float3 albedo = color.xyz;
-		//const float NoL = dot(N, ray.Direction);
-		//const float3 brdf = albedo / PI;
-		//const float pdf = NoL / PI;
-		//payload.Color *= brdf * NoL / pdf;
-		payload.Color *= recursionDepth > 0 ? albedo : albedo * (1.0 - 0.04);
-	}
+	// BRDF
+	//payload.Color = payload.Color.x < 0.0 ? payload.Color : environment(N, 0.0, 0.0, 10.0);
+	const float3 albedo = color.xyz;
+	//const float NoL = dot(N, ray.Direction);
+	//const float3 brdf = albedo / PI;
+	//const float pdf = NoL / PI;
+	//payload.Color *= brdf * NoL / pdf;
+	payload.Color *= recursionDepth > 0 ? albedo : albedo * (1.0 - 0.04);
 
 	return payload;
 }
@@ -560,12 +577,12 @@ void raygenMain()
 	if (hit) g_rwRoughMetal[index] = rghMtl;
 	g_rwVelocity[index] = velocity;
 
-	RayPayload payload = computeLighting(hit, rghMtl, N, V, P, color, HIT_GROUP_REFLECTION);
+	RayPayload payload = computeReflection(hit, rghMtl, N, V, P, color);
 	g_rwRenderTargets[HIT_GROUP_REFLECTION][index] = payload.Color;		// Write the raytraced color to the output texture.
 
 	if (rghMtl.y < 1.0)
 	{
-		payload = computeLighting(hit, rghMtl, N, V, P, color, HIT_GROUP_DIFFUSE);
+		payload = computeDiffuse(hit, rghMtl, N, V, P, color);
 		//payload.Color *= 1.0 - saturate(dot(N, float3(0.0, -1.0, 0.0)));
 		g_rwRenderTargets[HIT_GROUP_DIFFUSE][index] = payload.Color;	// Write the raytraced color to the output texture.
 	}
@@ -589,11 +606,11 @@ void closestHitReflection(inout RayPayload payload, TriAttributes attr)
 	const float3 P = hitWorldPosition();
 
 	const float2 rghMtl = getRoughMetal(instanceIdx, attrib.UV);
-	const uint hitGroup = rghMtl.y > 0.5 ? HIT_GROUP_REFLECTION : HIT_GROUP_DIFFUSE;
 	const float4 color = getBaseColor(instanceIdx, attrib.UV);
 
 	// Trace a reflection ray.
-	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, payload.Color, RayTCurrent(), 1);
+	if (rghMtl.y > 0.5) payload = computeReflection(true, rghMtl, N, V, P, color, 1);
+	else payload = computeDiffuse(true, rghMtl, N, V, P, color, payload.Color, 1);
 }
 
 [shader("closesthit")]
@@ -615,7 +632,8 @@ void closestHitDiffuse(inout RayPayload payload, TriAttributes attr)
 
 	// Trace a diffuse ray.
 	const float t = RayTCurrent();
-	payload = computeLighting(true, rghMtl, N, V, P, color, hitGroup, payload.Color, t, 1);
+	if (hitGroup) payload = computeDiffuse(true, rghMtl, N, V, P, color, payload.Color, 1);
+	else payload = computeReflection(true, rghMtl, N, V, P, color, 1);
 	//payload.Color *= exp(-0.15 * t);
 }
 

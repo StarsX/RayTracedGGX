@@ -5,6 +5,7 @@
 #pragma once
 
 #include "Core/XUSG.h"
+#include "Advanced/XUSGSphericalHarmonics.h"
 #include "RayTracing/XUSGRayTracing.h"
 
 class RayTracer
@@ -29,6 +30,7 @@ public:
 	void SetMetallic(uint32_t meshIdx, float metallic);
 	void UpdateFrame(const XUSG::RayTracing::Device* pDevice, uint8_t frameIndex,
 		DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
+	void TransformSH(XUSG::CommandList* pCommandList);
 	void Render(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void UpdateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void RenderVisibility(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
@@ -71,7 +73,8 @@ protected:
 		VERTEX_BUFFERS,
 		MATERIALS,
 		CONSTANTS,
-		SHADER_RESOURCES
+		SHADER_RESOURCES,
+		SH_COEFFICIENTS,
 	};
 
 	enum GBuffer : uint8_t
@@ -88,6 +91,7 @@ protected:
 		SRV_TABLE_IB,
 		SRV_TABLE_VB,
 		SRV_TABLE_RO,
+		SRV_TABLE_LP,
 
 		NUM_SRV_TABLE
 	};
@@ -131,6 +135,8 @@ protected:
 	XUSG::PipelineLayout		m_pipelineLayouts[NUM_PIPELINE_LAYOUT];
 	XUSG::Pipeline				m_pipelines[NUM_PIPELINE];
 
+	XUSG::SphericalHarmonics::uptr m_sphericalHarmonics;
+
 	XUSG::DescriptorTable		m_srvTables[NUM_SRV_TABLE];
 	XUSG::DescriptorTable		m_uavTable;
 	XUSG::Framebuffer			m_framebuffer;
@@ -161,10 +167,10 @@ protected:
 	XUSG::RayTracing::ShaderTable::uptr	m_hitGroupShaderTable;
 	XUSG::RayTracing::ShaderTable::uptr	m_rayGenShaderTables[FrameCount];
 
-	XUSG::ShaderLib::uptr				m_shaderLib;
+	XUSG::ShaderLib::sptr				m_shaderLib;
 	XUSG::RayTracing::PipelineLib::uptr	m_rayTracingPipelineCache;
 	XUSG::Graphics::PipelineLib::uptr	m_graphicsPipelineLib;
-	XUSG::Compute::PipelineLib::uptr	m_computePipelineLib;
-	XUSG::PipelineLayoutLib::uptr		m_pipelineLayoutLib;
+	XUSG::Compute::PipelineLib::sptr	m_computePipelineLib;
+	XUSG::PipelineLayoutLib::sptr		m_pipelineLayoutLib;
 	XUSG::DescriptorTableLib::sptr		m_descriptorTableLib;
 };

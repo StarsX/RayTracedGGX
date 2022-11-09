@@ -47,6 +47,8 @@
 
 #include "D3D12RaytracingFallback.h"
 
+#define _INDEPENDENT_SPHERICAL_HARMONICS_
+
 #if defined(DEBUG) | defined(_DEBUG)
 #ifndef DBG_NEW
 #define DBG_NEW new (_NORMAL_BLOCK, __FILE__, __LINE__)
