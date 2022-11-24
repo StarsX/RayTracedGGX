@@ -449,9 +449,9 @@ void RayTracedGGX::PopulateCommandList()
 	XUSG_N_RETURN(pCommandList->Reset(commandAllocator, nullptr), ThrowIfFailed(E_FAIL));
 
 	// Record commands.
-	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	pCommandList->SetDescriptorPools(1, &descriptorPool);
+	// Bind the descritpor heap
+	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 	m_rayTracer->Render(pCommandList, m_frameIndex);
@@ -486,8 +486,8 @@ void RayTracedGGX::PopulateUpdateASCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	pCommandList->SetDescriptorPools(1, &descriptorPool);
+	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
 	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
 
@@ -510,8 +510,8 @@ void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	pCommandList->SetDescriptorPools(1, &descriptorPool);
+	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
 	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex);
 
@@ -534,8 +534,8 @@ void RayTracedGGX::PopulateRayTraceCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	pCommandList->SetDescriptorPools(1, &descriptorPool);
+	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
 	m_rayTracer->RayTrace(pCommandList, m_frameIndex);
 
@@ -558,8 +558,8 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 
 	// Record commands.
 	// Bind the descritpor pool
-	const auto descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	pCommandList->SetDescriptorPools(1, &descriptorPool);
+	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
 	ResourceBarrier barriers[3];
 	auto numBarriers = 0u;

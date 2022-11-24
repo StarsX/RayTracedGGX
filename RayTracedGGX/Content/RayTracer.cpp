@@ -274,8 +274,8 @@ void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCom
 	TopLevelAS::SetInstances(pCommandList->GetRTDevice(), m_instances[frameIndex].get(), NUM_MESH, pBottomLevelASs, transforms);
 
 	// Update top level AS
-	const auto& descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
-	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorPool, true);
+	const auto& descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorHeap, true);
 }
 
 void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
@@ -660,9 +660,9 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	m_scratch = Resource::MakeUnique();
 	XUSG_N_RETURN(AccelerationStructure::AllocateUAVBuffer(pDevice, m_scratch.get(), scratchSize), false);
 
-	// Get descriptor pool and create descriptor tables
+	// Get descriptor heap and create descriptor tables
 	XUSG_N_RETURN(createDescriptorTables(), false);
-	const auto& descriptorPool = m_descriptorTableLib->GetDescriptorPool(CBV_SRV_UAV_POOL);
+	const auto& descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
 
 	// Set instance
 	XMFLOAT3X4 matrices[NUM_MESH];
@@ -682,10 +682,10 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 
 	// Build bottom level ASs
 	for (auto& bottomLevelAS : m_bottomLevelASs)
-		bottomLevelAS->Build(pCommandList, m_scratch.get(), descriptorPool);
+		bottomLevelAS->Build(pCommandList, m_scratch.get(), descriptorHeap);
 
 	// Build top level AS
-	m_topLevelAS->Build(pCommandList, m_scratch.get(), instances.get(), descriptorPool);
+	m_topLevelAS->Build(pCommandList, m_scratch.get(), instances.get(), descriptorHeap);
 
 	return true;
 }
