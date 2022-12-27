@@ -39,7 +39,7 @@ typedef min16float4	HALF4;
 // Constants
 //--------------------------------------------------------------------------------------
 static const uint g_historyBits = 4;
-static const uint g_historyMask = (1 << g_historyBits) - 1;
+static const uint g_historyMask = (1u << g_historyBits) - 1;
 static const float g_historyMax = g_historyMask;
 
 static const HALF3 g_luma4Base = { 1.0, 2.0, 1.0 };

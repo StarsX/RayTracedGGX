@@ -312,7 +312,7 @@ bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 		// Decode visibility
 		--visibility;
 		const uint instanceIdx = visibility >> PRIMITIVE_BITS;
-		const uint primitiveIdx = (visibility & ((1 << PRIMITIVE_BITS) - 1));
+		const uint primitiveIdx = (visibility & ((1u << PRIMITIVE_BITS) - 1));
 
 		// Fetch vertices
 		Vertex vertices[3];
