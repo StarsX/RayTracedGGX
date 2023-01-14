@@ -55,10 +55,10 @@ float UnprojectZ(float depth)
 }
 
 float ReflectionWeight(float3 normC, float4 norm, float rghC, float rgh,
-	float depthC, float depth, uint radius, uint i, float a)
+	float depthC, float depth, float radius, int blurRadius)
 {
 	float w = norm.w > 0.0 ? 1.0 : 0.0;
-	w *= Gaussian(radius, i, a);
+	w *= Gaussian(radius, blurRadius);
 	w *= NormalWeight(normC, norm.xyz, 512.0);
 	//w *= Gaussian(depthC, depth, SIGMA_Z);
 	w *= RoughnessWeight(rghC, rgh, 0.0, 0.5);

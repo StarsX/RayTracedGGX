@@ -49,8 +49,8 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		g_renderTarget[DTid] = dest;
 		return;
 	}
-	const uint radius = RADIUS;
-	loadSamples(DTid, GTid.y, radius);
+
+	loadSamples(DTid, GTid.y, RADIUS);
 	if (!vis)
 	{
 		g_renderTarget[DTid] = dest;
@@ -58,8 +58,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	}
 
 	const float3 src = g_txSource[DTid];
-	//const float depthC = g_depths[GTid.y + radius];
-	const uint sampleCount = radius * 2 + 1;
+	//const float depthC = g_depths[GTid.y + RADIUS];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
 	float3 mu = 0.0, m2 = 0.0;
@@ -68,9 +67,9 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	const float depthC = 0.0, depth = 0.0;
 
 	[unroll]
-	for (uint i = 0; i < sampleCount; ++i)
+	for (int i = -RADIUS; i <= RADIUS; ++i)
 	{
-		const uint j = GTid.y + i;
+		const uint j = GTid.y + i + RADIUS;
 		const float4 avgMtl = unpack(g_avgMtlNrms[j].xy);
 		const float4 norm = unpack(g_avgMtlNrms[j].zw);
 

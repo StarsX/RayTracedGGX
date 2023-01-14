@@ -19,8 +19,6 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	if (normC.w <= 0.0 || g_txRoughMetal[DTid].y >= 1.0) return;
 
 	//const float depthC = g_txDepth[DTid];
-	const uint radius = RADIUS;
-	const uint sampleCount = radius * 2 + 1;
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
 	float3 mu = 0.0;
@@ -29,9 +27,10 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	const float depthC = 0.0, depth = 0.0;
 
 	[unroll]
-	for (uint i = 0; i < sampleCount; ++i)
+	for (int i = -RADIUS; i <= RADIUS; ++i)
 	{
-		const uint2 index = uint2(DTid.x + i - radius, DTid.y);
+		const uint2 index = uint2((int)DTid.x + i, DTid.y);
+
 		float4 norm = g_txNormal[index];
 		const float mtl = g_txRoughMetal[index].y;
 

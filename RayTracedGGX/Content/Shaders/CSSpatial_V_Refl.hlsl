@@ -25,29 +25,27 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	}
 
 	const float roughness = g_txRoughness[DTid];
-	const uint radius = RADIUS;
-	const uint sampleCount = radius * 2 + 1;
-
 	//const float depthC = g_txDepth[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
-	const float a = RoughnessSigma(roughness);
+	const float br = GaussianRadiusFromRoughness(roughness);
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
 	const float depthC = 0.0, depth = 0.0;
 
 	[unroll]
-	for (uint i = 0; i < sampleCount; ++i)
+	for (int i = -RADIUS; i <= RADIUS; ++i)
 	{
-		const uint2 index = uint2(DTid.x, DTid.y + i - radius);
+		const uint2 index = uint2(DTid.x, (int)DTid.y + i);
+
 		float4 norm = g_txNormal[index];
 		const float3 avg = g_txAverage[index];
 		//const float depth = g_txDepth[index];
 		const float rgh = g_txRoughness[index];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
-		const float w = ReflectionWeight(normC.xyz, norm, roughness, rgh, depthC, depth, radius, i, a);
+		const float w = ReflectionWeight(normC.xyz, norm, roughness, rgh, depthC, depth, i, br);
 		mu += avg * w;
 		wsum += w;
 	}

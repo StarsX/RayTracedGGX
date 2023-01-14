@@ -2,6 +2,8 @@
 // Copyright (c) XU, Tianchen. All rights reserved.
 //--------------------------------------------------------------------------------------
 
+#define PI 3.141592654
+
 static const float3 g_lumBase = { 0.25, 0.5, 0.25 };
 static const float g_gammaRefl = 0.15;
 static const float g_gammaDiff = 0.15;
@@ -44,17 +46,28 @@ float RoughnessWeight(float roughC, float rough, float sigmaMin, float sigmaMax)
 	return 1.0 - smoothstep(sigmaMin, sigmaMax, abs(rough - roughC));
 }
 
-float RoughnessSigma(float roughness)
+int GaussianRadiusFromRoughness(float roughness)
 {
-	return 320.0 * roughness * roughness;
+	return max(800.0 * roughness * roughness - 1.0, 0.0);
 }
 
-float Gaussian(float x, float m, float sigma)
+float GaussianSigmaFromRadius(int radius)
 {
-	const float r = x - m;
-	const float a = r * r / (sigma * sigma);
+	return (radius + 1) / sqrt(6.0);
+}
 
-	return exp(-0.5 * a);
+float Gaussian(float r, float sigma)
+{
+	const float a = r / sigma;
+
+	return exp(-0.5 * a * a);
+}
+
+float Gaussian(float r, int radius)
+{
+	const float sigma = GaussianSigmaFromRadius(radius);
+
+	return Gaussian(r, sigma);
 }
 
 float3 Denoise(float3 src, float3 mu, float roughness)

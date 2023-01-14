@@ -48,33 +48,32 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		g_renderTarget[DTid] = float4(src, 0.0);
 		return;
 	}
-	const uint radius = RADIUS;
-	loadSamples(DTid, GTid.y, radius);
+
+	loadSamples(DTid, GTid.y, RADIUS);
 	if (!vis)
 	{
 		g_renderTarget[DTid] = float4(src, 0.0);
 		return;
 	}
 
-	//const float depthC = g_depths[GTid.y + radius];
+	//const float depthC = g_depths[GTid.y + RADIUS];
 	const float roughness = g_txRoughness[DTid];
-	const uint sampleCount = radius * 2 + 1;
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
-	const float a = RoughnessSigma(roughness);
+	const float br = GaussianRadiusFromRoughness(roughness);
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
 	const float depthC = 0.0, depth = 0.0;
 
 	[unroll]
-	for (uint i = 0; i < sampleCount; ++i)
+	for (int i = -RADIUS; i <= RADIUS; ++i)
 	{
-		const uint j = GTid.y + i;
+		const uint j = GTid.y + i + RADIUS;
 		const float4 avgRgh = unpack(g_avgRghNrms[j].xy);
 		const float4 norm = unpack(g_avgRghNrms[j].zw);
 
-		const float w = ReflectionWeight(normC.xyz, norm, roughness, avgRgh.w, depthC, depth, radius, i, a);
+		const float w = ReflectionWeight(normC.xyz, norm, roughness, avgRgh.w, depthC, depth, i, br);
 		mu += avgRgh.xyz * w;
 		wsum += w;
 	}

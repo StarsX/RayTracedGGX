@@ -43,30 +43,28 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	float4 normC = g_txNormal[DTid];
 	const bool vis = normC.w > 0.0;
 	if (WaveActiveAllTrue(!vis)) return;
-	const uint radius = RADIUS;
-	loadSamples(DTid, GTid.x, radius);
+
+	loadSamples(DTid, GTid.x, RADIUS);
 	if (!vis) return;
 
 	const float roughness = g_txRoughness[DTid];
-	const uint sampleCount = radius * 2 + 1;
-
-	//const float depthC = g_depths[GTid.x + radius];
+	//const float depthC = g_depths[GTid.x + RADIUS];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
-	const float a = RoughnessSigma(roughness);
+	const float br = GaussianRadiusFromRoughness(roughness);
 	float3 mu = 0.0;
 	float wsum = 0.0;
 
 	const float depthC = 0.0, depth = 0.0;
 
 	[unroll]
-	for (uint i = 0; i < sampleCount; ++i)
+	for (int i = -RADIUS; i <= RADIUS; ++i)
 	{
-		const uint j = GTid.x + i;
+		const uint j = GTid.x + i + RADIUS;
 		const float4 srcRgh = unpack(g_srcRghNrms[j].xy);
 		const float4 norm = unpack(g_srcRghNrms[j].zw);
 
-		const float w = ReflectionWeight(normC.xyz, norm, roughness, srcRgh.w, depthC, depth, radius, i, a);
+		const float w = ReflectionWeight(normC.xyz, norm, roughness, srcRgh.w, depthC, depth, i, br);
 		mu += srcRgh.xyz * w;
 		wsum += w;
 	}
