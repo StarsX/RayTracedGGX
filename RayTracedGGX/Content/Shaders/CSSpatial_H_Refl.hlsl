@@ -18,11 +18,14 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	float4 normC = g_txNormal[DTid];
 	if (normC.w <= 0.0) return;
 
+	float2 imageSize;
+	g_renderTarget.GetDimensions(imageSize.x, imageSize.y);
+
 	const float roughness = g_txRoughness[DTid];
 	//const float depthC = g_txDepth[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 	
-	const float br = GaussianRadiusFromRoughness(roughness);
+	const float br = GaussianRadiusFromRoughness(roughness, imageSize);
 	float3 mu = 0.0;
 	float wsum = 0.0;
 

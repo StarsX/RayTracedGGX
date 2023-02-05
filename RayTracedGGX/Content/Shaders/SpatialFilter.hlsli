@@ -5,7 +5,7 @@
 #include "FilterCommon.hlsli"
 
 #define THREADS_PER_WAVE 32
-#define RADIUS 10
+#define RADIUS 16
 #define SAMPLE_COUNT (RADIUS * 2 + 1)
 #define SHARED_MEM_SIZE (THREADS_PER_WAVE + RADIUS * 2)
 

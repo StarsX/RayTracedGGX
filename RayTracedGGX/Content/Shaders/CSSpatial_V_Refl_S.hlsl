@@ -56,11 +56,14 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 		return;
 	}
 
+	float2 imageSize;
+	g_renderTarget.GetDimensions(imageSize.x, imageSize.y);
+
 	//const float depthC = g_depths[GTid.y + RADIUS];
 	const float roughness = g_txRoughness[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
-	const float br = GaussianRadiusFromRoughness(roughness);
+	const float br = GaussianRadiusFromRoughness(roughness, imageSize);
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 

@@ -414,8 +414,8 @@ void RayTracedGGX::ParseCommandLineArgs(wchar_t* argv[], int argc)
 
 	for (auto i = 1; i < argc; ++i)
 	{
-		if (_wcsnicmp(argv[i], L"-mesh", wcslen(argv[i])) == 0 ||
-			_wcsnicmp(argv[i], L"/mesh", wcslen(argv[i])) == 0)
+		if (wcsncmp(argv[i], L"-mesh", wcslen(argv[i])) == 0 ||
+			wcsncmp(argv[i], L"/mesh", wcslen(argv[i])) == 0)
 		{
 			if (i + 1 < argc)
 			{
@@ -423,14 +423,16 @@ void RayTracedGGX::ParseCommandLineArgs(wchar_t* argv[], int argc)
 				for (size_t j = 0; j < m_meshFileName.size(); ++j)
 					m_meshFileName[j] = static_cast<char>(argv[i][j]);
 			}
-			if (i + 1 < argc) i += swscanf_s(argv[i + 1], L"%f", &m_meshPosScale.x);
-			if (i + 1 < argc) i += swscanf_s(argv[i + 1], L"%f", &m_meshPosScale.y);
-			if (i + 1 < argc) i += swscanf_s(argv[i + 1], L"%f", &m_meshPosScale.z);
-			if (i + 1 < argc) i += swscanf_s(argv[i + 1], L"%f", &m_meshPosScale.w);
+			if (i + 1 < argc) m_meshPosScale.x = stof(argv[++i]);
+			if (i + 1 < argc) m_meshPosScale.y = stof(argv[++i]);
+			if (i + 1 < argc) m_meshPosScale.z = stof(argv[++i]);
+			if (i + 1 < argc) m_meshPosScale.w = stof(argv[++i]);
 		}
-		else if (_wcsnicmp(argv[i], L"-env", wcslen(argv[i])) == 0 ||
-			_wcsnicmp(argv[i], L"/env", wcslen(argv[i])) == 0)
-			m_envFileName = i + 1 < argc ? argv[++i] : m_envFileName;
+		else if (wcsncmp(argv[i], L"-env", wcslen(argv[i])) == 0 ||
+			wcsncmp(argv[i], L"/env", wcslen(argv[i])) == 0)
+		{
+			if (i + 1 < argc) m_envFileName = argv[++i];
+		}
 	}
 }
 

@@ -46,14 +46,14 @@ float RoughnessWeight(float roughC, float rough, float sigmaMin, float sigmaMax)
 	return 1.0 - smoothstep(sigmaMin, sigmaMax, abs(rough - roughC));
 }
 
-int GaussianRadiusFromRoughness(float roughness)
+int GaussianRadiusFromRoughness(float roughness, float2 viewport)
 {
-	return max(800.0 * roughness * roughness - 1.0, 0.0);
+	return clamp(0.1 * roughness * viewport.x, 0.0, viewport.y * 0.05);
 }
 
 float GaussianSigmaFromRadius(int radius)
 {
-	return (radius + 1) / sqrt(6.0);
+	return (radius + 1) / 3.0;
 }
 
 float Gaussian(float r, float sigma)
