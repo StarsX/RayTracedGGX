@@ -338,7 +338,7 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 		metallic = (max)(metallic - 0.25f, 0.0f);
 		m_rayTracer->SetMetallic(m_currentMesh, metallic);
 		break;
-	case VK_F1:
+	case VK_F11:
 		m_screenShot = 1;
 		break;
 	case 'V':
