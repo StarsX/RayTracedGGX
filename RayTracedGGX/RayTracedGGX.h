@@ -98,6 +98,9 @@ private:
 
 	XUSG::Semaphore m_semaphore;
 
+	// Screen-shot helper
+	XUSG::Buffer::uptr		m_readBuffer;
+
 	// Application state
 	uint8_t		m_asyncCompute;
 	uint32_t	m_currentMesh;
@@ -109,6 +112,9 @@ private:
 	// User camera interactions
 	bool m_tracking;
 	XMFLOAT2 m_mousePt;
+
+	// Screen-shot state
+	uint8_t		m_screenShot;
 
 	// User external settings
 	std::wstring m_envFileName;
@@ -124,6 +130,7 @@ private:
 	void PopulateImageCommandList(CommandType commandType);
 	void WaitForGpu();
 	void MoveToNextFrame();
+	void SaveImage(char const* fileName, XUSG::Buffer* imageBuffer, uint32_t w, uint32_t h, uint8_t comp = 3);
 	double CalculateFrameStats(float* fTimeStep = nullptr);
 
 	// Ray tracing

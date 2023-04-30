@@ -10,6 +10,7 @@
 //*********************************************************
 
 #include "RayTracedGGX.h"
+#include "stb_image_write.h"
 
 using namespace std;
 using namespace XUSG;
@@ -337,6 +338,9 @@ void RayTracedGGX::OnKeyUp(uint8_t key)
 		metallic = (max)(metallic - 0.25f, 0.0f);
 		m_rayTracer->SetMetallic(m_currentMesh, metallic);
 		break;
+	case VK_F1:
+		m_screenShot = 1;
+		break;
 	case 'V':
 		m_useSharedMem = !m_useSharedMem;
 		break;
@@ -462,12 +466,21 @@ void RayTracedGGX::PopulateCommandList()
 	auto numBarriers = 0u;
 	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
 
-	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
-	m_denoiser->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
+	const auto pRenderTarget = m_renderTargets[m_frameIndex].get();
+	numBarriers = pRenderTarget->SetBarrier(barriers, ResourceState::RENDER_TARGET);
+	m_denoiser->ToneMap(pCommandList, pRenderTarget->GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
-	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::PRESENT);
+	numBarriers = pRenderTarget->SetBarrier(barriers, ResourceState::PRESENT);
 	pCommandList->Barrier(numBarriers, barriers);
+
+	// Screen-shot helper
+	if (m_screenShot == 1)
+	{
+		if (!m_readBuffer) m_readBuffer = Buffer::MakeUnique();
+		pRenderTarget->ReadBack(pCommandList, m_readBuffer.get());
+		m_screenShot = 2;
+	}
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
@@ -567,12 +580,21 @@ void RayTracedGGX::PopulateImageCommandList(CommandType commandType)
 	auto numBarriers = 0u;
 	m_denoiser->Denoise(pCommandList, numBarriers, barriers, m_useSharedMem);
 
-	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::RENDER_TARGET);
-	m_denoiser->ToneMap(pCommandList, m_renderTargets[m_frameIndex]->GetRTV(), numBarriers, barriers);
+	const auto pRenderTarget = m_renderTargets[m_frameIndex].get();
+	numBarriers = pRenderTarget->SetBarrier(barriers, ResourceState::RENDER_TARGET);
+	m_denoiser->ToneMap(pCommandList, pRenderTarget->GetRTV(), numBarriers, barriers);
 
 	// Indicate that the back buffer will now be used to present.
-	numBarriers = m_renderTargets[m_frameIndex]->SetBarrier(barriers, ResourceState::PRESENT);
+	numBarriers = pRenderTarget->SetBarrier(barriers, ResourceState::PRESENT);
 	pCommandList->Barrier(numBarriers, barriers);
+
+	// Screen-shot helper
+	if (m_screenShot == 1)
+	{
+		if (!m_readBuffer) m_readBuffer = Buffer::MakeUnique();
+		pRenderTarget->ReadBack(pCommandList, m_readBuffer.get());
+		m_screenShot = 2;
+	}
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }
@@ -607,6 +629,37 @@ void RayTracedGGX::MoveToNextFrame()
 
 	// Set the fence value for the next frame.
 	m_fenceValues[m_frameIndex] = currentFenceValue + 1;
+
+	// Screen-shot helper
+	if (m_screenShot)
+	{
+		if (m_screenShot > FrameCount)
+		{
+			char timeStr[15];
+			tm dateTime;
+			const auto now = time(nullptr);
+			if (!localtime_s(&dateTime, &now) && strftime(timeStr, sizeof(timeStr), "%Y%m%d%H%M%S", &dateTime))
+				SaveImage((string("RayTracedGGX_") + timeStr + ".png").c_str(), m_readBuffer.get(), m_width, m_height);
+			m_screenShot = 0;
+		}
+		else ++m_screenShot;
+	}
+}
+
+void RayTracedGGX::SaveImage(char const* fileName, Buffer* imageBuffer, uint32_t w, uint32_t h, uint8_t comp)
+{
+	assert(comp == 3 || comp == 4);
+	const auto pData = static_cast<uint8_t*>(imageBuffer->Map());
+
+	//stbi_write_png_compression_level = 1024;
+	vector<uint8_t> imageData(comp * w * h);
+	for (auto i = 0u; i < w * h; ++i)
+		for (uint8_t j = 0; j < comp; ++j)
+			imageData[comp * i + j] = pData[4 * i + j];
+
+	stbi_write_png(fileName, w, h, comp, imageData.data(), 0);
+
+	m_readBuffer->Unmap();
 }
 
 double RayTracedGGX::CalculateFrameStats(float* pTimeStep)
@@ -639,6 +692,7 @@ double RayTracedGGX::CalculateFrameStats(float* pTimeStep)
 		windowText << L"    [A] " << (m_asyncCompute ? L"Async compute" : L"Single command list");
 		windowText << L"    [\x2190][\x2192] Current mesh: " << meshNames[m_currentMesh];
 		windowText << L"    [\x2191][\x2193] Metallic: " << m_metallics[m_currentMesh];
+		windowText << L"    [F11] screen shot";
 		SetCustomWindowText(windowText.str().c_str());
 	}
 
