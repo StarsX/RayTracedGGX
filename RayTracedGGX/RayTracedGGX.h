@@ -99,7 +99,8 @@ private:
 	XUSG::Semaphore m_semaphore;
 
 	// Screen-shot helper
-	XUSG::Buffer::uptr		m_readBuffer;
+	XUSG::Buffer::uptr	m_readBuffer;
+	uint32_t			m_rowPitch;
 
 	// Application state
 	uint8_t		m_asyncCompute;
@@ -113,13 +114,13 @@ private:
 	bool m_tracking;
 	XMFLOAT2 m_mousePt;
 
-	// Screen-shot state
-	uint8_t		m_screenShot;
-
 	// User external settings
 	std::wstring m_envFileName;
 	std::string m_meshFileName;
 	XMFLOAT4 m_meshPosScale;
+
+	// Screen-shot state
+	uint8_t m_screenShot;
 
 	void LoadPipeline();
 	void LoadAssets();
@@ -130,7 +131,8 @@ private:
 	void PopulateImageCommandList(CommandType commandType);
 	void WaitForGpu();
 	void MoveToNextFrame();
-	void SaveImage(char const* fileName, XUSG::Buffer* imageBuffer, uint32_t w, uint32_t h, uint8_t comp = 3);
+	void SaveImage(char const* fileName, XUSG::Buffer* imageBuffer,
+		uint32_t w, uint32_t h, uint32_t rowPitch, uint8_t comp = 3);
 	double CalculateFrameStats(float* fTimeStep = nullptr);
 
 	// Ray tracing
