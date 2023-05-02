@@ -90,6 +90,10 @@ private:
 	XMFLOAT3	m_focusPt;
 	XMFLOAT3	m_eyePt;
 
+	// Screen-shot helper
+	XUSG::Buffer::uptr	m_readBuffer;
+	uint32_t			m_rowPitch;
+
 	// Synchronization objects.
 	uint8_t		m_frameIndex;
 	HANDLE		m_fenceEvent;
@@ -97,10 +101,6 @@ private:
 	uint64_t	m_fenceValues[FrameCount];
 
 	XUSG::Semaphore m_semaphore;
-
-	// Screen-shot helper
-	XUSG::Buffer::uptr	m_readBuffer;
-	uint32_t			m_rowPitch;
 
 	// Application state
 	uint8_t		m_asyncCompute;
