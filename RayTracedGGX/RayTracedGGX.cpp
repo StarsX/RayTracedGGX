@@ -35,7 +35,8 @@ RayTracedGGX::RayTracedGGX(uint32_t width, uint32_t height, std::wstring name) :
 	m_tracking(false),
 	m_meshFileName("Assets/dragon.obj"),
 	m_envFileName(L"Assets/rnl_cross.dds"),
-	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f)
+	m_meshPosScale(0.0f, 0.0f, 0.0f, 1.0f),
+	m_screenShot(0)
 {
 #if defined (_DEBUG)
 	_CrtSetDbgFlag(_CRTDBG_ALLOC_MEM_DF | _CRTDBG_LEAK_CHECK_DF);
