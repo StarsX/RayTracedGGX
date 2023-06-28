@@ -128,7 +128,7 @@ protected:
 	DirectX::XMFLOAT4X4 m_worlds[NUM_MESH];
 	DirectX::XMFLOAT4X4 m_worldViewProjs[NUM_MESH];
 
-	XUSG::RayTracing::BottomLevelAS::uptr m_bottomLevelASs[NUM_MESH];
+	XUSG::RayTracing::BottomLevelAS::uptr m_bottomLevelASes[NUM_MESH];
 	XUSG::RayTracing::TopLevelAS::uptr m_topLevelAS;
 
 	const XUSG::InputLayout*	m_pInputLayout;
@@ -168,7 +168,7 @@ protected:
 	XUSG::RayTracing::ShaderTable::uptr	m_rayGenShaderTables[FrameCount];
 
 	XUSG::ShaderLib::sptr				m_shaderLib;
-	XUSG::RayTracing::PipelineLib::uptr	m_rayTracingPipelineCache;
+	XUSG::RayTracing::PipelineLib::uptr	m_rayTracingPipelineLib;
 	XUSG::Graphics::PipelineLib::uptr	m_graphicsPipelineLib;
 	XUSG::Compute::PipelineLib::sptr	m_computePipelineLib;
 	XUSG::PipelineLayoutLib::sptr		m_pipelineLayoutLib;

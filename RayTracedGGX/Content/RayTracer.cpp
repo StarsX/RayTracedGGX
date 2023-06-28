@@ -73,7 +73,7 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTabl
 	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale, uint8_t maxGBufferMips)
 {
 	const auto pDevice = pCommandList->GetRTDevice();
-	m_rayTracingPipelineCache = RayTracing::PipelineLib::MakeUnique(pDevice);
+	m_rayTracingPipelineLib = RayTracing::PipelineLib::MakeUnique(pDevice);
 	m_graphicsPipelineLib = Graphics::PipelineLib::MakeUnique(pDevice);
 	m_computePipelineLib = Compute::PipelineLib::MakeShared(pDevice);
 	m_pipelineLayoutLib = PipelineLayoutLib::MakeShared(pDevice);
@@ -253,7 +253,7 @@ void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex
 	rayTrace(pCommandList, frameIndex);
 
 	ResourceBarrier barriers[5];
-	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ);
+	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ | ResourceState::NON_PIXEL_SHADER_RESOURCE);
 	for (uint8_t i = 0; i < VELOCITY; ++i)
 		numBarriers = m_gbuffers[i]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
@@ -270,12 +270,12 @@ void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCom
 		reinterpret_cast<float*>(&m_worlds[MODEL_OBJ])
 	};
 	const BottomLevelAS* pBottomLevelASs[NUM_MESH];
-	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASs[i].get();
+	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASes[i].get();
 	TopLevelAS::SetInstances(pCommandList->GetRTDevice(), m_instances[frameIndex].get(), NUM_MESH, pBottomLevelASs, transforms);
 
 	// Update top level AS
 	const auto& descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
-	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorHeap, true);
+	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorHeap, m_topLevelAS.get());
 }
 
 void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
@@ -283,13 +283,15 @@ void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t 
 	visibility(pCommandList, frameIndex);
 
 	// Set barriers
-	ResourceBarrier barriers[7];
+	ResourceBarrier barriers[8];
 	auto numBarriers = m_visBuffer->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 	for (auto& outputView : m_outputViews)
 		numBarriers = outputView->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers);
 	for (auto& gbuffer : m_gbuffers)
 		numBarriers = gbuffer->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers, 0);
+	numBarriers = m_sphericalHarmonics->GetSHCoefficients()->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
 	// numBarriers = m_depth->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	barriers[numBarriers++] = { m_topLevelAS->GetResource().get(), ResourceState::UNORDERED_ACCESS, ResourceState::UNORDERED_ACCESS };
 	pCommandList->Barrier(numBarriers, barriers);
 }
 
@@ -541,7 +543,7 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 			1, reinterpret_cast<const void**>(&RaygenShaderName));
 		state->SetGlobalPipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 		state->SetMaxRecursionDepth(1);
-		XUSG_X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(m_rayTracingPipelineCache.get(), L"Raytracing"), false);
+		XUSG_X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(m_rayTracingPipelineLib.get(), L"Raytracing"), false);
 	}
 
 	return true;
@@ -549,13 +551,13 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 
 bool RayTracer::createDescriptorTables()
 {
-	//m_descriptorTableLib.AllocateDescriptorPool(CBV_SRV_UAV_POOL, NumUAVs + NUM_MESH * 2);
+	m_descriptorTableLib->AllocateDescriptorHeap(CBV_SRV_UAV_HEAP, 128);
 
 	// Acceleration structure UAVs
 	{
 		Descriptor descriptors[NUM_MESH + 1];
-		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_bottomLevelASs[i]->GetResult()->GetUAV();
-		descriptors[NUM_MESH] = m_topLevelAS->GetResult()->GetUAV();
+		for (auto i = 0u; i < NUM_MESH; ++i) descriptors[i] = m_bottomLevelASes[i]->GetResource()->GetUAV();
+		descriptors[NUM_MESH] = m_topLevelAS->GetResource()->GetUAV();
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, static_cast<uint32_t>(size(descriptors)), descriptors);
 		const auto asTable = descriptorTable->GetCbvSrvUavTable(m_descriptorTableLib.get());
@@ -646,8 +648,8 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	// Prebuild
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
-		m_bottomLevelASs[i] = BottomLevelAS::MakeUnique();
-		XUSG_N_RETURN(m_bottomLevelASs[i]->PreBuild(pDevice, 1, pGeometries[i], bottomLevelASIndex + i), false);
+		m_bottomLevelASes[i] = BottomLevelAS::MakeUnique();
+		XUSG_N_RETURN(m_bottomLevelASes[i]->PreBuild(pDevice, 1, pGeometries[i], bottomLevelASIndex + i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
 	XUSG_N_RETURN(m_topLevelAS->PreBuild(pDevice, NUM_MESH, topLevelASIndex,
@@ -655,7 +657,7 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 
 	// Create scratch buffer
 	auto scratchSize = m_topLevelAS->GetScratchDataMaxSize();
-	for (const auto& bottomLevelAS : m_bottomLevelASs)
+	for (const auto& bottomLevelAS : m_bottomLevelASes)
 		scratchSize = (max)(bottomLevelAS->GetScratchDataMaxSize(), scratchSize);
 	m_scratch = Resource::MakeUnique();
 	XUSG_N_RETURN(AccelerationStructure::AllocateUAVBuffer(pDevice, m_scratch.get(), scratchSize), false);
@@ -677,15 +679,20 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	for (auto& instances : m_instances) instances = Resource::MakeUnique();
 	auto& instances = m_instances[FrameCount - 1];
 	const BottomLevelAS* ppBottomLevelASs[NUM_MESH];
-	for (auto i = 0u; i < NUM_MESH; ++i) ppBottomLevelASs[i] = m_bottomLevelASs[i].get();
+	for (auto i = 0u; i < NUM_MESH; ++i) ppBottomLevelASs[i] = m_bottomLevelASes[i].get();
 	TopLevelAS::SetInstances(pDevice, instances.get(), NUM_MESH, ppBottomLevelASs, transforms);
 
 	// Build bottom level ASs
-	for (auto& bottomLevelAS : m_bottomLevelASs)
+	const ResourceBarrier barrier = { nullptr, ResourceState::UNORDERED_ACCESS };
+	for (auto& bottomLevelAS : m_bottomLevelASes)
+	{
 		bottomLevelAS->Build(pCommandList, m_scratch.get(), descriptorHeap);
+		pCommandList->Barrier(1, &barrier);
+	}
 
 	// Build top level AS
 	m_topLevelAS->Build(pCommandList, m_scratch.get(), instances.get(), descriptorHeap);
+	pCommandList->Barrier(1, &barrier);
 
 	return true;
 }
