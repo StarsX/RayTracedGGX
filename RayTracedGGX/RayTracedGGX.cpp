@@ -150,6 +150,7 @@ void RayTracedGGX::LoadPipeline()
 
 	// Create descriptor-table lib.
 	m_descriptorTableLib = DescriptorTableLib::MakeShared(m_device.get(), L"DescriptorTableLib");
+	m_descriptorTableLib->AllocateDescriptorHeap(CBV_SRV_UAV_HEAP, 270);
 }
 
 // Load the sample assets.
@@ -460,7 +461,7 @@ void RayTracedGGX::PopulateCommandList()
 	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
 	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
-	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
+	m_rayTracer->UpdateAccelerationStructure(pCommandList, m_frameIndex);
 	m_rayTracer->Render(pCommandList, m_frameIndex);
 
 	ResourceBarrier barriers[3];
@@ -505,7 +506,7 @@ void RayTracedGGX::PopulateUpdateASCommandList(CommandType commandType)
 	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
 	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
-	m_rayTracer->UpdateAccelerationStructures(pCommandList, m_frameIndex);
+	m_rayTracer->UpdateAccelerationStructure(pCommandList, m_frameIndex);
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }

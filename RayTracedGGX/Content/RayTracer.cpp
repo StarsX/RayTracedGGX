@@ -261,7 +261,7 @@ void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex
 	pCommandList->Barrier(numBarriers, barriers);
 }
 
-void RayTracer::UpdateAccelerationStructures(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+void RayTracer::UpdateAccelerationStructure(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Set instance
 	float* const transforms[] =
@@ -551,8 +551,6 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 
 bool RayTracer::createDescriptorTables()
 {
-	m_descriptorTableLib->AllocateDescriptorHeap(CBV_SRV_UAV_HEAP, 128);
-
 	// Acceleration structure UAVs
 	{
 		Descriptor descriptors[NUM_MESH + 1];

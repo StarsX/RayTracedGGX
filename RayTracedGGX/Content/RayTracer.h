@@ -32,7 +32,7 @@ public:
 		DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
 	void TransformSH(XUSG::CommandList* pCommandList);
 	void Render(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-	void UpdateAccelerationStructures(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void UpdateAccelerationStructure(const XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void RenderVisibility(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void RayTrace(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
