@@ -532,15 +532,14 @@ bool RayTracer::createPipelines(Format rtFormat, Format dsFormat)
 	// Ray tracing pass
 	{
 		XUSG_N_RETURN(m_shaderLib->CreateShader(Shader::Stage::CS, CS_RAY_TRACING, L"RayTracing.cso"), false);
-		const void* shaders[] = { RaygenShaderName, ClosestHitShaderNames[0], ClosestHitShaderNames[1], MissShaderName };
+		const wchar_t* shaderNames[] = { RaygenShaderName, ClosestHitShaderNames[0], ClosestHitShaderNames[1], MissShaderName };
 
 		const auto state = RayTracing::State::MakeUnique();
-		state->SetShaderLibrary(0, m_shaderLib->GetShader(Shader::Stage::CS, CS_RAY_TRACING), static_cast<uint32_t>(size(shaders)), shaders);
+		state->SetShaderLibrary(0, m_shaderLib->GetShader(Shader::Stage::CS, CS_RAY_TRACING), static_cast<uint32_t>(size(shaderNames)), shaderNames);
 		state->SetHitGroup(HIT_GROUP_REFLECTION, HitGroupNames[HIT_GROUP_REFLECTION], ClosestHitShaderNames[HIT_GROUP_REFLECTION]);
 		state->SetHitGroup(HIT_GROUP_DIFFUSE, HitGroupNames[HIT_GROUP_DIFFUSE], ClosestHitShaderNames[HIT_GROUP_DIFFUSE]);
 		state->SetShaderConfig(sizeof(float[4]), sizeof(float[2]));
-		state->SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT],
-			1, reinterpret_cast<const void**>(&RaygenShaderName));
+		state->SetLocalPipelineLayout(0, m_pipelineLayouts[RAY_GEN_LAYOUT], 1, &RaygenShaderName);
 		state->SetGlobalPipelineLayout(m_pipelineLayouts[RT_GLOBAL_LAYOUT]);
 		state->SetMaxRecursionDepth(1);
 		XUSG_X_RETURN(m_pipelines[RAY_TRACING], state->GetPipeline(m_rayTracingPipelineLib.get(), L"Raytracing"), false);
@@ -785,5 +784,5 @@ void RayTracer::rayTrace(const RayTracing::CommandList* pCommandList, uint8_t fr
 
 	// Fallback layer has no depth
 	pCommandList->DispatchRays(m_pipelines[RAY_TRACING], m_viewport.x, m_viewport.y, 1,
-		m_hitGroupShaderTable.get(), m_missShaderTable.get(), m_rayGenShaderTables[frameIndex].get());
+		m_rayGenShaderTables[frameIndex].get(), m_hitGroupShaderTable.get(), m_missShaderTable.get());
 }
