@@ -60,7 +60,7 @@ float ReflectionWeight(float3 normC, float4 norm, float rghC, float rgh,
 	float w = norm.w > 0.0 ? 1.0 : 0.0;
 	w *= Gaussian(radius, blurRadius);
 	w *= NormalWeight(normC, norm.xyz, 512.0);
-	//w *= Gaussian(depthC, depth, SIGMA_Z);
+	w *= DepthWeight(depthC, depth, SIGMA_Z);
 	w *= RoughnessWeight(rghC, rgh, 0.0, 0.5);
 
 	return w;
@@ -69,7 +69,7 @@ float ReflectionWeight(float3 normC, float4 norm, float rghC, float rgh,
 float DiffuseWeight(float3 normC, float3 norm, float depthC, float depth)
 {
 	float w = NormalWeight(normC, norm, 32.0);
-	//w *= Gaussian(depthC, depth, SIGMA_Z);
+	w *= DepthWeight(depthC, depth, SIGMA_Z);
 
 	return w;
 }

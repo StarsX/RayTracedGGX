@@ -8,13 +8,13 @@
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	g_renderTarget;
-Texture2D<float3>	g_txAverage;
-Texture2D			g_txNormal;
-Texture2D<float>	g_txRoughness;
-//Texture2D<float>	g_txDepth : register (t4);
+Texture2D<float3>	g_txAverage		: register (t1);
+Texture2D			g_txNormal		: register (t2);
+Texture2D<float>	g_txRoughness	: register (t3);
+Texture2D<float>	g_txDepth		: register (t4);
 
 groupshared uint4 g_avgRghNrms[SHARED_MEM_SIZE];
-//groupshared float g_depths[SHARED_MEM_SIZE];
+groupshared float g_depths[SHARED_MEM_SIZE];
 
 void loadSamples(uint2 dTid, uint gTid, uint radius)
 {
@@ -27,11 +27,11 @@ void loadSamples(uint2 dTid, uint gTid, uint radius)
 		const float3 avg = g_txAverage[dTid];
 		float4 norm = g_txNormal[dTid];
 		const float rgh = g_txRoughness[dTid];
-		//const float depth = g_txDepth[dTid];
+		const float depth = g_txDepth[dTid];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
 		g_avgRghNrms[gTid] = uint4(pack(float4(avg, rgh)), pack(norm));
-		//g_depths[gTid] = depth;
+		g_depths[gTid] = depth;
 	}
 
 	GroupMemoryBarrierWithGroupSync();
@@ -59,7 +59,7 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	float2 imageSize;
 	g_renderTarget.GetDimensions(imageSize.x, imageSize.y);
 
-	//const float depthC = g_depths[GTid.y + RADIUS];
+	const float depthC = g_depths[GTid.y + RADIUS];
 	const float roughness = g_txRoughness[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
@@ -67,14 +67,13 @@ void main(uint2 DTid : SV_DispatchThreadID, uint2 GTid : SV_GroupThreadID)
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
 
-	const float depthC = 0.0, depth = 0.0;
-
 	[unroll]
 	for (int i = -RADIUS; i <= RADIUS; ++i)
 	{
 		const uint j = GTid.y + i + RADIUS;
 		const float4 avgRgh = unpack(g_avgRghNrms[j].xy);
 		const float4 norm = unpack(g_avgRghNrms[j].zw);
+		const float depth = g_depths[j];
 
 		const float w = ReflectionWeight(normC.xyz, norm, roughness, avgRgh.w, depthC, depth, i, br);
 		mu += avgRgh.xyz * w;

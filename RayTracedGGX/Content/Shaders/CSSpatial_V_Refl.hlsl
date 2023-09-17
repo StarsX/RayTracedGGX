@@ -8,10 +8,10 @@
 // Textures
 //--------------------------------------------------------------------------------------
 RWTexture2D<float4>	g_renderTarget;
-Texture2D<float3>	g_txAverage;
-Texture2D			g_txNormal;
-Texture2D<float>	g_txRoughness;
-//Texture2D<float>	g_txDepth : register (t4);
+Texture2D<float3>	g_txAverage		: register (t1);
+Texture2D			g_txNormal		: register (t2);
+Texture2D<float>	g_txRoughness	: register (t3);
+Texture2D<float>	g_txDepth		: register (t4);
 
 [numthreads(8, 8, 1)]
 void main(uint2 DTid : SV_DispatchThreadID)
@@ -28,14 +28,12 @@ void main(uint2 DTid : SV_DispatchThreadID)
 	g_renderTarget.GetDimensions(imageSize.x, imageSize.y);
 
 	const float roughness = g_txRoughness[DTid];
-	//const float depthC = g_txDepth[DTid];
+	const float depthC = g_txDepth[DTid];
 	normC.xyz = normC.xyz * 2.0 - 1.0;
 
 	const float br = GaussianRadiusFromRoughness(roughness, imageSize);
 	float3 mu = 0.0, m2 = 0.0;
 	float wsum = 0.0;
-
-	const float depthC = 0.0, depth = 0.0;
 
 	[unroll]
 	for (int i = -RADIUS; i <= RADIUS; ++i)
@@ -44,7 +42,7 @@ void main(uint2 DTid : SV_DispatchThreadID)
 
 		float4 norm = g_txNormal[index];
 		const float3 avg = g_txAverage[index];
-		//const float depth = g_txDepth[index];
+		const float depth = g_txDepth[index];
 		const float rgh = g_txRoughness[index];
 
 		norm.xyz = norm.xyz * 2.0 - 1.0;
