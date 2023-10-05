@@ -264,10 +264,10 @@ void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex
 void RayTracer::UpdateAccelerationStructure(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Set instance
-	float* const transforms[] =
+	const float* const transforms[] =
 	{
-		reinterpret_cast<float*>(&m_worlds[GROUND]),
-		reinterpret_cast<float*>(&m_worlds[MODEL_OBJ])
+		reinterpret_cast<const float*>(&m_worlds[GROUND]),
+		reinterpret_cast<const float*>(&m_worlds[MODEL_OBJ])
 	};
 	const BottomLevelAS* pBottomLevelASs[NUM_MESH];
 	for (auto i = 0u; i < NUM_MESH; ++i) pBottomLevelASs[i] = m_bottomLevelASes[i].get();
@@ -668,10 +668,10 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	XMStoreFloat3x4(&matrices[GROUND], (XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f)));
 	XMStoreFloat3x4(&matrices[MODEL_OBJ], (XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
 		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)));
-	float* const transforms[] =
+	const float* const transforms[] =
 	{
-		reinterpret_cast<float*>(&matrices[GROUND]),
-		reinterpret_cast<float*>(&matrices[MODEL_OBJ])
+		reinterpret_cast<const float*>(&matrices[GROUND]),
+		reinterpret_cast<const float*>(&matrices[MODEL_OBJ])
 	};
 	for (auto& instances : m_instances) instances = Resource::MakeUnique();
 	auto& instances = m_instances[FrameCount - 1];
