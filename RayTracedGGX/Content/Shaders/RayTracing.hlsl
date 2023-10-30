@@ -86,32 +86,6 @@ StructuredBuffer<Vertex>	g_vertexBuffers[]	: register (t0, space2);
 //--------------------------------------------------------------------------------------
 SamplerState g_sampler : register (s0);
 
-#if 0
-static const uint g_waveXSize = 8;
-
-float3 dFdx(float3 f)
-{
-	const uint laneIdx = WaveGetLaneIndex();
-	const uint2 lanePos = { laneIdx % g_waveXSize, laneIdx / g_waveXSize };
-	const uint quadPosX = lanePos.x >> 1;
-	const float3 f0 = WaveReadLaneAt(f, lanePos.y * g_waveXSize + (quadPosX << 1));
-	const float3 f1 = WaveReadLaneAt(f, lanePos.y * g_waveXSize + (quadPosX << 1) + 1);
-
-	return f1 - f0;
-}
-
-float3 dFdy(float3 f)
-{
-	const uint laneIdx = WaveGetLaneIndex();
-	const uint2 lanePos = { laneIdx % g_waveXSize, laneIdx / g_waveXSize };
-	const uint quadPosY = lanePos.y >> 1;
-	const float3 f0 = WaveReadLaneAt(f, (quadPosY << 1) * g_waveXSize + lanePos.x);
-	const float3 f1 = WaveReadLaneAt(f, ((quadPosY << 1) + 1) * g_waveXSize + lanePos.x);
-
-	return f1 - f0;
-}
-#endif
-
 //--------------------------------------------------------------------------------------
 // Compute direction in local space
 //--------------------------------------------------------------------------------------
