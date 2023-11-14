@@ -160,7 +160,7 @@ void RayTracedGGX::LoadAssets()
 	m_commandLists[UNIVERSAL] = RayTracing::CommandList::MakeUnique();
 	const auto& pCommandList = m_commandLists[UNIVERSAL].get();
 	XUSG_N_RETURN(pCommandList->Create(m_device.get(), 0, CommandListType::DIRECT,
-		m_commandAllocators[ALLOCATOR_GEOMETRY][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
+		m_commandAllocators[ALLOCATOR_GRAPHICS][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
 
 	{
 		m_commandLists[COMPUTE] = RayTracing::CommandList::MakeUnique();
@@ -176,18 +176,12 @@ void RayTracedGGX::LoadAssets()
 
 	// Create ray tracer
 	vector<Resource::uptr> uploaders(0);
+	RayTracing::BottomLevelAS::uptr bottomLevelASes[RayTracer::NUM_MESH];
 	{
 		GeometryBuffer geometries[RayTracer::NUM_MESH];
 		m_rayTracer = make_unique<RayTracer>();
 		XUSG_N_RETURN(m_rayTracer->Init(pCommandList, m_descriptorTableLib, m_width, m_height, uploaders, geometries,
-			m_meshFileName.c_str(), m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale), ThrowIfFailed(E_FAIL));
-	}
-
-	// Create denoiser
-	{
-		m_denoiser = make_unique<Denoiser>();
-		XUSG_N_RETURN(m_denoiser->Init(pCommandList, m_descriptorTableLib, m_width, m_height, Format::R8G8B8A8_UNORM,
-			m_rayTracer->GetRayTracingOutputs(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()),
+			bottomLevelASes, m_meshFileName.c_str(), m_envFileName.c_str(), Format::R8G8B8A8_UNORM, m_meshPosScale),
 			ThrowIfFailed(E_FAIL));
 	}
 
@@ -212,6 +206,26 @@ void RayTracedGGX::LoadAssets()
 		// complete before continuing.
 		WaitForGpu();
 	}
+
+	XUSG_N_RETURN(pCommandList->Reset(m_commandAllocators[ALLOCATOR_GRAPHICS][m_frameIndex].get(), nullptr), ThrowIfFailed(E_FAIL));
+	XUSG_N_RETURN(m_rayTracer->BuildAccelerationStructures(pCommandList, bottomLevelASes), ThrowIfFailed(E_FAIL));
+
+	// Create denoiser
+	{
+		m_denoiser = make_unique<Denoiser>();
+		XUSG_N_RETURN(m_denoiser->Init(pCommandList, m_descriptorTableLib, m_width, m_height, Format::R8G8B8A8_UNORM,
+			m_rayTracer->GetRayTracingOutputs(), m_rayTracer->GetGBuffers(), m_rayTracer->GetDepth()),
+			ThrowIfFailed(E_FAIL));
+	}
+
+	// Close the command list and execute it to begin the initial GPU setup.
+	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
+	m_commandQueues[UNIVERSAL]->ExecuteCommandList(pCommandList);
+
+	// Wait for the command list to execute; we are reusing the same command 
+	// list in our main loop but for now, we just want to wait for setup to 
+	// complete before continuing.
+	WaitForGpu();
 
 	if (!m_semaphore.Fence)
 	{

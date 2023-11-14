@@ -61,7 +61,7 @@ RayTracer::RayTracer() :
 	m_instances()
 {
 	m_shaderLib = ShaderLib::MakeShared();
-	AccelerationStructure::SetUAVCount(NUM_HIT_GROUP + NUM_GBUFFER + NUM_MESH + 1);
+	AccelerationStructure::SetUAVCount(NUM_MESH + 1);
 }
 
 RayTracer::~RayTracer()
@@ -69,8 +69,9 @@ RayTracer::~RayTracer()
 }
 
 bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTableLib::sptr& descriptorTableLib,
-	uint32_t width, uint32_t height, vector<Resource::uptr>& uploaders, GeometryBuffer* pGeometries, const char* fileName,
-	const wchar_t* envFileName, Format rtFormat, const XMFLOAT4& posScale, uint8_t maxGBufferMips)
+	uint32_t width, uint32_t height, vector<Resource::uptr>& uploaders, GeometryBuffer* pGeometries,
+	RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH], const char* fileName, const wchar_t* envFileName,
+	Format rtFormat, const XMFLOAT4& posScale, uint8_t maxGBufferMips)
 {
 	const auto pDevice = pCommandList->GetRTDevice();
 	m_rayTracingPipelineLib = RayTracing::PipelineLib::MakeUnique(pDevice);
@@ -161,8 +162,59 @@ bool RayTracer::Init(RayTracing::CommandList* pCommandList, const DescriptorTabl
 	XUSG_N_RETURN(createPipelines(rtFormat, dsFormat), false);
 
 	// Build acceleration structures
-	XUSG_N_RETURN(buildAccelerationStructures(pCommandList, pGeometries), false);
+	XUSG_N_RETURN(buildAccelerationStructures(pCommandList, pGeometries, bottomLevelASes), false);
 	XUSG_N_RETURN(buildShaderTables(pDevice), false);
+
+	return true;
+}
+
+bool RayTracer::BuildAccelerationStructures(RayTracing::CommandList* pCommandList,
+	const RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH])
+{
+	const auto pDevice = pCommandList->GetRTDevice();
+
+	// Create compacted bottom-level ASes
+	for (auto i = 0u; i < NUM_MESH; ++i)
+	{
+		m_bottomLevelASes[i] = BottomLevelAS::MakeUnique();
+		const auto postbuildInfo = bottomLevelASes[i]->GetPostbuildInfo();
+		const auto pPostbuildInfo = static_cast<const uint64_t*>(postbuildInfo->Map(nullptr));
+		m_bottomLevelASes[i]->Allocate(pDevice, i, static_cast<size_t>(*pPostbuildInfo));
+		postbuildInfo->Unmap();
+	}
+
+	// Get descriptor heap and create descriptor tables
+	XUSG_N_RETURN(createDescriptorTables(), false);
+	const auto& descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
+
+	// Set instance
+	XMFLOAT3X4 matrices[NUM_MESH];
+	XMStoreFloat3x4(&matrices[GROUND], (XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f)));
+	XMStoreFloat3x4(&matrices[MODEL_OBJ], (XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
+		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)));
+	const float* const transforms[] =
+	{
+		reinterpret_cast<const float*>(&matrices[GROUND]),
+		reinterpret_cast<const float*>(&matrices[MODEL_OBJ])
+	};
+	for (auto& instances : m_instances) instances = Resource::MakeUnique();
+	auto& instances = m_instances[FrameCount - 1];
+	const BottomLevelAS* ppBottomLevelASs[NUM_MESH];
+	for (auto i = 0u; i < NUM_MESH; ++i) ppBottomLevelASs[i] = m_bottomLevelASes[i].get();
+	TopLevelAS::SetInstances(pDevice, instances.get(), NUM_MESH, ppBottomLevelASs, transforms);
+
+	// Compact bottom-level ASes
+	for (auto i = 0u; i < NUM_MESH; ++i)
+	{
+		pCommandList->CopyRaytracingAccelerationStructure(m_bottomLevelASes[i].get(),
+			bottomLevelASes[i].get(), AccelerationStructureCopyMode::COMPACT);
+	}
+
+	const ResourceBarrier barrier = { nullptr, ResourceState::UNORDERED_ACCESS };
+	pCommandList->Barrier(1, &barrier);
+
+	// Build top-level AS
+	m_topLevelAS->Build(pCommandList, m_scratch.get(), instances.get(), descriptorHeap);
 
 	// Create SH object
 	m_sphericalHarmonics = SphericalHarmonics::MakeUnique();
@@ -623,7 +675,8 @@ bool RayTracer::createOutViewTable()
 	return true;
 }
 
-bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandList, GeometryBuffer* pGeometries)
+bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandList, GeometryBuffer* pGeometries,
+	RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH])
 {
 	const auto pDevice = pCommandList->GetRTDevice();
 
@@ -639,57 +692,30 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	}
 
 	// Descriptor index in descriptor pool
-	const auto bottomLevelASIndex = 0u;
-	const auto topLevelASIndex = bottomLevelASIndex + NUM_MESH;
+	const auto topLevelASIndex = NUM_MESH;
 
 	// Prebuild
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
-		m_bottomLevelASes[i] = BottomLevelAS::MakeUnique();
-		XUSG_N_RETURN(m_bottomLevelASes[i]->PreBuild(pDevice, 1, pGeometries[i], bottomLevelASIndex + i), false);
+		bottomLevelASes[i] = BottomLevelAS::MakeUnique();
+		XUSG_N_RETURN(bottomLevelASes[i]->PreBuild(pDevice, 1, pGeometries[i]), false);
+		XUSG_N_RETURN(bottomLevelASes[i]->Allocate(pDevice, i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
-	XUSG_N_RETURN(m_topLevelAS->PreBuild(pDevice, NUM_MESH, topLevelASIndex,
-		BuildFlag::ALLOW_UPDATE | BuildFlag::PREFER_FAST_TRACE), false);
+	XUSG_N_RETURN(m_topLevelAS->PreBuild(pDevice, NUM_MESH, BuildFlag::ALLOW_UPDATE | BuildFlag::PREFER_FAST_TRACE), false);
+	XUSG_N_RETURN(m_topLevelAS->Allocate(pDevice, topLevelASIndex), false);
 
 	// Create scratch buffer
 	auto scratchSize = m_topLevelAS->GetScratchDataMaxSize();
-	for (const auto& bottomLevelAS : m_bottomLevelASes)
-		scratchSize = (max)(bottomLevelAS->GetScratchDataMaxSize(), scratchSize);
+	for (auto i = 0u; i < NUM_MESH; ++i)
+		scratchSize = (max)(bottomLevelASes[i]->GetScratchDataMaxSize(), scratchSize);
 	m_scratch = Resource::MakeUnique();
 	XUSG_N_RETURN(AccelerationStructure::AllocateUAVBuffer(pDevice, m_scratch.get(), scratchSize), false);
 
-	// Get descriptor heap and create descriptor tables
-	XUSG_N_RETURN(createDescriptorTables(), false);
-	const auto& descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
-
-	// Set instance
-	XMFLOAT3X4 matrices[NUM_MESH];
-	XMStoreFloat3x4(&matrices[GROUND], (XMMatrixScaling(8.0f, 0.5f, 8.0f) * XMMatrixTranslation(0.0f, -0.5f, 0.0f)));
-	XMStoreFloat3x4(&matrices[MODEL_OBJ], (XMMatrixScaling(m_posScale.w, m_posScale.w, m_posScale.w) *
-		XMMatrixTranslation(m_posScale.x, m_posScale.y, m_posScale.z)));
-	const float* const transforms[] =
-	{
-		reinterpret_cast<const float*>(&matrices[GROUND]),
-		reinterpret_cast<const float*>(&matrices[MODEL_OBJ])
-	};
-	for (auto& instances : m_instances) instances = Resource::MakeUnique();
-	auto& instances = m_instances[FrameCount - 1];
-	const BottomLevelAS* ppBottomLevelASs[NUM_MESH];
-	for (auto i = 0u; i < NUM_MESH; ++i) ppBottomLevelASs[i] = m_bottomLevelASes[i].get();
-	TopLevelAS::SetInstances(pDevice, instances.get(), NUM_MESH, ppBottomLevelASs, transforms);
-
-	// Build bottom level ASs
-	const ResourceBarrier barrier = { nullptr, ResourceState::UNORDERED_ACCESS };
-	for (auto& bottomLevelAS : m_bottomLevelASes)
-	{
-		bottomLevelAS->Build(pCommandList, m_scratch.get(), descriptorHeap);
-		pCommandList->Barrier(1, &barrier);
-	}
-
-	// Build top level AS
-	m_topLevelAS->Build(pCommandList, m_scratch.get(), instances.get(), descriptorHeap);
-	pCommandList->Barrier(1, &barrier);
+	// Build bottom-level ASes
+	const auto postbuildInfoType = AccelerationStructurePostbuildInfoType::COMPACTED_SIZE;
+	for (auto i = 0u; i < NUM_MESH; ++i)
+		bottomLevelASes[i]->Build(pCommandList, m_scratch.get(), nullptr, 1, &postbuildInfoType);
 
 	return true;
 }

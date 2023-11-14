@@ -24,9 +24,11 @@ public:
 
 	bool Init(XUSG::RayTracing::CommandList* pCommandList, const XUSG::DescriptorTableLib::sptr& descriptorTableLib,
 		uint32_t width, uint32_t height, std::vector<XUSG::Resource::uptr>& uploaders, XUSG::RayTracing::GeometryBuffer* pGeometries,
-		const char* fileName, const wchar_t* envFileName, XUSG::Format rtFormat,
-		const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f),
-		uint8_t maxGBufferMips = 1);
+		XUSG::RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH], const char* fileName, const wchar_t* envFileName,
+		XUSG::Format rtFormat, const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f), uint8_t maxGBufferMips = 1);
+	bool BuildAccelerationStructures(XUSG::RayTracing::CommandList* pCommandList,
+		const XUSG::RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH]);
+
 	void SetMetallic(uint32_t meshIdx, float metallic);
 	void UpdateFrame(const XUSG::RayTracing::Device* pDevice, uint8_t frameIndex,
 		DirectX::CXMVECTOR eyePt, DirectX::CXMMATRIX viewProj, float timeStep);
@@ -115,7 +117,7 @@ protected:
 	bool createDescriptorTables();
 	virtual bool createOutViewTable();
 	bool buildAccelerationStructures(XUSG::RayTracing::CommandList* pCommandList,
-		XUSG::RayTracing::GeometryBuffer* pGeometries);
+		XUSG::RayTracing::GeometryBuffer* pGeometries, XUSG::RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH]);
 	bool buildShaderTables(const XUSG::RayTracing::Device* pDevice);
 
 	void visibility(XUSG::CommandList* pCommandList, uint8_t frameIndex);
