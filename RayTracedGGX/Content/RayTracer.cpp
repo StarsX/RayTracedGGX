@@ -698,7 +698,8 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		bottomLevelASes[i] = BottomLevelAS::MakeUnique();
-		XUSG_N_RETURN(bottomLevelASes[i]->PreBuild(pDevice, 1, pGeometries[i]), false);
+		XUSG_N_RETURN(bottomLevelASes[i]->PreBuild(pDevice, 1, pGeometries[i],
+			BuildFlag::ALLOW_COMPACTION | BuildFlag::PREFER_FAST_TRACE), false);
 		XUSG_N_RETURN(bottomLevelASes[i]->Allocate(pDevice, i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
