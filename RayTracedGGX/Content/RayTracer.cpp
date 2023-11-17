@@ -205,10 +205,8 @@ bool RayTracer::BuildAccelerationStructures(RayTracing::CommandList* pCommandLis
 
 	// Compact bottom-level ASes
 	for (auto i = 0u; i < NUM_MESH; ++i)
-	{
 		pCommandList->CopyRaytracingAccelerationStructure(m_bottomLevelASes[i].get(),
-			bottomLevelASes[i].get(), AccelerationStructureCopyMode::COMPACT);
-	}
+			bottomLevelASes[i].get(), CopyMode::COMPACT);
 
 	const ResourceBarrier barrier = { nullptr, ResourceState::UNORDERED_ACCESS };
 	pCommandList->Barrier(1, &barrier);
@@ -313,7 +311,7 @@ void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex
 	pCommandList->Barrier(numBarriers, barriers);
 }
 
-void RayTracer::UpdateAccelerationStructure(const RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+void RayTracer::UpdateAccelerationStructure(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
 	// Set instance
 	const float* const transforms[] =
@@ -698,12 +696,12 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	for (auto i = 0u; i < NUM_MESH; ++i)
 	{
 		bottomLevelASes[i] = BottomLevelAS::MakeUnique();
-		XUSG_N_RETURN(bottomLevelASes[i]->PreBuild(pDevice, 1, pGeometries[i],
+		XUSG_N_RETURN(bottomLevelASes[i]->Prebuild(pDevice, 1, pGeometries[i],
 			BuildFlag::ALLOW_COMPACTION | BuildFlag::PREFER_FAST_TRACE), false);
 		XUSG_N_RETURN(bottomLevelASes[i]->Allocate(pDevice, i), false);
 	}
 	m_topLevelAS = TopLevelAS::MakeUnique();
-	XUSG_N_RETURN(m_topLevelAS->PreBuild(pDevice, NUM_MESH, BuildFlag::ALLOW_UPDATE | BuildFlag::PREFER_FAST_TRACE), false);
+	XUSG_N_RETURN(m_topLevelAS->Prebuild(pDevice, NUM_MESH, BuildFlag::ALLOW_UPDATE | BuildFlag::PREFER_FAST_TRACE), false);
 	XUSG_N_RETURN(m_topLevelAS->Allocate(pDevice, topLevelASIndex), false);
 
 	// Create scratch buffer
@@ -714,7 +712,7 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 	XUSG_N_RETURN(AccelerationStructure::AllocateUAVBuffer(pDevice, m_scratch.get(), scratchSize), false);
 
 	// Build bottom-level ASes
-	const auto postbuildInfoType = AccelerationStructurePostbuildInfoType::COMPACTED_SIZE;
+	const auto postbuildInfoType = PostbuildInfoType::COMPACTED_SIZE;
 	for (auto i = 0u; i < NUM_MESH; ++i)
 		bottomLevelASes[i]->Build(pCommandList, m_scratch.get(), nullptr, 1, &postbuildInfoType);
 
