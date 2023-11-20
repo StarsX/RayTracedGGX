@@ -292,18 +292,11 @@ void RayTracer::TransformSH(XUSG::CommandList* pCommandList)
 
 void RayTracer::Render(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
-	static auto isFirstFrame = true;
-	if (isFirstFrame)
-	{
-		TransformSH(pCommandList);
-		isFirstFrame = false;
-	}
-
 	RenderVisibility(pCommandList, frameIndex);
 	rayTrace(pCommandList, frameIndex);
 
 	ResourceBarrier barriers[5];
-	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::DEPTH_READ | ResourceState::NON_PIXEL_SHADER_RESOURCE);
+	auto numBarriers = m_depth->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE);
 	for (uint8_t i = 0; i < VELOCITY; ++i)
 		numBarriers = m_gbuffers[i]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
@@ -328,8 +321,15 @@ void RayTracer::UpdateAccelerationStructure(RayTracing::CommandList* pCommandLis
 	m_topLevelAS->Build(pCommandList, m_scratch.get(), m_instances[frameIndex].get(), descriptorHeap, m_topLevelAS.get());
 }
 
-void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
+void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t frameIndex, bool asyncCompute)
 {
+	static auto isFirstFrame = true;
+	if (isFirstFrame)
+	{
+		TransformSH(pCommandList);
+		isFirstFrame = false;
+	}
+
 	visibility(pCommandList, frameIndex);
 
 	// Set barriers
@@ -340,26 +340,18 @@ void RayTracer::RenderVisibility(RayTracing::CommandList* pCommandList, uint8_t 
 	for (auto& gbuffer : m_gbuffers)
 		numBarriers = gbuffer->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, numBarriers, 0);
 	numBarriers = m_sphericalHarmonics->GetSHCoefficients()->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	// numBarriers = m_depth->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
-	barriers[numBarriers++] = { m_topLevelAS->GetResource().get(), ResourceState::UNORDERED_ACCESS, ResourceState::UNORDERED_ACCESS };
+	if (asyncCompute) numBarriers = m_depth->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers);
+	else barriers[numBarriers++] = { m_topLevelAS->GetResource().get(), ResourceState::UNORDERED_ACCESS, ResourceState::UNORDERED_ACCESS };
 	pCommandList->Barrier(numBarriers, barriers);
 }
 
 void RayTracer::RayTrace(RayTracing::CommandList* pCommandList, uint8_t frameIndex)
 {
-	static auto isFirstFrame = true;
-	if (isFirstFrame)
-	{
-		TransformSH(pCommandList);
-		isFirstFrame = false;
-	}
-
 	rayTrace(pCommandList, frameIndex);
 
 	ResourceBarrier barriers[4];
-	auto numBarriers = m_gbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
-		0, XUSG_BARRIER_ALL_SUBRESOURCES, BarrierFlag::BEGIN_ONLY);
-	for (uint8_t i = 0; i < VELOCITY; ++i)
+	auto numBarriers = 0u;
+	for (uint8_t i = 0; i < NUM_GBUFFER; ++i)
 		numBarriers = m_gbuffers[i]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	pCommandList->Barrier(numBarriers, barriers);
 }
@@ -649,7 +641,7 @@ bool RayTracer::createDescriptorTables()
 	{
 		const auto descriptorTable = Util::DescriptorTable::MakeUnique();
 		descriptorTable->SetDescriptors(0, 1, &m_visBuffer->GetRTV());
-		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableLib.get(), & m_depth->GetDSV());
+		m_framebuffer = descriptorTable->GetFramebuffer(m_descriptorTableLib.get(), &m_depth->GetDSV());
 	}
 
 	return true;

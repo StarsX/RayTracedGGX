@@ -64,14 +64,14 @@ bool Denoiser::Init(CommandList* pCommandList, const DescriptorTableLib::sptr& d
 }
 
 void Denoiser::Denoise(CommandList* pCommandList, uint32_t numBarriers,
-	ResourceBarrier* pBarriers, bool useSharedMem)
+	ResourceBarrier* pBarriers, bool useSharedMem, bool asyncCompute)
 {
 	m_frameParity = !m_frameParity;
 
 	// Bind the acceleration structure, and dispatch rays.
 	reflectionSpatialFilter(pCommandList, numBarriers, pBarriers, useSharedMem);
 	diffuseSpatialFilter(pCommandList, numBarriers, pBarriers, useSharedMem);
-	temporalSS(pCommandList);
+	temporalSS(pCommandList, asyncCompute);
 }
 
 void Denoiser::ToneMap(CommandList* pCommandList, const Descriptor& rtv,
@@ -459,13 +459,13 @@ void Denoiser::diffuseSpatialFilter(CommandList* pCommandList, uint32_t numBarri
 	}
 }
 
-void Denoiser::temporalSS(CommandList* pCommandList)
+void Denoiser::temporalSS(CommandList* pCommandList, bool asyncCompute)
 {
 	ResourceBarrier barriers[5];
 	auto numBarriers = m_outputViews[UAV_TSS + m_frameParity]->SetBarrier(barriers, ResourceState::UNORDERED_ACCESS, 0, 0);
 	numBarriers = m_outputViews[UAV_FLT_DFF]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
 	numBarriers = m_outputViews[UAV_TSS + !m_frameParity]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE, numBarriers, 0);
-	numBarriers = m_pGbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
+	if (!asyncCompute) numBarriers = m_pGbuffers[VELOCITY]->SetBarrier(barriers, ResourceState::NON_PIXEL_SHADER_RESOURCE,
 		numBarriers, XUSG_BARRIER_ALL_SUBRESOURCES, BarrierFlag::END_ONLY);
 	pCommandList->Barrier(numBarriers, barriers);
 

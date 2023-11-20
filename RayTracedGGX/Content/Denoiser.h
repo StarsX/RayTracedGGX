@@ -16,7 +16,7 @@ public:
 		uint32_t width, uint32_t height, XUSG::Format rtFormat, const XUSG::Texture2D::uptr* inputViews,
 		const XUSG::RenderTarget::uptr* pGbuffers, const XUSG::DepthStencil::sptr& depth, uint8_t maxMips = 1);
 	void Denoise(XUSG::CommandList* pCommandList, uint32_t numBarriers,
-		XUSG::ResourceBarrier* pBarriers, bool useSharedMem = false);
+		XUSG::ResourceBarrier* pBarriers, bool useSharedMem = false, bool asyncCompute = false);
 	void ToneMap(XUSG::CommandList* pCommandList, const XUSG::Descriptor& rtv,
 		uint32_t numBarriers, XUSG::ResourceBarrier* pBarriers);
 
@@ -119,7 +119,7 @@ protected:
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
 	void diffuseSpatialFilter(XUSG::CommandList* pCommandList, uint32_t numBarriers,
 		XUSG::ResourceBarrier* pBarriers, bool useSharedMem);
-	void temporalSS(XUSG::CommandList* pCommandList);
+	void temporalSS(XUSG::CommandList* pCommandList, bool asyncCompute);
 
 	uint8_t						m_frameParity;
 	DirectX::XMUINT2			m_viewport;

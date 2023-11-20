@@ -35,7 +35,7 @@ public:
 	void TransformSH(XUSG::CommandList* pCommandList);
 	void Render(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 	void UpdateAccelerationStructure(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
-	void RenderVisibility(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
+	void RenderVisibility(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex, bool asyncCompute = false);
 	void RayTrace(XUSG::RayTracing::CommandList* pCommandList, uint8_t frameIndex);
 
 	const XUSG::Texture2D::uptr* GetRayTracingOutputs() const;
