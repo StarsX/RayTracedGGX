@@ -28,6 +28,7 @@ public:
 		XUSG::Format rtFormat, const DirectX::XMFLOAT4& posScale = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f), uint8_t maxGBufferMips = 1);
 	bool BuildAccelerationStructures(XUSG::RayTracing::CommandList* pCommandList,
 		const XUSG::RayTracing::BottomLevelAS::uptr bottomLevelASes[NUM_MESH]);
+	bool Postinit(const XUSG::RayTracing::Device* pDevice);
 
 	void SetMetallic(uint32_t meshIdx, float metallic);
 	void UpdateFrame(const XUSG::RayTracing::Device* pDevice, uint8_t frameIndex,
@@ -155,8 +156,8 @@ protected:
 	XUSG::ConstantBuffer::uptr	m_cbMaterials;
 	XUSG::ConstantBuffer::uptr	m_cbRaytracing;
 
-	XUSG::Resource::uptr		m_scratch;
-	XUSG::Resource::uptr		m_instances[FrameCount];
+	XUSG::Buffer::uptr			m_scratch;
+	XUSG::Buffer::uptr			m_instances[FrameCount];
 
 	XUSG::Texture::sptr			m_lightProbe;
 
@@ -175,4 +176,6 @@ protected:
 	XUSG::Compute::PipelineLib::sptr	m_computePipelineLib;
 	XUSG::PipelineLayoutLib::sptr		m_pipelineLayoutLib;
 	XUSG::DescriptorTableLib::sptr		m_descriptorTableLib;
+
+	XUSG::Format m_rtFormat;
 };

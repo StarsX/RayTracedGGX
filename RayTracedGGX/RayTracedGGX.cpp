@@ -227,6 +227,8 @@ void RayTracedGGX::LoadAssets()
 	// complete before continuing.
 	WaitForGpu();
 
+	m_rayTracer->Postinit(m_device.get());
+
 	if (!m_semaphore.Fence)
 	{
 		m_semaphore.Fence = Fence::MakeUnique();
@@ -544,7 +546,7 @@ void RayTracedGGX::PopulateGeometryCommandList(CommandType commandType)
 	const auto descriptorHeap = m_descriptorTableLib->GetDescriptorHeap(CBV_SRV_UAV_HEAP);
 	pCommandList->SetDescriptorHeaps(1, &descriptorHeap);
 
-	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex);
+	m_rayTracer->RenderVisibility(pCommandList, m_frameIndex, true);
 
 	XUSG_N_RETURN(pCommandList->Close(), ThrowIfFailed(E_FAIL));
 }

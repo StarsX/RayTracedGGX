@@ -6,6 +6,8 @@
 
 #include "Core/XUSG.h"
 
+#define XUSG_MAKE_COARSE_SHADING_RATE(x,y) ((x) << 2 | (y))
+
 namespace XUSG
 {
 	struct ProgramIdentifier
@@ -28,15 +30,97 @@ namespace XUSG
 			DECODE_SAMPLER_FEEDBACK
 		};
 
+		enum class BarrierSync : uint32_t
+		{
+			NONE = 0,
+			ALL = (1 << 0),
+			DRAW = (1 << 1),
+			INDEX_INPUT = (1 << 2),
+			VERTEX_SHADING = (1 << 3),
+			PIXEL_SHADING = (1 << 4),
+			DEPTH_STENCIL = (1 << 5),
+			RENDER_TARGET = (1 << 6),
+			COMPUTE_SHADING = (1 << 7),
+			RAYTRACING = (1 << 8),
+			COPY = (1 << 9),
+			RESOLVE = (1 << 10),
+			EXECUTE_INDIRECT = (1 << 11),
+			ALL_SHADING = (1 << 12),
+			NON_PIXEL_SHADING = (1 << 13),
+			EMIT_RAYTRACING_ACCELERATION_STRUCTURE_POSTBUILD_INFO = (1 << 14),
+			CLEAR_UNORDERED_ACCESS_VIEW = (1 << 15),
+			VIDEO_DECODE = (1 << 16),
+			VIDEO_PROCESS = (1 << 17),
+			VIDEO_ENCODE = (1 << 18),
+			BUILD_RAYTRACING_ACCELERATION_STRUCTURE = (1 << 19),
+			COPY_RAYTRACING_ACCELERATION_STRUCTURE = (1 << 20),
+			SPLIT = (1 << 21),
+
+			PREDICATION = EXECUTE_INDIRECT,
+		};
+
+		XUSG_DEF_ENUM_FLAG_OPERATORS(BarrierSync);
+
+		enum class BarrierAccess : uint32_t
+		{
+			COMMON = 0,
+			VERTEX_BUFFER = (1 << 0),
+			CONSTANT_BUFFER = (1 << 1),
+			INDEX_BUFFER = (1 << 2),
+			RENDER_TARGET = (1 << 3),
+			UNORDERED_ACCESS = (1 << 4),
+			DEPTH_STENCIL_WRITE = (1 << 5),
+			DEPTH_STENCIL_READ = (1 << 6),
+			SHADER_RESOURCE = (1 << 7),
+			STREAM_OUTPUT = (1 << 8),
+			INDIRECT_ARGUMENT = (1 << 9),
+			COPY_DEST = (1 << 10),
+			COPY_SOURCE = (1 << 11),
+			RESOLVE_DEST = (1 << 12),
+			RESOLVE_SOURCE = (1 << 13),
+			RAYTRACING_ACCELERATION_STRUCTURE_READ = (1 << 14),
+			RAYTRACING_ACCELERATION_STRUCTURE_WRITE = (1 << 15),
+			SHADING_RATE_SOURCE = (1 << 16),
+			VIDEO_DECODE_READ = (1 << 17),
+			VIDEO_DECODE_WRITE = (1 << 18),
+			VIDEO_PROCESS_READ = (1 << 19),
+			VIDEO_PROCESS_WRITE = (1 << 20),
+			VIDEO_ENCODE_READ = (1 << 21),
+			VIDEO_ENCODE_WRITE = (1 << 22),
+			NO_ACCESS = (1 << 23),
+
+			PREDICATION = INDIRECT_ARGUMENT,
+			RAYTRACING_ACCELERATION_STRUCTURE = UNORDERED_ACCESS | RAYTRACING_ACCELERATION_STRUCTURE_WRITE | RAYTRACING_ACCELERATION_STRUCTURE_READ
+		};
+
+		XUSG_DEF_ENUM_FLAG_OPERATORS(BarrierAccess);
+
+		enum class TextureBarrierFlag
+		{
+			NONE = 0,
+			DISCARD = (1 << 0)
+		};
+
+		XUSG_DEF_ENUM_FLAG_OPERATORS(TextureBarrierFlag);
+
+		enum AxisShadingRate : uint8_t
+		{
+			AXIS_SHADING_RATE_1X = 0,
+			AXIS_SHADING_RATE_2X = 0x1,
+			AXIS_SHADING_RATE_4X = 0x2
+		};
+
+		XUSG_DEF_ENUM_FLAG_OPERATORS(AxisShadingRate);
+
 		enum class ShadingRate : uint8_t
 		{
-			TILE_1X1 = 0,
-			TILE_1X2 = 0x1,
-			TILE_2X1 = 0x4,
-			TILE_2X2 = 0x5,
-			TILE_2X4 = 0x6,
-			TILE_4X2 = 0x9,
-			TILE_4X4 = 0xa
+			COARSE_1X1 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_1X, AXIS_SHADING_RATE_1X),
+			COARSE_1X2 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_1X, AXIS_SHADING_RATE_2X),
+			COARSE_2X1 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_2X, AXIS_SHADING_RATE_1X),
+			COARSE_2X2 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_2X, AXIS_SHADING_RATE_2X),
+			COARSE_2X4 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_2X, AXIS_SHADING_RATE_4X),
+			COARSE_4X2 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_4X, AXIS_SHADING_RATE_2X),
+			COARSE_4X4 = XUSG_MAKE_COARSE_SHADING_RATE(AXIS_SHADING_RATE_4X, AXIS_SHADING_RATE_4X)
 		};
 
 		enum class ShadingRateCombiner : uint8_t
@@ -70,6 +154,41 @@ namespace XUSG
 		};
 
 		XUSG_DEF_ENUM_FLAG_OPERATORS(WorkGraphFlag);
+
+		struct ResourceBarrier
+		{
+			BarrierSync SyncBefore;
+			BarrierSync SyncAfter;
+			BarrierAccess AccessBefore;
+			BarrierAccess AccessAfter;
+			BarrierLayout LayoutBefore;
+			BarrierLayout LayoutAfter;
+			const Resource* pResource;
+			union
+			{
+				struct
+				{
+					uint32_t IndexOrFirstMipLevel;
+					uint8_t NumMipLevels;
+					uint16_t FirstArraySlice;
+					uint16_t NumArraySlices;
+					uint8_t FirstPlane;
+					uint8_t NumPlanes;
+					TextureBarrierFlag Flags;
+				};
+				struct
+				{
+					uint64_t Offset;
+					uint64_t Size;
+				};
+			};
+		};
+
+		struct BarrierGroup
+		{
+			uint32_t NumBarriers;
+			const ResourceBarrier* pBarriers;
+		};
 
 		struct ViewInstance
 		{
@@ -118,6 +237,11 @@ namespace XUSG
 
 			virtual bool CreateInterface() = 0;
 
+			using XUSG::CommandList::Barrier;
+			virtual void Barrier(uint32_t numBarrierGroups, BarrierGroup* pBarrierGroups) = 0;
+			virtual void Barrier(uint32_t numBufferBarriers, ResourceBarrier* pBufferBarriers,
+				uint32_t numTextureBarriers, ResourceBarrier* pTextureBarriers,
+				uint32_t numGlobalBarriers, ResourceBarrier* pGlobalBarriers) = 0;
 			virtual void SetSamplePositions(uint8_t numSamplesPerPixel, uint8_t numPixels, SamplePosition* pPositions) const = 0;
 			virtual void ResolveSubresourceRegion(const Resource* pDstResource, uint32_t dstSubresource,
 				uint32_t dstX, uint32_t dstY, const Resource* pSrcResource, uint32_t srcSubresource,
@@ -261,6 +385,7 @@ namespace XUSG
 			//SamplerFeedBack();
 			virtual ~SamplerFeedBack() {};
 
+			// Create a texture with auto SRVs and UAVs
 			virtual bool Create(const Device* pDevice, const Texture* pTarget, Format format,
 				uint32_t mipRegionWidth, uint32_t mipRegionHeight, uint32_t mipRegionDepth,
 				ResourceFlag resourceFlags = ResourceFlag::NONE, bool isCubeMap = false,
@@ -286,6 +411,23 @@ namespace XUSG
 		};
 
 		XUSG_INTERFACE ProgramIdentifier GetProgramIdentifier(const Pipeline& stateObject, const wchar_t* programName);
+
+		XUSG_INTERFACE uint32_t SetBarrier(ResourceBarrier* pBufferBarriers, Buffer* pBuffer, ResourceState dstState,
+			uint32_t numBarriers = 0, BarrierFlag flags = BarrierFlag::NONE, ResourceState srcState = ResourceState::AUTO,
+			uint32_t threadIdx = 0);
+		XUSG_INTERFACE uint32_t SetBarrier(ResourceBarrier* pTextureBarriers, Texture* pTexture, ResourceState dstState,
+			uint32_t numBarriers = 0, uint32_t indexOrFirstMip = XUSG_BARRIER_ALL_SUBRESOURCES, uint8_t numMipLevels = 0,
+			uint16_t firstArraySlice = 0, uint16_t numArraySlices = 0, uint8_t firstPlane = 0, uint8_t numPlanes = 0,
+			BarrierFlag flags = BarrierFlag::NONE, ResourceState srcState = ResourceState::AUTO,
+			TextureBarrierFlag textureFlags = TextureBarrierFlag::NONE, uint32_t threadIdx = 0);
+
+		XUSG_INTERFACE void MapBarrierState(BarrierSync& barrierSync, BarrierAccess& barrierAccess, ResourceState resourceState);
+		XUSG_INTERFACE void MapBarrierState(BarrierSync& barrierSync, BarrierAccess& barrierAccess,
+			BarrierLayout &barrierLayout, ResourceState resourceState);
+
+		XUSG_INTERFACE BarrierSync GetBarrierSync(ResourceState resourceState);
+
+		XUSG_INTERFACE BarrierAccess GetBarrierAccess(ResourceState resourceState);
 	}
 
 	//--------------------------------------------------------------------------------------
