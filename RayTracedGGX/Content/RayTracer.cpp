@@ -724,14 +724,14 @@ bool RayTracer::buildAccelerationStructures(RayTracing::CommandList* pCommandLis
 bool RayTracer::buildShaderTables(const RayTracing::Device* pDevice)
 {
 	// Get shader identifiers.
-	const auto shaderIDSize = ShaderRecord::GetShaderIDSize(pDevice);
+	const auto shaderIdentifierSize = ShaderRecord::GetShaderIdentifierSize(pDevice);
 	const auto cbRayGen = RayGenConstants();
 
 	for (uint8_t i = 0; i < FrameCount; ++i)
 	{
 		// Ray gen shader table
 		m_rayGenShaderTables[i] = ShaderTable::MakeUnique();
-		XUSG_N_RETURN(m_rayGenShaderTables[i]->Create(pDevice, 1, shaderIDSize + sizeof(cbRayGen),
+		XUSG_N_RETURN(m_rayGenShaderTables[i]->Create(pDevice, 1, shaderIdentifierSize + sizeof(cbRayGen),
 			MemoryFlag::NONE, (L"RayGenShaderTable" + to_wstring(i)).c_str()), false);
 		m_rayGenShaderTables[i]->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 			m_pipelines[RAY_TRACING], RaygenShaderName, &cbRayGen, sizeof(cbRayGen)).get());
@@ -739,7 +739,7 @@ bool RayTracer::buildShaderTables(const RayTracing::Device* pDevice)
 
 	// Hit group shader table
 	m_hitGroupShaderTable = ShaderTable::MakeUnique();
-	XUSG_N_RETURN(m_hitGroupShaderTable->Create(pDevice, 2, shaderIDSize, MemoryFlag::NONE, L"HitGroupShaderTable"), false);
+	XUSG_N_RETURN(m_hitGroupShaderTable->Create(pDevice, 2, shaderIdentifierSize, MemoryFlag::NONE, L"HitGroupShaderTable"), false);
 	m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 		m_pipelines[RAY_TRACING], HitGroupNames[HIT_GROUP_REFLECTION]).get());
 	m_hitGroupShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
@@ -747,7 +747,7 @@ bool RayTracer::buildShaderTables(const RayTracing::Device* pDevice)
 
 	// Miss shader table
 	m_missShaderTable = ShaderTable::MakeUnique();
-	XUSG_N_RETURN(m_missShaderTable->Create(pDevice, 1, shaderIDSize, MemoryFlag::NONE, L"MissShaderTable"), false);
+	XUSG_N_RETURN(m_missShaderTable->Create(pDevice, 1, shaderIdentifierSize, MemoryFlag::NONE, L"MissShaderTable"), false);
 	m_missShaderTable->AddShaderRecord(ShaderRecord::MakeUnique(pDevice,
 		m_pipelines[RAY_TRACING], MissShaderName).get());
 

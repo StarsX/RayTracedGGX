@@ -227,7 +227,7 @@ void RayTracedGGX::LoadAssets()
 	// complete before continuing.
 	WaitForGpu();
 
-	m_rayTracer->Postinit(m_device.get());
+	XUSG_N_RETURN(m_rayTracer->Postinit(m_device.get()), ThrowIfFailed(E_FAIL));
 
 	if (!m_semaphore.Fence)
 	{
