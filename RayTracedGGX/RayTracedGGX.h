@@ -45,6 +45,13 @@ public:
 	virtual void ParseCommandLineArgs(wchar_t* argv[], int argc);
 
 private:
+	enum DeviceType : uint8_t
+	{
+		DEVICE_DISCRETE,
+		DEVICE_UMA,
+		DEVICE_WARP
+	};
+
 	enum CommandType : uint8_t
 	{
 		UNIVERSAL,
@@ -99,12 +106,13 @@ private:
 	XUSG::Semaphore m_semaphore;
 
 	// Application state
+	DeviceType	m_deviceType;
+	StepTimer	m_timer;
 	uint8_t		m_asyncCompute;
 	uint32_t	m_currentMesh;
 	float		m_metallics[RayTracer::NUM_MESH];
 	bool		m_useSharedMem;
 	bool		m_isPaused;
-	StepTimer	m_timer;
 
 	// User camera interactions
 	bool m_tracking;
