@@ -90,9 +90,9 @@ void RayTracedGGX::LoadPipeline()
 
 	DXGI_ADAPTER_DESC1 dxgiAdapterDesc;
 	com_ptr<IDXGIAdapter1> dxgiAdapter;
+	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
 	const auto useUMA = m_deviceType == DEVICE_UMA;
 	const auto useWARP = m_deviceType == DEVICE_WARP;
-	const auto createDeviceFlags = EnableRootDescriptorsInShaderRecords;
 	auto checkUMA = true, checkWARP = true;
 	auto hr = DXGI_ERROR_NOT_FOUND;
 	for (uint8_t n = 0; n < 3; ++n)
