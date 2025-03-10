@@ -39,6 +39,7 @@
 #include <algorithm>
 #include <string>
 #include <vector>
+#include <map>
 #include <unordered_map>
 #endif
 #include <functional>
@@ -46,8 +47,6 @@
 #include <shellapi.h>
 
 #include "D3D12RaytracingFallback.h"
-
-#define _INDEPENDENT_SPHERICAL_HARMONICS_
 
 #if defined(DEBUG) | defined(_DEBUG)
 #ifndef DBG_NEW

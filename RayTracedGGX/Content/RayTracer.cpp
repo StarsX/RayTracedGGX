@@ -4,12 +4,6 @@
 
 #include "RayTracer.h"
 #include "Optional/XUSGObjLoader.h"
-#define _INDEPENDENT_DDS_LOADER_
-#include "Advanced/XUSGDDSLoader.h"
-#undef _INDEPENDENT_DDS_LOADER_
-#define _INDEPENDENT_HALTON_
-#include "Advanced/XUSGHalton.h"
-#undef _INDEPENDENT_HALTON_
 #include "DirectXPackedVector.h"
 
 using namespace std;
