@@ -326,6 +326,8 @@ bool getPrimarySurface(uint2 index, uint2 dim, out float3 N, out float3 V, out f
 		N = 0.0;
 		V = normalize(l_rayGen.EyePt - P);
 
+		rghMtl.y = 0.0;
+
 		return false;
 	}
 }
@@ -510,7 +512,7 @@ RayPayload computeDiffuse(bool hit, float2 rghMtl, float3 N, float3 V, float3 P,
 	}
 	else payload.Color = EvaluateSHIrradiance(g_roSHCoeffs, N).xyz / PI;
 
-	if (!hit) return (RayPayload)0;
+	if (!hit) return payload;
 
 #if 0
 	const float NoV = dot(V, N);
